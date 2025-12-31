@@ -17,6 +17,7 @@ export async function syncToCloud(state: AppState): Promise<void> {
     links: state.links,
     requests: state.requests,
     language: state.language,
+    theme: state.theme,
     version: state.version,
     updatedAt: new Date().toISOString()
   };

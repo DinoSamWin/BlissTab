@@ -4,6 +4,8 @@ import { User } from '../types';
 // In a real production environment, this would be your actual Google Client ID.
 const CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
 
+const IS_PLACEHOLDER_ID = CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID');
+
 export async function initGoogleAuth(onUser: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
 
@@ -15,6 +17,12 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
     } catch (e) {
       console.error('Auth restore failed', e);
     }
+  }
+
+  // If we are using a placeholder ID, do not attempt to initialize GSI to avoid console errors
+  if (IS_PLACEHOLDER_ID) {
+    console.info("FocusTab: Auth is in simulation mode (No valid Client ID provided).");
+    return;
   }
 
   // Load GSI if available
@@ -46,7 +54,9 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
       (window as any).google.accounts.id.initialize({
         client_id: CLIENT_ID,
         callback: handleCredentialResponse,
-        auto_select: true
+        auto_select: true,
+        // Disable FedCM to prevent NotAllowedError in restricted iframe environments
+        use_fedcm_for_prompt: false 
       });
       
       // Attempt One Tap
@@ -72,7 +82,7 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
 
   // If GSI is available and we have a real Client ID, use it.
   // Otherwise, if it's the placeholder, we simulate a login for the user to see the flow.
-  if (CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
+  if (IS_PLACEHOLDER_ID) {
     console.warn("FocusTab: Using mock login because CLIENT_ID is still placeholder.");
     
     // Simulate a brief loading state
@@ -85,7 +95,6 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
       };
       localStorage.setItem('focus_tab_user', JSON.stringify(mockUser));
       if (onUser) onUser(mockUser);
-      // Force page reload or state update is handled by the caller
     }, 800);
     return;
   }
@@ -100,6 +109,10 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
 export function signOutUser() {
   localStorage.removeItem('focus_tab_user');
   if (typeof window !== 'undefined' && (window as any).google) {
-    (window as any).google.accounts.id.disableAutoSelect();
+    try {
+      (window as any).google.accounts.id.disableAutoSelect();
+    } catch (e) {
+      // Ignore errors if GSI wasn't initialized
+    }
   }
 }

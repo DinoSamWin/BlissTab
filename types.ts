@@ -20,6 +20,8 @@ export interface User {
   picture?: string;
 }
 
+export type Theme = 'light' | 'dark';
+
 export interface AppState {
   version: string;
   links: QuickLink[];
@@ -27,6 +29,7 @@ export interface AppState {
   pinnedSnippetId: string | null;
   language: string;
   user: User | null;
+  theme: Theme;
 }
 
 export type ToastType = 'success' | 'error' | 'info';

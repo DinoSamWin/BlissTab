@@ -6,6 +6,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FocusTab</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Instrument Serif', 'serif'],
+                    },
+                    animation: {
+                        'breathing-slow': 'breathing 12s ease-in-out infinite',
+                        'drift': 'drift 60s linear infinite',
+                    },
+                    keyframes: {
+                        breathing: {
+                            '0%, 100%': { transform: 'scale(1)', opacity: '0.3' },
+                            '50%': { transform: 'scale(1.05)', opacity: '0.5' },
+                        },
+                        drift: {
+                            '0%': { transform: 'translate(0, 0)' },
+                            '100%': { transform: 'translate(20px, 10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -18,7 +45,14 @@
             color: #2D2C2A;
             margin: 0;
             overflow: hidden;
+            transition: background-color 1s ease, color 0.5s ease;
         }
+        
+        body.dark {
+            background-color: #0D0D0C; /* Slightly deeper warm dark */
+            color: #E5E5E3;
+        }
+
         .serif {
             font-family: 'Instrument Serif', serif;
         }
@@ -32,9 +66,13 @@
             width: 100%;
             height: 100%;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-            opacity: 0.015;
+            opacity: 0.012;
             pointer-events: none;
             z-index: 50;
+        }
+
+        body.dark::before {
+            opacity: 0.025;
         }
 
         @keyframes reveal {
@@ -42,30 +80,21 @@
             to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
         
-        @keyframes breathing {
-            0%, 100% { transform: scale(1); opacity: 0.4; }
-            50% { transform: scale(1.1); opacity: 0.6; }
-        }
-
         .animate-reveal {
             animation: reveal 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
 
-        .animate-breathing {
-            animation: breathing 8s ease-in-out infinite;
-        }
-
         .animate-pulse-slow {
-            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
+            50% { opacity: .4; }
         }
 
         .animate-fade-in {
-            animation: fadeIn 0.3s ease-out forwards;
+            animation: fadeIn 0.4s ease-out forwards;
         }
 
         @keyframes fadeIn {
@@ -92,8 +121,20 @@
             background: #E5E5E3;
             border-radius: 10px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #D1D1CF;
+        body.dark ::-webkit-scrollbar-thumb {
+            background: #2D2D2A;
+        }
+        
+        @media (prefers-reduced-motion: reduce) {
+            *, ::before, ::after {
+                animation-delay: -1ms !important;
+                animation-duration: 1ms !important;
+                animation-iteration-count: 1 !important;
+                background-attachment: initial !important;
+                scroll-behavior: auto !important;
+                transition-duration: 0s !important;
+                transition-delay: 0s !important;
+            }
         }
     </style>
 <script type="importmap">
