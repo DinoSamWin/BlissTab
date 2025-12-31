@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, ToastMessage, User, Theme } from './types';
 import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS } from './constants';
@@ -161,27 +160,41 @@ const App: React.FC = () => {
 
   // --- Render ---
   return (
-    <div className={`relative w-full h-screen flex flex-col items-center justify-between p-8 md:p-12 overflow-hidden select-none transition-colors duration-1000`}>
+    <div className="relative w-full h-screen flex flex-col items-center justify-between p-8 md:p-12 overflow-hidden select-none transition-colors duration-1000">
       
-      {/* 1. Background Decoration (Atmospheric Halos & Lunar Texture) */}
+      {/* 1. Background Decoration Layers (Unifying Transitions) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         
-        {/* LIGHT MODE HALOS */}
-        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-orange-100/30 rounded-full blur-[120px] animate-breathing-slow dark:hidden" />
-        <div className="absolute -bottom-1/4 -right-1/4 w-2/3 h-2/3 bg-blue-50/20 rounded-full blur-[140px] animate-breathing-slow dark:hidden" style={{ animationDelay: '-4s' }} />
-        <div className="absolute inset-0 bg-radial-gradient from-transparent via-transparent to-white/10 dark:hidden" />
-
-        {/* DARK MODE LUNAR SURFACE (Upper Area Only) */}
-        <div className="hidden dark:block absolute top-0 left-0 w-full h-1/2 overflow-hidden">
-            {/* Extremely faint craters */}
-            <div className="absolute top-[10%] left-[15%] w-64 h-64 bg-white/[0.02] rounded-full blur-[80px] animate-breathing-slow" />
-            <div className="absolute top-[25%] left-[60%] w-96 h-96 bg-white/[0.015] rounded-full blur-[100px] animate-breathing-slow" style={{ animationDelay: '-3s' }} />
-            <div className="absolute top-[5%] left-[80%] w-48 h-48 bg-white/[0.01] rounded-full blur-[60px] animate-breathing-slow" style={{ animationDelay: '-6s' }} />
-            <div className="absolute top-[40%] left-[5%] w-80 h-80 bg-white/[0.01] rounded-full blur-[90px] animate-breathing-slow" style={{ animationDelay: '-1.5s' }} />
+        {/* LIGHT MODE BACKGROUND LAYER */}
+        <div className={`theme-overlay bg-[#FAF9F6] ${appState.theme === 'light' ? 'opacity-100' : 'opacity-0'}`}>
+            <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-orange-100/30 rounded-full blur-[120px] animate-breathing-slow" />
+            <div className="absolute -bottom-1/4 -right-1/4 w-2/3 h-2/3 bg-blue-50/20 rounded-full blur-[140px] animate-breathing-slow" style={{ animationDelay: '-4s' }} />
+            <div className="absolute inset-0 bg-radial-gradient from-transparent via-transparent to-white/10" />
         </div>
 
-        {/* DARK MODE GROUNDING (Lower Area Only) */}
-        <div className="hidden dark:block absolute bottom-0 left-0 w-full h-full pointer-events-none bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+        {/* DARK MODE BACKGROUND LAYER (Single source of truth for dark color) */}
+        <div className={`theme-overlay bg-[#0F0F0E] ${appState.theme === 'dark' ? 'opacity-100' : 'opacity-0'}`}>
+            {/* Upper Lunar Surface Texture - Contained in parent bg for color consistency */}
+            <div className="absolute top-0 left-0 w-full h-[45%] overflow-hidden">
+                <div className="absolute top-[-10%] left-[10%] w-[500px] h-[500px] bg-white/[0.035] rounded-full blur-[120px] animate-lunar-drift" />
+                <div className="absolute top-[15%] right-[5%] w-[400px] h-[400px] bg-white/[0.025] rounded-full blur-[100px] animate-lunar-drift" style={{ animationDelay: '-8s' }} />
+
+                {/* Crater Textures */}
+                <div className="absolute top-[12%] left-[22%] w-48 h-48 crater-shadow rounded-full opacity-[0.08] animate-lunar-drift" style={{ animationDelay: '-2s' }} />
+                <div className="absolute top-[28%] left-[55%] w-72 h-72 crater-shadow rounded-full opacity-[0.06] animate-lunar-drift" style={{ animationDelay: '-12s' }} />
+                <div className="absolute top-[8%] left-[65%] w-32 h-32 crater-shadow rounded-full opacity-[0.04] animate-lunar-drift" style={{ animationDelay: '-5s' }} />
+                
+                {/* Overlaying small cluster */}
+                <div className="absolute top-[35%] left-[25%] w-24 h-24 crater-shadow rounded-full opacity-[0.07] animate-lunar-drift" style={{ animationDelay: '-15s' }} />
+                <div className="absolute top-[38%] left-[28%] w-16 h-16 crater-shadow rounded-full opacity-[0.05] animate-lunar-drift" style={{ animationDelay: '-10s' }} />
+
+                {/* Fade to core color to avoid sharp lines */}
+                <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#0F0F0E] to-transparent" />
+            </div>
+            
+            {/* Lower-level depth for grounding */}
+            <div className="absolute bottom-0 left-0 w-full h-1/3 pointer-events-none bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-40" />
+        </div>
       </div>
 
       {/* 2. Top Navigation */}
@@ -195,21 +208,6 @@ const App: React.FC = () => {
             )}
         </div>
         <div className="flex items-center gap-4">
-            {appState.user && (
-                <div className="flex items-center gap-3 bg-white/40 dark:bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-2xl border border-white/60 dark:border-white/5 shadow-sm animate-fade-in transition-all">
-                    <div className="hidden md:flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 leading-tight truncate max-w-[120px]">{appState.user.name}</span>
-                        <span className="text-[9px] text-gray-400 dark:text-gray-500 leading-tight">Synced</span>
-                    </div>
-                    {appState.user.picture ? (
-                        <img src={appState.user.picture} alt="" className="w-8 h-8 rounded-full border border-white/80 dark:border-white/10 shadow-inner" referrerPolicy="no-referrer" />
-                    ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest border border-white/80 dark:border-white/10">
-                            {appState.user.name?.charAt(0)}
-                        </div>
-                    )}
-                </div>
-            )}
             <button 
               onClick={() => setIsSettingsOpen(true)}
               className="p-3 bg-white/40 dark:bg-white/[0.03] backdrop-blur-md rounded-2xl shadow-sm border border-white/60 dark:border-white/5 hover:shadow-md hover:bg-white/60 dark:hover:bg-white/[0.08] transition-all active:scale-95 group"
@@ -223,22 +221,22 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Main Focus Area */}
-      <main className="flex-1 flex flex-col items-center justify-center max-w-2xl w-full px-4 text-center z-10 mb-12">
+      {/* 3. Main Focus Area - Increased spacing to satisfy functional separation */}
+      <main className="flex-1 flex flex-col items-center justify-center max-w-2xl w-full px-4 text-center z-10 mb-32 transition-all duration-1000">
         <div key={key} className={`transition-all duration-1000 ${isGenerating ? 'opacity-20 blur-sm scale-[0.99]' : 'opacity-100 blur-0 scale-100 animate-reveal'}`}>
           <div className="relative inline-block px-10">
-            <span className="serif absolute -top-14 left-0 text-9xl text-gray-200/40 dark:text-gray-800/40 pointer-events-none select-none italic">“</span>
-            <h1 className="serif text-4xl md:text-5xl lg:text-6xl text-gray-800 dark:text-gray-200 leading-[2.2] font-normal tracking-tight">
+            <span className="serif absolute -top-16 left-0 text-[12rem] text-gray-200/30 dark:text-gray-800/20 pointer-events-none select-none italic leading-none transition-colors duration-1000">“</span>
+            <h1 className="serif text-4xl md:text-5xl lg:text-6xl text-gray-800 dark:text-gray-200 leading-[1.65] font-normal tracking-[0.03em] px-4">
               {currentSnippet}
             </h1>
-            <div className="mt-20 h-px w-28 mx-auto bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-800 to-transparent" />
+            <div className="mt-24 h-px w-28 mx-auto bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-800/80 to-transparent" />
           </div>
         </div>
         
         <button 
           onClick={fetchRandomSnippet}
           disabled={isGenerating}
-          className="mt-20 group relative flex items-center gap-3 px-10 py-4 bg-white/30 dark:bg-white/[0.02] backdrop-blur-md hover:bg-white/60 dark:hover:bg-white/[0.06] rounded-full border border-white/80 dark:border-white/5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+          className="mt-24 group relative flex items-center gap-3 px-10 py-4 bg-white/30 dark:bg-white/[0.02] backdrop-blur-md hover:bg-white/60 dark:hover:bg-white/[0.06] rounded-full border border-white/80 dark:border-white/5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
         >
           <svg 
             className={`w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform duration-700 ${isGenerating ? 'animate-spin' : 'group-hover:rotate-180'}`} 
@@ -254,11 +252,11 @@ const App: React.FC = () => {
         </button>
       </main>
 
-      {/* 4. Quick Links Area / Logged-out Placeholder */}
+      {/* 4. Quick Links Area / Logged-out Placeholder - Lower position as requested */}
       <footer className="w-full flex justify-center items-end pb-8 z-10 relative">
         
-        {/* Theme Toggle */}
-        <div className="absolute left-0 bottom-8 md:bottom-12">
+        {/* Theme Toggle - Positioned in safe bottom-left corner */}
+        <div className="absolute left-0 bottom-4 md:bottom-8">
             <button 
                 onClick={toggleTheme}
                 aria-label="Toggle dark mode"
@@ -277,7 +275,7 @@ const App: React.FC = () => {
         </div>
 
         {!appState.user ? (
-          <div className="flex flex-col items-center gap-8 bg-white/30 dark:bg-white/[0.02] backdrop-blur-3xl p-10 md:p-14 rounded-[4rem] border border-white/50 dark:border-white/[0.04] shadow-[0_8px_48px_0_rgba(0,0,0,0.03)] animate-reveal max-w-md text-center group">
+          <div className="flex flex-col items-center gap-8 bg-white/30 dark:bg-white/[0.01] backdrop-blur-3xl p-10 md:p-14 rounded-[4rem] border border-white/50 dark:border-white/[0.03] shadow-[0_8px_48px_0_rgba(0,0,0,0.03)] animate-reveal max-w-md text-center group translate-y-4">
             <div className="space-y-4">
                 <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em]">The Dashboard</h3>
                 <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed px-8 font-medium">
@@ -288,7 +286,7 @@ const App: React.FC = () => {
             <button 
               onClick={handleSignIn}
               disabled={isSyncing}
-              className="inline-flex items-center gap-3 bg-white dark:bg-gray-900/50 border border-gray-100 dark:border-white/5 px-10 py-4 rounded-2xl shadow-sm hover:shadow-xl transition-all active:scale-95 group/btn disabled:opacity-50"
+              className="inline-flex items-center gap-3 bg-white dark:bg-gray-900/40 border border-gray-100 dark:border-white/[0.05] px-10 py-4 rounded-2xl shadow-sm hover:shadow-xl transition-all active:scale-95 group/btn disabled:opacity-50"
             >
               <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin opacity-50' : ''}`} viewBox="0 0 24 24">
                   <path fill="#EA4335" d="M12 5.04c1.74 0 3.3.6 4.53 1.77l3.39-3.39C17.85 1.5 15.15 0 12 0 7.31 0 3.25 2.69 1.25 6.64l3.96 3.07C6.16 6.94 8.86 5.04 12 5.04z" />
@@ -300,7 +298,7 @@ const App: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="flex flex-wrap justify-center gap-8 md:gap-12 bg-white/20 dark:bg-white/[0.01] backdrop-blur-2xl p-8 md:p-10 rounded-[3.5rem] border border-white/40 dark:border-white/[0.03] shadow-[0_4px_32px_0_rgba(0,0,0,0.02)] animate-reveal">
+          <div className="flex flex-wrap justify-center gap-8 md:gap-12 bg-white/20 dark:bg-white/[0.01] backdrop-blur-2xl p-8 md:p-10 rounded-[3.5rem] border border-white/40 dark:border-white/[0.03] shadow-[0_4px_32px_0_rgba(0,0,0,0.02)] animate-reveal translate-y-4">
             {appState.links.length === 0 ? (
               <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] italic px-6">Begin with intention. Add links in studio.</p>
             ) : (
