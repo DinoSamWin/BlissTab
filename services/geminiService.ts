@@ -2,15 +2,20 @@
 import { GoogleGenAI } from "@google/genai";
 import { LOCALIZED_FALLBACKS } from "../constants";
 
+/**
+ * Generates a single line snippet using Gemini 3 Flash.
+ * Strictly adheres to @google/genai initialization and property access rules.
+ */
 export async function generateSnippet(prompt: string, language: string = "English"): Promise<string> {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
+    // Check for API key presence to handle missing env var gracefully
+    if (!process.env.API_KEY) {
       console.warn("FocusTab: API key not found. Using localized fallback.");
       return getRandomFallback(language);
     }
 
-    const ai = new GoogleGenAI({ apiKey: apiKey });
+    // Always use the named parameter and direct process.env.API_KEY reference
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -22,6 +27,7 @@ export async function generateSnippet(prompt: string, language: string = "Englis
       },
     });
 
+    // Correctly access the .text property (not a method) on GenerateContentResponse
     const text = response.text;
     if (!text || text.trim().length === 0) {
       return getRandomFallback(language);

@@ -1,7 +1,6 @@
-
 import { User } from '../types';
 
-// In a real production environment, this would be your actual Google Client ID.
+// Replace this with your actual Client ID from Google Cloud Console
 const CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
 
 const IS_PLACEHOLDER_ID = CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID');
@@ -9,7 +8,6 @@ const IS_PLACEHOLDER_ID = CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID');
 export async function initGoogleAuth(onUser: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
 
-  // Mocking the auth check for a better UX when the real GSI lib isn't fully configured
   const savedUser = localStorage.getItem('focus_tab_user');
   if (savedUser) {
     try {
@@ -19,7 +17,6 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
     }
   }
 
-  // Load GSI if available
   const gsiInterval = setInterval(() => {
     if ((window as any).google?.accounts?.id) {
       clearInterval(gsiInterval);
@@ -49,22 +46,16 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
         client_id: IS_PLACEHOLDER_ID ? 'MOCK_ID' : CLIENT_ID,
         callback: handleCredentialResponse,
         auto_select: true,
-        // Disable FedCM to prevent NotAllowedError in restricted iframe environments
         use_fedcm_for_prompt: false 
       });
       
-      // Attempt One Tap if not in mock mode
+      // Attempt One Tap only if not in placeholder mode
       if (!IS_PLACEHOLDER_ID) {
-        (window as any).google.accounts.id.prompt((notification: any) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            console.log('One Tap suppressed or skipped');
-          }
-        });
+        (window as any).google.accounts.id.prompt();
       }
     }
-  }, 500);
+  }, 300);
 
-  // Safety timeout for interval
   setTimeout(() => clearInterval(gsiInterval), 5000);
 }
 
@@ -74,33 +65,24 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
  */
 export function renderGoogleButton(containerId: string, theme: 'light' | 'dark' = 'light') {
   if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
-    const container = document.getElementById(containerId);
-    if (container) {
-      (window as any).google.accounts.id.renderButton(
-        container,
-        { 
-          theme: theme === 'dark' ? 'filled_black' : 'outline', 
-          size: 'large',
-          shape: 'pill',
-          text: 'signin_with',
-          width: 280
-        }
-      );
-    }
+    (window as any).google.accounts.id.renderButton(
+      document.getElementById(containerId),
+      { 
+        theme: theme === 'dark' ? 'filled_black' : 'outline', 
+        size: 'large',
+        shape: 'pill',
+        text: 'signin_with',
+        width: 280
+      }
+    );
   }
 }
 
-/**
- * Triggers the login flow. 
- * If the CLIENT_ID is still the default placeholder, it simulates a login for demo purposes.
- */
 export function openGoogleSignIn(onUser?: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
 
   if (IS_PLACEHOLDER_ID) {
-    console.warn("FocusTab: Using mock login because CLIENT_ID is still placeholder.");
-    
-    // Simulate a brief loading state
+    // Simulate login for development if no Client ID is provided
     setTimeout(() => {
       const mockUser: User = {
         id: 'mock-12345',
@@ -110,14 +92,12 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
       };
       localStorage.setItem('focus_tab_user', JSON.stringify(mockUser));
       if (onUser) onUser(mockUser);
-    }, 800);
+    }, 500);
     return;
   }
 
   if ((window as any).google?.accounts?.id) {
     (window as any).google.accounts.id.prompt();
-  } else {
-    alert("Google Sign-In is still loading. Please try again in a moment.");
   }
 }
 
@@ -126,8 +106,6 @@ export function signOutUser() {
   if (typeof window !== 'undefined' && (window as any).google) {
     try {
       (window as any).google.accounts.id.disableAutoSelect();
-    } catch (e) {
-      // Ignore errors if GSI wasn't initialized
-    }
+    } catch (e) {}
   }
 }
