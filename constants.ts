@@ -3,6 +3,11 @@ import { QuickLink, SnippetRequest } from './types';
 
 export const APP_VERSION = '1.0.0';
 
+export const BRAND_CONFIG = {
+  name: 'StartlyTab',
+  slogan: 'Start your day softly'
+};
+
 export const SUPPORTED_LANGUAGES = [
   { code: 'English', name: 'English' },
   { code: 'German', name: 'Deutsch' },

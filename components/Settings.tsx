@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppState, QuickLink, SnippetRequest } from '../types';
 import { fetchSiteMetadata } from '../services/metadataService';
-import { COLORS, SUPPORTED_LANGUAGES } from '../constants';
+import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG } from '../constants';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -18,24 +18,57 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [newPrompt, setNewPrompt] = useState('');
   const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'language' | 'account'>('links');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
+  const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUrl) return;
-    const meta = await fetchSiteMetadata(newUrl);
-    if (meta) {
-      const newLink: QuickLink = {
-        id: Date.now().toString(),
-        url: meta.url,
-        title: meta.title,
-        icon: meta.icon,
-        color: COLORS[Math.floor(Math.random() * COLORS.length)]
-      };
-      updateState({ ...state, links: [...state.links, newLink] });
-      setNewUrl('');
-      addToast('Gateway added');
+    if (!newUrl || isFetchingMetadata) return;
+    
+    setIsFetchingMetadata(true);
+    const tempId = Date.now().toString();
+    setPendingLinkId(tempId);
+    
+    // Create optimistic link with loading state
+    const optimisticLink: QuickLink = {
+      id: tempId,
+      url: newUrl.trim(),
+      title: 'Fetching details...',
+      icon: null,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)]
+    };
+    
+    updateState({ ...state, links: [...state.links, optimisticLink] });
+    const currentUrl = newUrl;
+    setNewUrl('');
+    
+    try {
+      // Fetch metadata
+      const meta = await fetchSiteMetadata(currentUrl);
+      
+      if (meta) {
+        // Update the optimistic link with real data
+        const updatedLinks = state.links.map(link => 
+          link.id === tempId 
+            ? { ...link, url: meta.url, title: meta.title, icon: meta.icon }
+            : link
+        );
+        updateState({ ...state, links: updatedLinks });
+        addToast('Gateway added');
+      } else {
+        // Remove failed link
+        updateState({ ...state, links: state.links.filter(l => l.id !== tempId) });
+        addToast('Failed to fetch gateway details', 'error');
+      }
+    } catch (error) {
+      // Remove failed link
+      updateState({ ...state, links: state.links.filter(l => l.id !== tempId) });
+      addToast('Failed to add gateway', 'error');
+    } finally {
+      setIsFetchingMetadata(false);
+      setPendingLinkId(null);
     }
   };
 
@@ -62,21 +95,21 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-reveal">
-      <div className="bg-white dark:bg-[#0F0F0F] w-full max-w-2xl rounded-[3.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden flex flex-col max-h-[85vh] border border-black/5 dark:border-white/5">
+      <div className="bg-white dark:bg-[#0F0F0F] w-full max-w-2xl rounded-[3.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden flex flex-col" style={{ maxHeight: 'min(80vh, 720px)' }}>
         
         {/* Header Section */}
-        <div className="px-12 pt-12 pb-8 flex justify-between items-end">
+        <div className="px-12 pt-12 pb-8 flex justify-between items-end flex-shrink-0">
           <div>
-            <h2 className="serif text-4xl md:text-5xl font-normal text-gray-800 dark:text-gray-100 tracking-tight">Studio</h2>
-            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-[0.3em] mt-2">Refining your focus</p>
+            <h2 className="serif text-4xl md:text-5xl font-normal text-gray-800 dark:text-gray-100 tracking-tight">{BRAND_CONFIG.name}</h2>
+            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-[0.3em] mt-2">{BRAND_CONFIG.slogan}</p>
           </div>
           <button onClick={onClose} className="p-4 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-2xl transition-all active:scale-95">
             <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex px-12 border-b border-black/5 dark:border-white/5 no-scrollbar overflow-x-auto">
+        {/* Tab Navigation - Sticky */}
+        <div className="flex px-12 border-b border-black/5 dark:border-white/5 no-scrollbar overflow-x-auto flex-shrink-0 sticky top-0 z-10 bg-white dark:bg-[#0F0F0F]">
           {['links', 'snippets', 'language', 'account'].map((tab) => (
             <button 
               key={tab}
@@ -107,22 +140,44 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
               <div className="space-y-4">
                 <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Active Gateways</label>
                 <div className="grid grid-cols-1 gap-3">
-                  {state.links.map(link => (
-                    <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
-                           {link.icon ? <img src={link.icon} className="w-6 h-6 object-contain opacity-60" alt="" /> : <div className="w-3 h-3 rounded-full" style={{backgroundColor: link.color}} />}
+                  {state.links.map(link => {
+                    const isPending = link.id === pendingLinkId && isFetchingMetadata;
+                    return (
+                      <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
+                            {isPending ? (
+                              <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+                            ) : link.icon ? (
+                              <img src={link.icon} className="w-6 h-6 object-contain opacity-60" alt="" onError={(e) => {
+                                // Fallback to colored dot if icon fails to load
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  const fallback = document.createElement('div');
+                                  fallback.className = 'w-3 h-3 rounded-full';
+                                  fallback.style.backgroundColor = link.color;
+                                  parent.appendChild(fallback);
+                                }
+                              }} />
+                            ) : (
+                              <div className="w-3 h-3 rounded-full" style={{backgroundColor: link.color}} />
+                            )}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className={`text-sm font-semibold ${isPending ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-200'}`}>
+                              {link.title}
+                            </span>
+                            <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{link.title}</span>
-                          <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
-                        </div>
+                        <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors" disabled={isPending}>
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
+                        </button>
                       </div>
-                      <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
