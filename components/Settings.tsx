@@ -1,0 +1,209 @@
+import React, { useState } from 'react';
+import { AppState, QuickLink, SnippetRequest } from '../types';
+import { fetchSiteMetadata } from '../services/metadataService';
+import { COLORS, SUPPORTED_LANGUAGES } from '../constants';
+
+interface SettingsProps {
+  isOpen: boolean;
+  onClose: () => void;
+  state: AppState;
+  updateState: (newState: AppState) => void;
+  addToast: (msg: string, type?: any) => void;
+  onSignIn: () => void;
+  onSignOut: () => void;
+}
+
+const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState, addToast, onSignIn, onSignOut }) => {
+  const [newUrl, setNewUrl] = useState('');
+  const [newPrompt, setNewPrompt] = useState('');
+  const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'language' | 'account'>('links');
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleAddLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUrl) return;
+    const meta = await fetchSiteMetadata(newUrl);
+    if (meta) {
+      const newLink: QuickLink = {
+        id: Date.now().toString(),
+        url: meta.url,
+        title: meta.title,
+        icon: meta.icon,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)]
+      };
+      updateState({ ...state, links: [...state.links, newLink] });
+      setNewUrl('');
+      addToast('Gateway added');
+    }
+  };
+
+  const removeLink = (id: string) => {
+    updateState({ ...state, links: state.links.filter(l => l.id !== id) });
+  };
+
+  const handleAddSnippet = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPrompt) return;
+    const newItem: SnippetRequest = { id: Date.now().toString(), prompt: newPrompt, active: true };
+    updateState({ ...state, requests: [...state.requests, newItem] });
+    setNewPrompt('');
+    addToast('Seed planted');
+  };
+
+  const toggleSnippetActive = (id: string) => {
+    updateState({ ...state, requests: state.requests.map(r => r.id === id ? { ...r, active: !r.active } : r) });
+  };
+
+  const removeSnippet = (id: string) => {
+    updateState({ ...state, requests: state.requests.filter(r => r.id !== id) });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-reveal">
+      <div className="bg-white dark:bg-[#0F0F0F] w-full max-w-2xl rounded-[3.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden flex flex-col max-h-[85vh] border border-black/5 dark:border-white/5">
+        
+        {/* Header Section */}
+        <div className="px-12 pt-12 pb-8 flex justify-between items-end">
+          <div>
+            <h2 className="serif text-4xl md:text-5xl font-normal text-gray-800 dark:text-gray-100 tracking-tight">Studio</h2>
+            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-[0.3em] mt-2">Refining your focus</p>
+          </div>
+          <button onClick={onClose} className="p-4 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-2xl transition-all active:scale-95">
+            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex px-12 border-b border-black/5 dark:border-white/5 no-scrollbar overflow-x-auto">
+          {['links', 'snippets', 'language', 'account'].map((tab) => (
+            <button 
+              key={tab}
+              onClick={() => setActiveTab(tab as any)}
+              className={`py-6 px-1 mr-10 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${activeTab === tab ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            >
+              {tab === 'links' ? 'Gateways' : tab === 'snippets' ? 'Intentions' : tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-12 py-10 no-scrollbar space-y-12">
+          
+          {activeTab === 'links' && (
+            <div className="space-y-10 animate-reveal">
+              <form onSubmit={handleAddLink} className="space-y-4">
+                <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Add Gateway</label>
+                <div className="flex gap-4">
+                  <input 
+                    type="text" placeholder="https://..." value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
+                    className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-3xl px-6 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-800 dark:text-gray-100"
+                  />
+                  <button type="submit" className="bg-black dark:bg-white text-white dark:text-black px-8 rounded-3xl text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all">Add</button>
+                </div>
+              </form>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Active Gateways</label>
+                <div className="grid grid-cols-1 gap-3">
+                  {state.links.map(link => (
+                    <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
+                           {link.icon ? <img src={link.icon} className="w-6 h-6 object-contain opacity-60" alt="" /> : <div className="w-3 h-3 rounded-full" style={{backgroundColor: link.color}} />}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{link.title}</span>
+                          <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
+                        </div>
+                      </div>
+                      <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'snippets' && (
+            <div className="space-y-10 animate-reveal">
+              <form onSubmit={handleAddSnippet} className="space-y-4">
+                <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">New Seed</label>
+                <div className="flex gap-4">
+                  <input 
+                    type="text" placeholder="e.g. Tips for deep focus" value={newPrompt} onChange={(e) => setNewPrompt(e.target.value)}
+                    className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-3xl px-6 py-4 text-sm focus:outline-none text-gray-800 dark:text-gray-100"
+                  />
+                  <button type="submit" className="bg-black dark:bg-white text-white dark:text-black px-8 rounded-3xl text-[11px] font-bold uppercase tracking-widest transition-all">Plant</button>
+                </div>
+              </form>
+              <div className="space-y-4">
+                {state.requests.map(req => (
+                    <div key={req.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl transition-all">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => toggleSnippetActive(req.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${req.active ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-200 dark:border-gray-800'}`}>
+                                {req.active && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                            </button>
+                            <span className={`text-sm font-medium ${req.active ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>{req.prompt}</span>
+                        </div>
+                        <button onClick={() => removeSnippet(req.id)} className="p-3 text-gray-300 hover:text-red-500"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg></button>
+                    </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'language' && (
+            <div className="grid grid-cols-2 gap-4 animate-reveal">
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <button
+                  key={lang.code}
+                  onClick={() => { updateState({...state, language: lang.code}); addToast(`Language: ${lang.name}`); }}
+                  className={`p-6 rounded-[2rem] text-sm font-bold transition-all text-left border-2 ${state.language === lang.code ? 'border-indigo-500 bg-indigo-500/5 text-indigo-600' : 'border-transparent bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10'}`}
+                >
+                  {lang.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'account' && (
+            <div className="space-y-8 animate-reveal">
+                {state.user ? (
+                    <div className="flex flex-col gap-8">
+                        <div className="flex items-center gap-6 p-8 bg-indigo-500/5 dark:bg-indigo-400/5 rounded-[3rem] border border-indigo-500/10">
+                            {state.user.picture ? <img src={state.user.picture} className="w-16 h-16 rounded-full shadow-lg" alt="" /> : <div className="w-16 h-16 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xl font-bold">{state.user.name?.charAt(0)}</div>}
+                            <div className="flex flex-col">
+                                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">{state.user.name}</span>
+                                <span className="text-sm text-gray-400">{state.user.email}</span>
+                            </div>
+                        </div>
+                        <button onClick={onSignOut} className="w-full py-5 bg-white dark:bg-white/5 border border-red-500/20 text-red-500 rounded-[2rem] text-[11px] font-bold uppercase tracking-widest hover:bg-red-500/5 transition-all">Sign Out</button>
+                    </div>
+                ) : (
+                    <div className="text-center p-12 bg-gray-50/50 dark:bg-white/5 rounded-[3rem] border border-dashed border-gray-200 dark:border-white/10">
+                        <p className="text-sm text-gray-500 mb-10 leading-relaxed max-w-xs mx-auto">Sign in to securely sync your Studio settings and gateways across all devices.</p>
+                        <button onClick={() => { setIsAuthLoading(true); onSignIn(); setTimeout(()=>setIsAuthLoading(false), 2000); }} disabled={isAuthLoading} className="inline-flex items-center gap-4 bg-white dark:bg-white/10 border border-black/5 px-10 py-4 rounded-full shadow-xl hover:scale-105 transition-all">
+                             <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5.04c1.74 0 3.3.6 4.53 1.77l3.39-3.39C17.85 1.5 15.15 0 12 0 7.31 0 3.25 2.69 1.25 6.64l3.96 3.07C6.16 6.94 8.86 5.04 12 5.04z" /><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58l3.76 2.91c2.2-2.02 3.46-4.99 3.46-8.73z" /><path fill="#FBBC05" d="M5.21 14.71c-.24-.7-.37-1.44-.37-2.21s.13-1.51.37-2.21L1.25 7.22C.45 8.71 0 10.33 0 12s.45 3.29 1.25 4.78l3.96-3.07z" /><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.76-2.91c-1.08.72-2.45 1.16-4.17 1.16-3.14 0-5.84-1.9-6.84-4.73L1.25 17.68C3.25 21.31 7.31 24 12 24z" /></svg>
+                             <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-widest">{isAuthLoading ? 'Connecting...' : 'Continue with Google'}</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-12 bg-gray-50/50 dark:bg-black/40 flex justify-between items-center">
+            <button onClick={onClose} className="px-10 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-xl shadow-black/10">Close Studio</button>
+            <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">StartlyTab v{state.version}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Settings;
