@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { AppState, QuickLink, SnippetRequest } from '../types';
 import { fetchSiteMetadata } from '../services/metadataService';
 import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG } from '../constants';
+import { canAddGateway, canAddIntention, getSubscriptionTier } from '../services/usageLimitsService';
+import SubscriptionUpsellModal from './SubscriptionUpsellModal';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -20,12 +22,28 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [subscriptionModalFeature, setSubscriptionModalFeature] = useState<'gateways' | 'intentions'>('gateways');
 
   if (!isOpen) return null;
 
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUrl || isFetchingMetadata) return;
+    
+    // Check usage limits before adding
+    const limitCheck = canAddGateway(state);
+    if (!limitCheck.allowed) {
+      if (limitCheck.reason === 'limit_reached') {
+        setSubscriptionModalFeature('gateways');
+        setIsSubscriptionModalOpen(true);
+      } else if (limitCheck.reason === 'requires_auth') {
+        addToast('Please sign in to add gateways', 'info');
+        // Optionally trigger sign in
+        onSignIn();
+      }
+      return;
+    }
     
     setIsFetchingMetadata(true);
     // Generate stable UUID-like ID
@@ -118,13 +136,48 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const handleAddSnippet = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPrompt) return;
+    
+    // Check usage limits before adding
+    const limitCheck = canAddIntention(state);
+    if (!limitCheck.allowed) {
+      if (limitCheck.reason === 'limit_reached') {
+        setSubscriptionModalFeature('intentions');
+        setIsSubscriptionModalOpen(true);
+      } else if (limitCheck.reason === 'requires_auth') {
+        addToast('Please sign in to add intentions', 'info');
+        // Optionally trigger sign in
+        onSignIn();
+      }
+      return;
+    }
+    
     const newItem: SnippetRequest = { id: Date.now().toString(), prompt: newPrompt, active: true };
     updateState(prevState => ({ ...prevState, requests: [...prevState.requests, newItem] }));
     setNewPrompt('');
     addToast('Seed planted');
   };
+  
+  const handleUpgrade = () => {
+    // For now, just show a message that subscription is coming soon
+    // In the future, this would redirect to a payment/subscription page
+    addToast('Subscription coming soon', 'info');
+  };
 
   const toggleSnippetActive = (id: string) => {
+    const targetRequest = state.requests.find(r => r.id === id);
+    if (!targetRequest) return;
+    
+    // If activating, check if it would exceed the limit
+    if (!targetRequest.active) {
+      const limitCheck = canAddIntention(state);
+      if (!limitCheck.allowed && limitCheck.reason === 'limit_reached') {
+        setSubscriptionModalFeature('intentions');
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+    }
+    
+    // Allow deactivation or activation if within limits
     updateState(prevState => ({ ...prevState, requests: prevState.requests.map(r => r.id === id ? { ...r, active: !r.active } : r) }));
   };
 
@@ -165,16 +218,77 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
           
           {activeTab === 'links' && (
             <div className="space-y-10 animate-reveal">
-              <form onSubmit={handleAddLink} className="space-y-4">
-                <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Add Gateway</label>
-                <div className="flex gap-4">
-                  <input 
-                    type="text" placeholder="https://..." value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
-                    className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-3xl px-6 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-800 dark:text-gray-100"
-                  />
-                  <button type="submit" className="bg-black dark:bg-white text-white dark:text-black px-8 rounded-3xl text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all">Add</button>
-                </div>
-              </form>
+              {(() => {
+                const gatewayLimitCheck = canAddGateway(state);
+                const isLimitReached = !gatewayLimitCheck.allowed && gatewayLimitCheck.reason === 'limit_reached';
+                const requiresAuth = !gatewayLimitCheck.allowed && gatewayLimitCheck.reason === 'requires_auth';
+                
+                if (requiresAuth) {
+                  return (
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Add Gateway</label>
+                      <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-200 dark:border-white/10">
+                        <div className="flex flex-col items-center text-center">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                            Sign in to add and sync your gateways across devices.
+                          </p>
+                          <button
+                            onClick={onSignIn}
+                            className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
+                          >
+                            Sign In
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                if (isLimitReached) {
+                  return (
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Add Gateway</label>
+                      <div className="p-8 bg-indigo-50 dark:bg-indigo-950/20 rounded-3xl border border-indigo-100 dark:border-indigo-900/30">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">Gateway limit reached</h3>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+                              You've reached the maximum of 5 gateways on the free plan. Upgrade to unlock unlimited gateways and organize all your important destinations.
+                            </p>
+                            <button
+                              onClick={() => {
+                                setSubscriptionModalFeature('gateways');
+                                setIsSubscriptionModalOpen(true);
+                              }}
+                              className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
+                            >
+                              Upgrade to Pro
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <form onSubmit={handleAddLink} className="space-y-4">
+                    <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Add Gateway</label>
+                    <div className="flex gap-4">
+                      <input 
+                        type="text" placeholder="https://..." value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
+                        className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-3xl px-6 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-800 dark:text-gray-100"
+                      />
+                      <button type="submit" className="bg-black dark:bg-white text-white dark:text-black px-8 rounded-3xl text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all">Add</button>
+                    </div>
+                  </form>
+                );
+              })()}
 
               <div className="space-y-4">
                 <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Active Gateways</label>
@@ -224,16 +338,77 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
           {activeTab === 'snippets' && (
             <div className="space-y-10 animate-reveal">
-              <form onSubmit={handleAddSnippet} className="space-y-4">
-                <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">New Seed</label>
-                <div className="flex gap-4">
-                  <input 
-                    type="text" placeholder="e.g. Tips for deep focus" value={newPrompt} onChange={(e) => setNewPrompt(e.target.value)}
-                    className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-3xl px-6 py-4 text-sm focus:outline-none text-gray-800 dark:text-gray-100"
-                  />
-                  <button type="submit" className="bg-black dark:bg-white text-white dark:text-black px-8 rounded-3xl text-[11px] font-bold uppercase tracking-widest transition-all">Plant</button>
-                </div>
-              </form>
+              {(() => {
+                const intentionLimitCheck = canAddIntention(state);
+                const isLimitReached = !intentionLimitCheck.allowed && intentionLimitCheck.reason === 'limit_reached';
+                const requiresAuth = !intentionLimitCheck.allowed && intentionLimitCheck.reason === 'requires_auth';
+                
+                if (requiresAuth) {
+                  return (
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">New Seed</label>
+                      <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-200 dark:border-white/10">
+                        <div className="flex flex-col items-center text-center">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                            Sign in to create and manage your intentions.
+                          </p>
+                          <button
+                            onClick={onSignIn}
+                            className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
+                          >
+                            Sign In
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                if (isLimitReached) {
+                  return (
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">New Seed</label>
+                      <div className="p-8 bg-indigo-50 dark:bg-indigo-950/20 rounded-3xl border border-indigo-100 dark:border-indigo-900/30">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">Intention limit reached</h3>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+                              You can have 1 active intention on the free plan. Upgrade to create and manage multiple intentions for different days or contexts.
+                            </p>
+                            <button
+                              onClick={() => {
+                                setSubscriptionModalFeature('intentions');
+                                setIsSubscriptionModalOpen(true);
+                              }}
+                              className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
+                            >
+                              Upgrade to Pro
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <form onSubmit={handleAddSnippet} className="space-y-4">
+                    <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">New Seed</label>
+                    <div className="flex gap-4">
+                      <input 
+                        type="text" placeholder="e.g. Tips for deep focus" value={newPrompt} onChange={(e) => setNewPrompt(e.target.value)}
+                        className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-3xl px-6 py-4 text-sm focus:outline-none text-gray-800 dark:text-gray-100"
+                      />
+                      <button type="submit" className="bg-black dark:bg-white text-white dark:text-black px-8 rounded-3xl text-[11px] font-bold uppercase tracking-widest transition-all">Plant</button>
+                    </div>
+                  </form>
+                );
+              })()}
               <div className="space-y-4">
                 {state.requests.map(req => (
                     <div key={req.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl transition-all">
@@ -296,6 +471,14 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
             <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">StartlyTab v{state.version}</span>
         </div>
       </div>
+
+      <SubscriptionUpsellModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        onUpgrade={handleUpgrade}
+        feature={subscriptionModalFeature}
+        theme={state.theme}
+      />
     </div>
   );
 };

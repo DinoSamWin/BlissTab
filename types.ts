@@ -13,14 +13,24 @@ export interface SnippetRequest {
   active: boolean;
 }
 
+export type SubscriptionPlan = 'free' | 'pro' | 'team';
+export type SubscriptionStatus = 'active' | 'expired' | 'canceled';
+
 export interface User {
   id: string;
   email: string;
   name?: string;
   picture?: string;
+  // Subscription fields (from backend)
+  isSubscribed?: boolean;
+  subscriptionPlan?: SubscriptionPlan;
+  subscriptionStatus?: SubscriptionStatus;
+  subscriptionExpiresAt?: string | null; // ISO date string
 }
 
 export type Theme = 'light' | 'dark';
+
+export type SubscriptionTier = 'unauthenticated' | 'authenticated_free' | 'authenticated_subscribed';
 
 export interface AppState {
   version: string;
@@ -30,6 +40,7 @@ export interface AppState {
   language: string;
   user: User | null;
   theme: Theme;
+  subscriptionTier?: SubscriptionTier; // Optional for backward compatibility
 }
 
 export type ToastType = 'success' | 'error' | 'info';

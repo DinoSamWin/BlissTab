@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AppState, ToastMessage, User, Theme } from './types';
+import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
 import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
 import { generateSnippet } from './services/geminiService';
 import { initGoogleAuth, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory } from './services/perspectiveService';
+import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier } from './services/usageLimitsService';
+import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import Settings from './components/Settings';
+import LoginPromptModal from './components/LoginPromptModal';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(() => {
@@ -37,6 +40,7 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [revealKey, setRevealKey] = useState(0);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   
   const isAuthenticated = !!appState.user;
   
@@ -71,18 +75,27 @@ const App: React.FC = () => {
     setIsSyncing(true);
     openGoogleSignIn(async (user) => {
       if (user) {
+        // Reset perspective count for unauthenticated users
+        resetPerspectiveCount();
+        
+        // Fetch subscription state from backend
+        const subscriptionData = await fetchSubscriptionState(user.id);
+        const userWithSubscription = { ...user, ...subscriptionData };
+        const subscriptionTier = determineSubscriptionTier(userWithSubscription);
+        
         // First set user, then fetch cloud data
         const currentState = appState;
-        setAppState(prev => ({ ...prev, user }));
+        setAppState(prev => ({ ...prev, user: userWithSubscription, subscriptionTier }));
         
         // Fetch cloud data and merge with current state
         const cloudData = await fetchFromCloud(user.id);
         if (cloudData) {
-          // Merge cloud data with current state, preserving user
+          // Merge cloud data with current state, preserving user with subscription data
           const mergedState = {
             ...currentState,
             ...cloudData,
-            user, // Ensure user is set
+            user: userWithSubscription, // Ensure user with subscription data is set
+            subscriptionTier, // Set subscription tier
             // Preserve local state if cloud data is missing fields
             links: cloudData.links || currentState.links,
             requests: cloudData.requests || currentState.requests,
@@ -93,7 +106,7 @@ const App: React.FC = () => {
           addToast('Data synced from cloud', 'success');
         } else {
           // No cloud data, sync current state to cloud
-          const stateWithUser = { ...currentState, user };
+          const stateWithUser = { ...currentState, user: userWithSubscription, subscriptionTier };
           saveState(stateWithUser, false); // Sync current state to cloud
           addToast('Logged in successfully', 'success');
         }
@@ -103,6 +116,15 @@ const App: React.FC = () => {
   };
 
   const fetchRandomSnippet = useCallback(async () => {
+    // Check usage limits before generating
+    const limitCheck = canGeneratePerspective(appState);
+    if (!limitCheck.allowed) {
+      if (limitCheck.reason === 'limit_reached') {
+        setIsLoginModalOpen(true);
+      }
+      return;
+    }
+
     const activeRequests = appState.requests.filter(r => r.active);
     if (activeRequests.length === 0) return;
 
@@ -114,6 +136,11 @@ const App: React.FC = () => {
     lastPromptIdRef.current = randomReq.id;
 
     setIsGenerating(true);
+    
+    // Increment perspective count for unauthenticated users
+    if (!appState.user) {
+      incrementPerspectiveCount();
+    }
     
     // Load recent history to prevent repetition
     const history = loadHistory();
@@ -128,7 +155,7 @@ const App: React.FC = () => {
     setCurrentSnippet(result);
     setIsGenerating(false);
     setRevealKey(prev => prev + 1);
-  }, [appState.requests, appState.language]);
+  }, [appState]);
 
   const renderSnippet = (text: string) => {
     const parts = text.split(/\[h\](.*?)\[\/h\]/g);
@@ -282,7 +309,16 @@ const App: React.FC = () => {
     initGoogleAuth(async (user) => {
       if (user) {
         console.log('[App] User authenticated:', user.email);
+        // Reset perspective count on login
+        resetPerspectiveCount();
+        
         setIsSyncing(true);
+        
+        // Fetch subscription state from backend
+        const subscriptionData = await fetchSubscriptionState(user.id);
+        const userWithSubscription = { ...user, ...subscriptionData };
+        const subscriptionTier = determineSubscriptionTier(userWithSubscription);
+        
         // Fetch cloud data first
         const cloudData = await fetchFromCloud(user.id);
         
@@ -295,7 +331,8 @@ const App: React.FC = () => {
           const mergedState = {
             ...appState,
             ...cloudData,
-            user, // Ensure user is set
+            user: userWithSubscription, // Ensure user with subscription data is set
+            subscriptionTier, // Set subscription tier
             // Preserve local state if cloud data is missing fields
             links: cloudData.links || appState.links,
             requests: cloudData.requests || appState.requests,
@@ -306,7 +343,7 @@ const App: React.FC = () => {
         } else {
           console.log('[App] No cloud data found, syncing current state');
           // No cloud data, set user and sync current state
-          const stateWithUser = { ...appState, user };
+          const stateWithUser = { ...appState, user: userWithSubscription, subscriptionTier };
           setAppState(stateWithUser);
           // Sync current state to cloud for first-time users
           await syncToCloud(stateWithUser);
@@ -552,7 +589,19 @@ const App: React.FC = () => {
         updateState={saveState}
         addToast={addToast}
         onSignIn={handleSignIn}
-        onSignOut={() => { signOutUser(); saveState({...appState, user: null}); addToast('Signed out'); }}
+        onSignOut={() => { 
+          signOutUser(); 
+          const newState = {...appState, user: null, subscriptionTier: undefined};
+          saveState(newState); 
+          addToast('Signed out'); 
+        }}
+      />
+
+      <LoginPromptModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onSignIn={handleSignIn}
+        theme={appState.theme}
       />
     </div>
   );
