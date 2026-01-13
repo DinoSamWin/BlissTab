@@ -28,44 +28,83 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     if (!newUrl || isFetchingMetadata) return;
     
     setIsFetchingMetadata(true);
-    const tempId = Date.now().toString();
+    // Generate stable UUID-like ID
+    const tempId = `gateway-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setPendingLinkId(tempId);
     
-    // Create optimistic link with loading state
+    // Normalize URL immediately
+    let normalizedUrl = newUrl.trim();
+    if (!/^https?:\/\//i.test(normalizedUrl)) {
+      normalizedUrl = 'https://' + normalizedUrl;
+    }
+    
+    // Extract domain for fallback
+    let fallbackTitle = 'Gateway';
+    try {
+      const domain = new URL(normalizedUrl).hostname;
+      const domainParts = domain.split('.');
+      fallbackTitle = domainParts.length > 1 
+        ? domainParts[domainParts.length - 2].charAt(0).toUpperCase() + domainParts[domainParts.length - 2].slice(1)
+        : domain.charAt(0).toUpperCase() + domain.slice(1);
+    } catch {
+      // Keep default fallback
+    }
+    
+    // Create optimistic link with loading state - ALWAYS keep this item
     const optimisticLink: QuickLink = {
       id: tempId,
-      url: newUrl.trim(),
+      url: normalizedUrl,
       title: 'Fetching details...',
       icon: null,
       color: COLORS[Math.floor(Math.random() * COLORS.length)]
     };
     
-    updateState({ ...state, links: [...state.links, optimisticLink] });
-    const currentUrl = newUrl;
+    // Use functional update to ensure we're working with latest state
+    updateState(prevState => ({ ...prevState, links: [...prevState.links, optimisticLink] }));
+    const currentUrl = normalizedUrl;
     setNewUrl('');
     
     try {
       // Fetch metadata
       const meta = await fetchSiteMetadata(currentUrl);
       
-      if (meta) {
-        // Update the optimistic link with real data
-        const updatedLinks = state.links.map(link => 
+      // Always update the link - never remove it
+      // Use functional update to work with latest state
+      updateState(prevState => ({
+        ...prevState,
+        links: prevState.links.map(link => 
           link.id === tempId 
-            ? { ...link, url: meta.url, title: meta.title, icon: meta.icon }
+            ? { 
+                ...link, 
+                url: meta?.url || normalizedUrl, 
+                title: meta?.title || fallbackTitle, 
+                icon: meta?.icon || null 
+              }
             : link
-        );
-        updateState({ ...state, links: updatedLinks });
+        )
+      }));
+      
+      if (meta) {
         addToast('Gateway added');
       } else {
-        // Remove failed link
-        updateState({ ...state, links: state.links.filter(l => l.id !== tempId) });
-        addToast('Failed to fetch gateway details', 'error');
+        // Still keep the item, just with fallback data
+        addToast('Gateway added (using fallback details)', 'info');
       }
     } catch (error) {
-      // Remove failed link
-      updateState({ ...state, links: state.links.filter(l => l.id !== tempId) });
-      addToast('Failed to add gateway', 'error');
+      // NEVER remove the item - keep it with fallback data
+      updateState(prevState => ({
+        ...prevState,
+        links: prevState.links.map(link => 
+          link.id === tempId 
+            ? { 
+                ...link, 
+                title: fallbackTitle,
+                icon: null // Will use color fallback
+              }
+            : link
+        )
+      }));
+      addToast('Gateway added (using fallback details)', 'info');
     } finally {
       setIsFetchingMetadata(false);
       setPendingLinkId(null);
@@ -73,24 +112,24 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   };
 
   const removeLink = (id: string) => {
-    updateState({ ...state, links: state.links.filter(l => l.id !== id) });
+    updateState(prevState => ({ ...prevState, links: prevState.links.filter(l => l.id !== id) }));
   };
 
   const handleAddSnippet = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPrompt) return;
     const newItem: SnippetRequest = { id: Date.now().toString(), prompt: newPrompt, active: true };
-    updateState({ ...state, requests: [...state.requests, newItem] });
+    updateState(prevState => ({ ...prevState, requests: [...prevState.requests, newItem] }));
     setNewPrompt('');
     addToast('Seed planted');
   };
 
   const toggleSnippetActive = (id: string) => {
-    updateState({ ...state, requests: state.requests.map(r => r.id === id ? { ...r, active: !r.active } : r) });
+    updateState(prevState => ({ ...prevState, requests: prevState.requests.map(r => r.id === id ? { ...r, active: !r.active } : r) }));
   };
 
   const removeSnippet = (id: string) => {
-    updateState({ ...state, requests: state.requests.filter(r => r.id !== id) });
+    updateState(prevState => ({ ...prevState, requests: prevState.requests.filter(r => r.id !== id) }));
   };
 
   return (
@@ -100,7 +139,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         {/* Header Section */}
         <div className="px-12 pt-12 pb-8 flex justify-between items-end flex-shrink-0">
           <div>
-            <h2 className="serif text-4xl md:text-5xl font-normal text-gray-800 dark:text-gray-100 tracking-tight">{BRAND_CONFIG.name}</h2>
+            <h2 className="logo-text text-4xl md:text-5xl font-normal text-gray-800 dark:text-gray-100 tracking-tight">{BRAND_CONFIG.name}</h2>
             <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-[0.3em] mt-2">{BRAND_CONFIG.slogan}</p>
           </div>
           <button onClick={onClose} className="p-4 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-2xl transition-all active:scale-95">
