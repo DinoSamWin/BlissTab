@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StartlyTab - Debug Info</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #666;
+      font-size: 18px;
+      margin-top: 0;
+      margin-bottom: 15px;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    .status.ok {
+      background: #10b981;
+      color: white;
+    }
+    .status.error {
+      background: #ef4444;
+      color: white;
+    }
+    .status.warning {
+      background: #f59e0b;
+      color: white;
+    }
+    .info-item {
+      margin: 10px 0;
+      padding: 10px;
+      background: #f9fafb;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .label {
+      font-weight: 600;
+      color: #666;
+      margin-right: 8px;
+    }
+    button {
+      background: #111;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #333;
+    }
+  </style>
+</head>
+<body>
+  <h1>StartlyTab Debug Information</h1>
+  
+  <div class="card">
+    <h2>Environment Variables <span id="envStatus" class="status">Checking...</span></h2>
+    <div id="envInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2>Google OAuth Status <span id="googleStatus" class="status">Checking...</span></h2>
+    <div id="googleInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2>Supabase Status <span id="supabaseStatus" class="status">Checking...</span></h2>
+    <div id="supabaseInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2>Current Environment</h2>
+    <div id="envDetails"></div>
+  </div>
+
+  <button onclick="location.reload()">Refresh</button>
+
+  <script>
+    function checkEnvironment() {
+      const envInfo = document.getElementById('envInfo');
+      const envStatus = document.getElementById('envStatus');
+      
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      let html = '';
+      let hasError = false;
+      
+      if (clientId) {
+        html += `<div class="info-item"><span class="label">VITE_GOOGLE_CLIENT_ID:</span> ${clientId.substring(0, 30)}...</div>`;
+      } else {
+        html += `<div class="info-item" style="background: #fee2e2;"><span class="label">VITE_GOOGLE_CLIENT_ID:</span> <strong style="color: #dc2626;">NOT SET</strong></div>`;
+        hasError = true;
+      }
+      
+      if (supabaseUrl) {
+        html += `<div class="info-item"><span class="label">VITE_SUPABASE_URL:</span> ${supabaseUrl}</div>`;
+      } else {
+        html += `<div class="info-item" style="background: #fee2e2;"><span class="label">VITE_SUPABASE_URL:</span> <strong style="color: #dc2626;">NOT SET</strong></div>`;
+        hasError = true;
+      }
+      
+      if (supabaseKey) {
+        html += `<div class="info-item"><span class="label">VITE_SUPABASE_ANON_KEY:</span> ${supabaseKey.substring(0, 30)}...</div>`;
+      } else {
+        html += `<div class="info-item" style="background: #fee2e2;"><span class="label">VITE_SUPABASE_ANON_KEY:</span> <strong style="color: #dc2626;">NOT SET</strong></div>`;
+        hasError = true;
+      }
+      
+      envInfo.innerHTML = html;
+      envStatus.textContent = hasError ? 'Error' : 'OK';
+      envStatus.className = 'status ' + (hasError ? 'error' : 'ok');
+    }
+
+    function checkGoogleOAuth() {
+      const googleInfo = document.getElementById('googleInfo');
+      const googleStatus = document.getElementById('googleStatus');
+      
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      let html = '';
+      let status = 'warning';
+      
+      html += `<div class="info-item"><span class="label">Client ID:</span> ${clientId || 'NOT SET'}</div>`;
+      html += `<div class="info-item"><span class="label">Google SDK:</span> ${window.google?.accounts?.id ? 'Loaded' : 'Not loaded'}</div>`;
+      html += `<div class="info-item"><span class="label">Current Origin:</span> ${window.location.origin}</div>`;
+      
+      if (!clientId) {
+        html += `<div class="info-item" style="background: #fee2e2;"><strong style="color: #dc2626;">Error: Client ID not configured</strong></div>`;
+        status = 'error';
+      } else if (!window.google?.accounts?.id) {
+        html += `<div class="info-item" style="background: #fef3c7;"><strong style="color: #d97706;">Warning: Google SDK not loaded yet</strong></div>`;
+        status = 'warning';
+      } else {
+        html += `<div class="info-item" style="background: #d1fae5;"><strong style="color: #059669;">Google OAuth ready</strong></div>`;
+        status = 'ok';
+      }
+      
+      googleInfo.innerHTML = html;
+      googleStatus.textContent = status === 'ok' ? 'OK' : status === 'error' ? 'Error' : 'Warning';
+      googleStatus.className = 'status ' + status;
+    }
+
+    function checkSupabase() {
+      const supabaseInfo = document.getElementById('supabaseInfo');
+      const supabaseStatus = document.getElementById('supabaseStatus');
+      
+      const url = import.meta.env.VITE_SUPABASE_URL;
+      const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      let html = '';
+      let status = 'warning';
+      
+      html += `<div class="info-item"><span class="label">URL:</span> ${url || 'NOT SET'}</div>`;
+      html += `<div class="info-item"><span class="label">Anon Key:</span> ${key ? key.substring(0, 30) + '...' : 'NOT SET'}</div>`;
+      
+      if (!url || !key) {
+        html += `<div class="info-item" style="background: #fee2e2;"><strong style="color: #dc2626;">Error: Supabase not configured</strong></div>`;
+        status = 'error';
+      } else {
+        html += `<div class="info-item" style="background: #d1fae5;"><strong style="color: #059669;">Supabase configured</strong></div>`;
+        status = 'ok';
+      }
+      
+      supabaseInfo.innerHTML = html;
+      supabaseStatus.textContent = status === 'ok' ? 'OK' : 'Error';
+      supabaseStatus.className = 'status ' + status;
+    }
+
+    function checkEnvironmentDetails() {
+      const envDetails = document.getElementById('envDetails');
+      
+      const html = `
+        <div class="info-item"><span class="label">Mode:</span> ${import.meta.env.MODE}</div>
+        <div class="info-item"><span class="label">Origin:</span> ${window.location.origin}</div>
+        <div class="info-item"><span class="label">Hostname:</span> ${window.location.hostname}</div>
+        <div class="info-item"><span class="label">Protocol:</span> ${window.location.protocol}</div>
+        <div class="info-item"><span class="label">User Agent:</span> ${navigator.userAgent.substring(0, 80)}...</div>
+      `;
+      
+      envDetails.innerHTML = html;
+    }
+
+    // Load Google SDK
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      setTimeout(() => {
+        checkGoogleOAuth();
+      }, 500);
+    };
+    document.head.appendChild(script);
+
+    // Initial checks
+    checkEnvironment();
+    checkSupabase();
+    checkEnvironmentDetails();
+    
+    // Check Google OAuth after SDK loads
+    setTimeout(checkGoogleOAuth, 1000);
+  </script>
+</body>
+</html>
+

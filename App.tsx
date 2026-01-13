@@ -71,11 +71,31 @@ const App: React.FC = () => {
     setIsSyncing(true);
     openGoogleSignIn(async (user) => {
       if (user) {
+        // First set user, then fetch cloud data
+        const currentState = appState;
         setAppState(prev => ({ ...prev, user }));
+        
+        // Fetch cloud data and merge with current state
         const cloudData = await fetchFromCloud(user.id);
         if (cloudData) {
-          saveState({ ...appState, ...cloudData, user }, true);
-          addToast('Studio synced', 'success');
+          // Merge cloud data with current state, preserving user
+          const mergedState = {
+            ...currentState,
+            ...cloudData,
+            user, // Ensure user is set
+            // Preserve local state if cloud data is missing fields
+            links: cloudData.links || currentState.links,
+            requests: cloudData.requests || currentState.requests,
+            language: cloudData.language || currentState.language,
+            theme: cloudData.theme || currentState.theme,
+          };
+          saveState(mergedState, true); // Skip sync on initial load
+          addToast('Data synced from cloud', 'success');
+        } else {
+          // No cloud data, sync current state to cloud
+          const stateWithUser = { ...currentState, user };
+          saveState(stateWithUser, false); // Sync current state to cloud
+          addToast('Logged in successfully', 'success');
         }
       }
       setIsSyncing(false);
@@ -258,17 +278,46 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    console.log('[App] Initializing Google Auth...');
     initGoogleAuth(async (user) => {
       if (user) {
-        setAppState(prev => ({ ...prev, user }));
+        console.log('[App] User authenticated:', user.email);
         setIsSyncing(true);
+        // Fetch cloud data first
         const cloudData = await fetchFromCloud(user.id);
+        
         if (cloudData) {
-          setAppState(prev => ({ ...prev, ...cloudData, user }));
+          console.log('[App] Cloud data fetched:', {
+            links: cloudData.links?.length || 0,
+            requests: cloudData.requests?.length || 0
+          });
+          // Merge cloud data with current state
+          const mergedState = {
+            ...appState,
+            ...cloudData,
+            user, // Ensure user is set
+            // Preserve local state if cloud data is missing fields
+            links: cloudData.links || appState.links,
+            requests: cloudData.requests || appState.requests,
+            language: cloudData.language || appState.language,
+            theme: cloudData.theme || appState.theme,
+          };
+          saveState(mergedState, true); // Skip sync on initial load
+        } else {
+          console.log('[App] No cloud data found, syncing current state');
+          // No cloud data, set user and sync current state
+          const stateWithUser = { ...appState, user };
+          setAppState(stateWithUser);
+          // Sync current state to cloud for first-time users
+          await syncToCloud(stateWithUser);
         }
         setIsSyncing(false);
       } else {
-        renderGoogleButton('google-login-btn', appState.theme);
+        console.log('[App] No user, rendering Google button');
+        // Delay button rendering to ensure SDK is loaded
+        setTimeout(() => {
+          renderGoogleButton('google-login-btn', appState.theme);
+        }, 500);
       }
     });
     fetchRandomSnippet();
@@ -375,7 +424,11 @@ const App: React.FC = () => {
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
             <button 
-              onClick={() => saveState({...appState, theme: appState.theme === 'light' ? 'dark' : 'light'})}
+              onClick={() => {
+                const newTheme = appState.theme === 'light' ? 'dark' : 'light';
+                saveState({...appState, theme: newTheme});
+                addToast(`Theme: ${newTheme}`, 'info');
+              }}
               className="p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
               aria-label="Toggle Theme"
             >

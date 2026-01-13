@@ -1,35 +1,43 @@
-
 import { AppState } from '../types';
+import { syncToCloud as supabaseSync, fetchFromCloud as supabaseFetch } from './supabaseService';
 
 /**
- * Simulates a cloud backend for storing and retrieving user data.
- * In a real-world scenario, this would be a series of fetch() calls to a REST API.
+ * Sync user data to cloud (Supabase) with localStorage fallback
  */
 export async function syncToCloud(state: AppState): Promise<void> {
   if (!state.user) return;
 
-  // Simulate network latency
-  await new Promise(resolve => setTimeout(resolve, 800));
-
-  // Isolated cloud storage per user
-  const cloudKey = `cloud_sync_${state.user.id}`;
-  const dataToSync = {
-    links: state.links,
-    requests: state.requests,
-    language: state.language,
-    theme: state.theme,
-    version: state.version,
-    updatedAt: new Date().toISOString()
-  };
-
-  localStorage.setItem(cloudKey, JSON.stringify(dataToSync));
-  console.log(`[Sync] Successfully pushed data for ${state.user.email}`);
+  // Try Supabase first, fallback to localStorage
+  try {
+    await supabaseSync(state);
+  } catch (error) {
+    console.warn('[Sync] Supabase sync failed, using localStorage fallback:', error);
+    // Fallback to localStorage
+    const cloudKey = `cloud_sync_${state.user.id}`;
+    const dataToSync = {
+      links: state.links,
+      requests: state.requests,
+      language: state.language,
+      theme: state.theme,
+      version: state.version,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem(cloudKey, JSON.stringify(dataToSync));
+  }
 }
 
+/**
+ * Fetch user data from cloud (Supabase) with localStorage fallback
+ */
 export async function fetchFromCloud(userId: string): Promise<Partial<AppState> | null> {
-  // Simulate network latency
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  try {
+    const data = await supabaseFetch(userId);
+    if (data) return data;
+  } catch (error) {
+    console.warn('[Sync] Supabase fetch failed, trying localStorage fallback:', error);
+  }
 
+  // Fallback to localStorage
   const cloudKey = `cloud_sync_${userId}`;
   const saved = localStorage.getItem(cloudKey);
   
