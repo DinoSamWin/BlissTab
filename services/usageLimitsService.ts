@@ -2,6 +2,20 @@ import { SubscriptionTier, AppState } from '../types';
 import { determineSubscriptionTier } from './subscriptionService';
 
 /**
+ * Single source of truth for subscription limits
+ */
+export const SUBSCRIPTION_LIMITS = {
+  GATEWAYS: {
+    FREE: 5,
+    SUBSCRIBED: Infinity,
+  },
+  INTENTIONS: {
+    FREE: 1,
+    SUBSCRIBED: Infinity,
+  },
+} as const;
+
+/**
  * Get the current subscription tier based on user state
  * Uses backend subscription data if available, falls back to AppState
  */
@@ -19,6 +33,14 @@ export function getSubscriptionTier(state: AppState): SubscriptionTier {
   }
   
   return tier;
+}
+
+/**
+ * Check if user is subscribed (helper function)
+ */
+export function isSubscribed(state: AppState): boolean {
+  const tier = getSubscriptionTier(state);
+  return tier === 'authenticated_subscribed';
 }
 
 /**
@@ -40,6 +62,7 @@ export function canGeneratePerspective(state: AppState): { allowed: boolean; rea
 
 /**
  * Check if user can add a new gateway
+ * Single source of truth: Free users get 5 gateways, subscribed get unlimited
  */
 export function canAddGateway(state: AppState): { allowed: boolean; reason?: string } {
   const tier = getSubscriptionTier(state);
@@ -49,8 +72,9 @@ export function canAddGateway(state: AppState): { allowed: boolean; reason?: str
   }
   
   if (tier === 'authenticated_free') {
-    const activeGateways = state.links.length;
-    if (activeGateways >= 5) {
+    const gatewayCount = state.links.length;
+    const maxGateways = SUBSCRIPTION_LIMITS.GATEWAYS.FREE;
+    if (gatewayCount >= maxGateways) {
       return { allowed: false, reason: 'limit_reached' };
     }
   }
@@ -61,6 +85,7 @@ export function canAddGateway(state: AppState): { allowed: boolean; reason?: str
 
 /**
  * Check if user can add a new intention
+ * Single source of truth: Free users get 1 active intention, subscribed get unlimited
  */
 export function canAddIntention(state: AppState): { allowed: boolean; reason?: string } {
   const tier = getSubscriptionTier(state);
@@ -70,8 +95,9 @@ export function canAddIntention(state: AppState): { allowed: boolean; reason?: s
   }
   
   if (tier === 'authenticated_free') {
-    const activeIntentions = state.requests.filter(r => r.active).length;
-    if (activeIntentions >= 1) {
+    const activeIntentionCount = state.requests.filter(r => r.active).length;
+    const maxIntentions = SUBSCRIPTION_LIMITS.INTENTIONS.FREE;
+    if (activeIntentionCount >= maxIntentions) {
       return { allowed: false, reason: 'limit_reached' };
     }
   }

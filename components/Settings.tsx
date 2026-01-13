@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AppState, QuickLink, SnippetRequest } from '../types';
 import { fetchSiteMetadata } from '../services/metadataService';
 import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG } from '../constants';
-import { canAddGateway, canAddIntention, getSubscriptionTier } from '../services/usageLimitsService';
+import { canAddGateway, canAddIntention, getSubscriptionTier, SUBSCRIPTION_LIMITS, isSubscribed } from '../services/usageLimitsService';
 import SubscriptionUpsellModal from './SubscriptionUpsellModal';
 
 interface SettingsProps {
@@ -31,7 +31,19 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     e.preventDefault();
     if (!newUrl || isFetchingMetadata) return;
     
-    // Check usage limits before adding
+    // Handler-level guard: Prevent bypass via Enter key, fast clicks, or devtools
+    const tier = getSubscriptionTier(state);
+    const isAuthed = !!state.user;
+    const gatewayCount = state.links.length;
+    
+    // Explicit check: Only block if authenticated, not subscribed, and at/above limit
+    if (isAuthed && !isSubscribed(state) && gatewayCount >= SUBSCRIPTION_LIMITS.GATEWAYS.FREE) {
+      setSubscriptionModalFeature('gateways');
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
+    
+    // Check usage limits before adding (secondary check)
     const limitCheck = canAddGateway(state);
     if (!limitCheck.allowed) {
       if (limitCheck.reason === 'limit_reached') {
@@ -39,7 +51,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         setIsSubscriptionModalOpen(true);
       } else if (limitCheck.reason === 'requires_auth') {
         addToast('Please sign in to add gateways', 'info');
-        // Optionally trigger sign in
         onSignIn();
       }
       return;
@@ -137,7 +148,19 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     e.preventDefault();
     if (!newPrompt) return;
     
-    // Check usage limits before adding
+    // Handler-level guard: Prevent bypass via Enter key, fast clicks, or devtools
+    const tier = getSubscriptionTier(state);
+    const isAuthed = !!state.user;
+    const activeIntentionCount = state.requests.filter(r => r.active).length;
+    
+    // Explicit check: Only block if authenticated, not subscribed, and at/above limit
+    if (isAuthed && !isSubscribed(state) && activeIntentionCount >= SUBSCRIPTION_LIMITS.INTENTIONS.FREE) {
+      setSubscriptionModalFeature('intentions');
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
+    
+    // Check usage limits before adding (secondary check)
     const limitCheck = canAddIntention(state);
     if (!limitCheck.allowed) {
       if (limitCheck.reason === 'limit_reached') {
@@ -145,7 +168,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         setIsSubscriptionModalOpen(true);
       } else if (limitCheck.reason === 'requires_auth') {
         addToast('Please sign in to add intentions', 'info');
-        // Optionally trigger sign in
         onSignIn();
       }
       return;
@@ -169,6 +191,17 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     
     // If activating, check if it would exceed the limit
     if (!targetRequest.active) {
+      const isAuthed = !!state.user;
+      const activeIntentionCount = state.requests.filter(r => r.active).length;
+      
+      // Handler-level guard: Only block if authenticated, not subscribed, and at/above limit
+      if (isAuthed && !isSubscribed(state) && activeIntentionCount >= SUBSCRIPTION_LIMITS.INTENTIONS.FREE) {
+        setSubscriptionModalFeature('intentions');
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+      
+      // Secondary check using service function
       const limitCheck = canAddIntention(state);
       if (!limitCheck.allowed && limitCheck.reason === 'limit_reached') {
         setSubscriptionModalFeature('intentions');
