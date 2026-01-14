@@ -150,6 +150,13 @@ CREATE POLICY "Users can view their own membership"
   FOR SELECT
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
 
+-- Create policy: Users can insert their own membership (for redeem operations)
+DROP POLICY IF EXISTS "Users can insert their own membership" ON user_membership;
+CREATE POLICY "Users can insert their own membership"
+  ON user_membership
+  FOR INSERT
+  WITH CHECK (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
+
 -- Create policy: Users can update their own membership (for redeem operations)
 DROP POLICY IF EXISTS "Users can update their own membership" ON user_membership;
 CREATE POLICY "Users can update their own membership"

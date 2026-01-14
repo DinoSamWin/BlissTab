@@ -14,10 +14,14 @@ export async function generateSnippet(
 ): Promise<string> {
   try {
     // Verify API key presence
-    if (!process.env.API_KEY) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
       console.warn("StartlyTab: API key not found. Using localized fallback.");
+      console.warn("StartlyTab: Check that VITE_GEMINI_API_KEY or GEMINI_API_KEY is set in .env file");
       return getRandomFallback(language);
     }
+    
+    console.log('[Gemini] Generating perspective with API key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET');
 
     // Build diversity instruction based on history
     const diversityInstruction = history.length > 0
@@ -25,7 +29,9 @@ export async function generateSnippet(
       : '';
 
     // Initialize the AI client
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
+    
+    console.log('[Gemini] Calling API with prompt:', prompt.substring(0, 50) + '...');
     
     // Use the 2.5-flash model
     const response = await ai.models.generateContent({
@@ -49,19 +55,29 @@ export async function generateSnippet(
 
     const text = response.text?.trim();
     if (!text || text.length === 0) {
+      console.warn('[Gemini] Empty response from API, using fallback');
       return getRandomFallback(language);
     }
 
+    console.log('[Gemini] Generated perspective:', text.substring(0, 50) + '...');
+
     // Check if generated text is too similar to history
     if (isTooSimilar(text, history) && retryCount < 3) {
-      console.log(`Perspective too similar, retrying (attempt ${retryCount + 1})...`);
+      console.log(`[Gemini] Perspective too similar, retrying (attempt ${retryCount + 1})...`);
       return generateSnippet(prompt, language, history, retryCount + 1);
     }
 
+    console.log('[Gemini] Successfully generated unique perspective');
     return text;
   } catch (error: any) {
     // Log detailed error information while ensuring the UI doesn't break
-    console.error("StartlyTab: Gemini generation failed:", error);
+    console.error("[Gemini] Generation failed:", error);
+    console.error("[Gemini] Error details:", {
+      message: error?.message,
+      status: error?.status,
+      statusText: error?.statusText,
+      apiKeySet: !!process.env.API_KEY
+    });
     return getRandomFallback(language);
   }
 }
