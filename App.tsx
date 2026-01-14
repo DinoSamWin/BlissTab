@@ -70,13 +70,34 @@ const App: React.FC = () => {
   
   const lastPromptIdRef = useRef<string | null>(null);
 
+  const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
+    const id = Date.now().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  }, []);
+
   const saveState = useCallback(async (state: AppState | ((prev: AppState) => AppState), skipSync = false) => {
-    // Handle functional updates
-    const newState = typeof state === 'function' ? state(appState) : state;
+    // Handle functional updates - use setAppState's functional form
+    let newState: AppState;
     
-    // Always update local state immediately for responsive UI
-    localStorage.setItem('focus_tab_state', JSON.stringify({ ...newState, user: null }));
-    setAppState(newState);
+    if (typeof state === 'function') {
+      // For functional updates, use setAppState to get the latest state
+      // This ensures we always work with the most current state
+      await new Promise<void>(resolve => {
+        setAppState(prev => {
+          newState = state(prev);
+          // Update localStorage immediately
+          localStorage.setItem('focus_tab_state', JSON.stringify({ ...newState, user: null }));
+          resolve();
+          return newState;
+        });
+      });
+    } else {
+      newState = state;
+      // Always update local state immediately for responsive UI
+      localStorage.setItem('focus_tab_state', JSON.stringify({ ...newState, user: null }));
+      setAppState(newState);
+    }
     
     // Sync to Supabase if user is logged in and not skipping
     if (newState.user && !skipSync) {
@@ -93,13 +114,7 @@ const App: React.FC = () => {
         setIsSyncing(false);
       }
     }
-  }, [appState]);
-
-  const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
-    const id = Date.now().toString();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-  };
+  }, [addToast]);
 
   const handleSignIn = () => {
     setIsSyncing(true);

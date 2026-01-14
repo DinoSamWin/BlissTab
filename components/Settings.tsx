@@ -95,7 +95,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     
     // Optimistic update - add link immediately for responsive UI
     const optimisticState = { ...state, links: [...state.links, optimisticLink] };
-    updateState(optimisticState);
+    // Don't await optimistic update - let it happen in background for responsive UI
+    updateState(optimisticState).catch(err => console.error('[Settings] Optimistic update failed:', err));
     const currentUrl = normalizedUrl;
     setNewUrl('');
     
@@ -104,7 +105,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       const meta = await fetchSiteMetadata(currentUrl);
       
       // Always update the link - never remove it
-      // Use functional update to work with latest state
+      // Build updated state based on optimistic state (includes the new link)
       const updatedLink = {
         id: tempId,
         url: meta?.url || normalizedUrl,
@@ -113,12 +114,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         color: optimisticLink.color
       };
       
-      // Build updated state
-      const updatedLinks = state.links.map(link => 
+      // Build updated state - use optimisticState.links which includes the new link
+      const updatedLinks = optimisticState.links.map(link => 
         link.id === tempId ? updatedLink : link
       );
       const updatedState = {
-        ...state,
+        ...optimisticState,
         links: updatedLinks
       };
       
@@ -144,10 +145,11 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         icon: null,
         color: optimisticLink.color
       };
-      const fallbackLinks = state.links.map(link => 
+      // Use optimisticState.links which includes the new link
+      const fallbackLinks = optimisticState.links.map(link => 
         link.id === tempId ? fallbackLink : link
       );
-      const fallbackState = { ...state, links: fallbackLinks };
+      const fallbackState = { ...optimisticState, links: fallbackLinks };
       try {
         await updateState(fallbackState);
         addToast('Gateway added (using fallback details)', 'info');
@@ -294,13 +296,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
         {/* Tab Navigation - Sticky */}
         <div className="flex px-12 border-b border-black/5 dark:border-white/5 no-scrollbar overflow-x-auto flex-shrink-0 sticky top-0 z-10 bg-white dark:bg-[#0F0F0F]">
-          {['links', 'snippets', 'language', 'account'].map((tab) => (
+          {['links', 'snippets', 'language', 'redeem', 'account'].map((tab) => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab as any)}
               className={`py-6 px-1 mr-10 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${activeTab === tab ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
             >
-              {tab === 'links' ? 'Gateways' : tab === 'snippets' ? 'Intentions' : tab}
+              {tab === 'links' ? 'Gateways' : tab === 'snippets' ? 'Intentions' : tab === 'redeem' ? 'Redeem Code' : tab}
             </button>
           ))}
         </div>
@@ -699,175 +701,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                   {lang.name}
                 </button>
               ))}
-            </div>
-          )}
-
-          {activeTab === 'redeem' && (
-            <div className="space-y-10 animate-reveal">
-              {!state.user ? (
-                <div className="text-center p-12 bg-gray-50/50 dark:bg-white/5 rounded-[3rem] border border-dashed border-gray-200 dark:border-white/10">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-                    Sign in to redeem a code and unlock membership.
-                  </p>
-                  <button
-                    onClick={onSignIn}
-                    className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
-                  >
-                    Sign In
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Redeem Feature Toggle */}
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Redeem Feature</label>
-                    <div className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Enable Redeem Code</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Turn on to use redeem codes</span>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const newValue = !state.user?.redeemEnabled;
-                          const success = await toggleRedeemFeature(state.user!.id, newValue);
-                          if (success) {
-                            updateState({
-                              ...state,
-                              user: { ...state.user!, redeemEnabled: newValue },
-                            });
-                            addToast(newValue ? 'Redeem enabled' : 'Redeem disabled', 'info');
-                          } else {
-                            addToast('Failed to update setting', 'error');
-                          }
-                        }}
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                          state.user?.redeemEnabled !== false ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                            state.user?.redeemEnabled !== false ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Redeem Code Input */}
-                  {state.user?.redeemEnabled !== false ? (
-                    <div className="space-y-4">
-                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Redeem Code</label>
-                      <form
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          if (!redeemCodeInput.trim() || isRedeeming) return;
-
-                          setIsRedeeming(true);
-                          setRedeemStatus({ type: null, message: '' });
-
-                          const result = await redeemCode(state.user!, redeemCodeInput.trim());
-
-                          if (result.ok) {
-                            setRedeemStatus({ type: 'success', message: 'Code redeemed successfully! Membership unlocked.' });
-                            setRedeemCodeInput('');
-                            addToast('Membership unlocked via redeem code', 'success');
-                            
-                            // Refresh membership state
-                            updateState({
-                              ...state,
-                              user: {
-                                ...state.user!,
-                                memberViaRedeem: true,
-                                membershipSince: new Date().toISOString(),
-                              },
-                            });
-                          } else {
-                            const errorMessages: Record<RedeemErrorCode, string> = {
-                              INVALID_CODE: 'Invalid code. Please check and try again.',
-                              DISABLED_CODE: 'This code has been disabled.',
-                              ALREADY_REDEEMED: 'This code has already been redeemed.',
-                              EXPIRED_CODE: 'This code has expired.',
-                              NOT_AUTHENTICATED: 'Please sign in to redeem a code.',
-                              NETWORK_ERROR: 'Network error. Please try again later.',
-                              UNKNOWN_ERROR: 'An error occurred. Please try again.',
-                            };
-                            setRedeemStatus({
-                              type: 'error',
-                              message: result.message || errorMessages[result.error_code!] || 'Failed to redeem code.',
-                            });
-                          }
-
-                          setIsRedeeming(false);
-                        }}
-                        className="space-y-4"
-                      >
-                        <div className="flex gap-4">
-                          <input
-                            type="text"
-                            placeholder="ST-XXXX-XXXX-XXXX"
-                            value={redeemCodeInput}
-                            onChange={(e) => setRedeemCodeInput(e.target.value.toUpperCase())}
-                            className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-3xl px-6 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-800 dark:text-gray-100 uppercase"
-                            disabled={isRedeeming}
-                          />
-                          <button
-                            type="submit"
-                            disabled={isRedeeming || !redeemCodeInput.trim()}
-                            className="bg-black dark:bg-white text-white dark:text-black px-8 rounded-3xl text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isRedeeming ? 'Redeeming...' : 'Redeem'}
-                          </button>
-                        </div>
-                        {redeemStatus.type && (
-                          <div
-                            className={`p-4 rounded-2xl ${
-                              redeemStatus.type === 'success'
-                                ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30'
-                                : 'bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30'
-                            }`}
-                          >
-                            <p
-                              className={`text-sm ${
-                                redeemStatus.type === 'success'
-                                  ? 'text-green-700 dark:text-green-300'
-                                  : 'text-red-700 dark:text-red-300'
-                              }`}
-                            >
-                              {redeemStatus.message}
-                            </p>
-                          </div>
-                        )}
-                      </form>
-                    </div>
-                  ) : (
-                    <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-200 dark:border-white/10">
-                      <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                        Redeem is disabled. Turn it on to use codes.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Membership Status */}
-                  {state.user?.memberViaRedeem && (
-                    <div className="p-6 bg-indigo-50 dark:bg-indigo-950/20 rounded-3xl border border-indigo-100 dark:border-indigo-900/30">
-                      <div className="flex items-center gap-3">
-                        <svg className="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Membership Active</p>
-                          <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
-                            Unlocked via redeem code
-                            {state.user.membershipSince && (
-                              <> • {new Date(state.user.membershipSince).toLocaleDateString()}</>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           )}
 
