@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppState, QuickLink, SnippetRequest } from '../types';
 import { fetchSiteMetadata } from '../services/metadataService';
 import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG } from '../constants';
 import { canAddGateway, canAddIntention, getSubscriptionTier, SUBSCRIPTION_LIMITS, isSubscribed } from '../services/usageLimitsService';
-import { redeemCode, toggleRedeemFeature, RedeemErrorCode } from '../services/redeemService';
+import { redeemCode, toggleRedeemFeature, RedeemErrorCode, fetchUserMembership, fetchUserSettings } from '../services/redeemService';
+import { determineSubscriptionTier } from '../services/subscriptionService';
 import SubscriptionUpsellModal from './SubscriptionUpsellModal';
 
 interface SettingsProps {
@@ -29,6 +30,65 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemStatus, setRedeemStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
+
+  // Refresh membership state when switching tabs
+  useEffect(() => {
+    if (!isOpen || !state.user) return;
+
+    const refreshMembershipState = async () => {
+      try {
+        // Re-fetch membership and settings to get latest state
+        const [membershipData, settingsData] = await Promise.all([
+          fetchUserMembership(state.user!.id),
+          fetchUserSettings(state.user!.id),
+        ]);
+
+        if (membershipData || settingsData) {
+          const currentUser = state.user;
+          const updatedUser = {
+            ...currentUser,
+            ...(membershipData && {
+              memberViaRedeem: membershipData.memberViaRedeem,
+              membershipSince: membershipData.membershipSince,
+            }),
+            ...(settingsData && {
+              redeemEnabled: settingsData.redeemEnabled,
+            }),
+          };
+
+          // Recalculate subscription tier based on updated user data
+          const subscriptionTier = determineSubscriptionTier(updatedUser);
+
+          // Update state if user data changed
+          if (
+            updatedUser.memberViaRedeem !== currentUser.memberViaRedeem ||
+            updatedUser.redeemEnabled !== currentUser.redeemEnabled ||
+            subscriptionTier !== state.subscriptionTier
+          ) {
+            updateState(prevState => ({
+              ...prevState,
+              user: updatedUser,
+              subscriptionTier,
+            })).catch(err => console.error('[Settings] Failed to update state:', err));
+            
+            console.log('[Settings] Membership state refreshed:', {
+              memberViaRedeem: updatedUser.memberViaRedeem,
+              redeemEnabled: updatedUser.redeemEnabled,
+              subscriptionTier,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[Settings] Failed to refresh membership state:', error);
+      }
+    };
+
+    // Refresh when switching to links or snippets tabs
+    if (activeTab === 'links' || activeTab === 'snippets') {
+      refreshMembershipState();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isOpen]);
 
   if (!isOpen) return null;
 
@@ -566,17 +626,62 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                           
                           // Optimistic update - update UI immediately
                           const optimisticUser = { ...state.user, redeemEnabled: newValue };
-                          const optimisticState = { ...state, user: optimisticUser };
+                          
+                          // Recalculate subscription tier based on new redeemEnabled value
+                          // If redeem is disabled, user loses membership benefits
+                          const optimisticTier = determineSubscriptionTier(optimisticUser);
+                          const optimisticState = { 
+                            ...state, 
+                            user: optimisticUser,
+                            subscriptionTier: optimisticTier,
+                          };
                           
                           try {
                             // Update local state first for immediate UI feedback
                             await updateState(optimisticState);
-                            console.log('[Settings] Local state updated optimistically');
+                            console.log('[Settings] Local state updated optimistically', {
+                              redeemEnabled: newValue,
+                              subscriptionTier: optimisticTier,
+                            });
                             
                             // Then try to sync to database
                             const success = await toggleRedeemFeature(state.user.id, newValue);
                             if (success) {
                               console.log('[Settings] Database updated successfully');
+                              
+                              // Refresh membership state to ensure consistency
+                              const [membershipData, settingsData] = await Promise.all([
+                                fetchUserMembership(state.user.id),
+                                fetchUserSettings(state.user.id),
+                              ]);
+
+                              if (membershipData || settingsData) {
+                                const refreshedUser = {
+                                  ...state.user,
+                                  ...(membershipData && {
+                                    memberViaRedeem: membershipData.memberViaRedeem,
+                                    membershipSince: membershipData.membershipSince,
+                                  }),
+                                  ...(settingsData && {
+                                    redeemEnabled: settingsData.redeemEnabled,
+                                  }),
+                                };
+                                const refreshedTier = determineSubscriptionTier(refreshedUser);
+                                
+                                // Use functional update to get latest state
+                                updateState(prevState => ({
+                                  ...prevState,
+                                  user: refreshedUser,
+                                  subscriptionTier: refreshedTier,
+                                })).catch(err => console.error('[Settings] Failed to update state:', err));
+                                
+                                console.log('[Settings] Membership state refreshed after toggle:', {
+                                  redeemEnabled: refreshedUser.redeemEnabled,
+                                  memberViaRedeem: refreshedUser.memberViaRedeem,
+                                  subscriptionTier: refreshedTier,
+                                });
+                              }
+                              
                               addToast(newValue ? 'Redeem enabled' : 'Redeem disabled', 'info');
                             } else {
                               console.warn('[Settings] Database update failed, but UI updated');
@@ -589,6 +694,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                             await updateState({
                               ...state,
                               user: { ...state.user, redeemEnabled: currentValue },
+                              subscriptionTier: determineSubscriptionTier({ ...state.user, redeemEnabled: currentValue }),
                             });
                             addToast('Failed to update setting', 'error');
                           }
@@ -625,17 +731,33 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                             setRedeemCodeInput('');
                             addToast('Membership unlocked via redeem code', 'success');
                             
-                            // Refresh membership state
-                            // This will be handled by App.tsx fetching updated user data
-                            // For now, update local state optimistically
-                            updateState({
-                              ...state,
-                              user: {
-                                ...state.user!,
+                            // Refresh membership state and update subscription tier
+                            const [membershipData, settingsData] = await Promise.all([
+                              fetchUserMembership(state.user!.id),
+                              fetchUserSettings(state.user!.id),
+                            ]);
+
+                            updateState(prevState => {
+                              const updatedUser = {
+                                ...prevState.user!,
                                 memberViaRedeem: true,
                                 membershipSince: new Date().toISOString(),
-                              },
-                            });
+                                ...(membershipData && {
+                                  memberViaRedeem: membershipData.memberViaRedeem,
+                                  membershipSince: membershipData.membershipSince,
+                                }),
+                                ...(settingsData && {
+                                  redeemEnabled: settingsData.redeemEnabled,
+                                }),
+                              };
+                              const subscriptionTier = determineSubscriptionTier(updatedUser);
+                              
+                              return {
+                                ...prevState,
+                                user: updatedUser,
+                                subscriptionTier,
+                              };
+                            }).catch(err => console.error('[Settings] Failed to update state after redeem:', err));
                           } else {
                             const errorMessages: Record<RedeemErrorCode, string> = {
                               INVALID_CODE: 'Invalid code. Please check and try again.',
@@ -702,8 +824,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                     </div>
                   )}
 
-                  {/* Membership Status */}
-                  {state.user?.memberViaRedeem && (
+                  {/* Membership Status - Only show if memberViaRedeem AND redeemEnabled */}
+                  {state.user?.memberViaRedeem && (state.user?.redeemEnabled ?? true) && (
                     <div className="p-6 bg-indigo-50 dark:bg-indigo-950/20 rounded-3xl border border-indigo-100 dark:border-indigo-900/30">
                       <div className="flex items-center gap-3">
                         <svg className="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
