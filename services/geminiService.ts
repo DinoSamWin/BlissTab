@@ -1,7 +1,7 @@
 import { LOCALIZED_FALLBACKS } from "../constants";
 import { PerspectiveHistory, isTooSimilar } from "./perspectiveService";
 
-const MAX_QUOTE_LENGTH = 120; // Hard limit per spec
+const MAX_QUOTE_LENGTH = 60; // Hard limit: ~3 lines for Chinese, ~2 lines for English
 const MAX_RETRIES = 3;
 
 // 智谱AI API 配置
@@ -56,40 +56,38 @@ export async function generateSnippet(
       : '';
 
     // Build system prompt following the canonical specification
-    const systemPrompt = `You generate short, inspiring, calming, and motivating quotes for a focus tab.
+    const systemPrompt = `You generate SHORT, inspiring, calming quotes for a focus tab.
 
 CORE PURPOSE: Help the user start the moment with quiet strength.
 
-LENGTH RULES:
-- HARD LIMIT: Maximum 120 characters (including spaces)
-- RECOMMENDED: 60-100 characters
-- One single sentence preferred
-- Period at end is optional but encouraged
+CRITICAL LENGTH RULES:
+- ABSOLUTE MAXIMUM: 60 characters (including spaces)
+- TARGET: 30-50 characters
+- MUST fit in 2-3 lines when displayed
+- ONE short sentence or phrase only
+- NO multi-sentence stories or dialogues
+- NO conversations or Q&A format
 
-TONE REQUIREMENTS:
-- Calm, warm, reflective, encouraging, non-preachy
-- Gentle encouragement, clarity, grounded confidence
-- Designed to be read quickly and felt emotionally
+CONTENT REQUIREMENTS:
+- Single, concise thought or observation
+- Calm, warm, reflective, encouraging
+- Designed to be read instantly and felt emotionally
 - Never noisy, preachy, or aggressive
 
-FORBIDDEN:
-- NO emojis
-- NO hashtags
-- NO quotation marks (" or "")
+STRICTLY FORBIDDEN:
+- NO stories, narratives, or dialogues
+- NO conversations between people
+- NO multi-part sentences
+- NO emojis, hashtags, quotation marks
 - NO markdown formatting
-- NO hype language (crush it, hustle harder)
-- NO commands (avoid must, should)
+- NO hype language or commands
 - NO clichés or overused quotes
-- NO religious or political references
-- NO direct productivity jargon
-
-CONTENT VARIATION:
-Rotate across metaphors (light, space, rhythm, growth, stillness), sentence rhythms (short/balanced/flowing), and emotional emphasis (acceptance, progress, patience, presence, trust).
 
 OUTPUT FORMAT:
-- Output ONLY the quote text
-- NO metadata, explanation, intention label, or markdown
+- Output ONLY the quote text (30-50 characters)
+- NO metadata, explanation, or markdown
 - Plain text only
+- Single line of thought
 
 LANGUAGE: Output must be entirely in ${language.toUpperCase()}.`;
 
@@ -119,7 +117,7 @@ LANGUAGE: Output must be entirely in ${language.toUpperCase()}.`;
         ],
         temperature: 0.85 + (retryCount * 0.05), // Increase temperature on retries for more diversity
         top_p: 0.95,
-        max_tokens: 150, // Limit tokens to ensure length constraint
+        max_tokens: 60, // Strict limit: ~60 chars = 2-3 lines
       }),
     });
 
@@ -146,17 +144,27 @@ LANGUAGE: Output must be entirely in ${language.toUpperCase()}.`;
 
     // Validate length (hard limit)
     if (text.length > MAX_QUOTE_LENGTH) {
-      // Truncate intelligently at word boundary
-      const words = text.split(' ');
-      let truncated = '';
-      for (const word of words) {
-        if ((truncated + ' ' + word).length <= MAX_QUOTE_LENGTH) {
-          truncated = truncated ? truncated + ' ' + word : word;
-        } else {
-          break;
+      // For Chinese: truncate by character; For English: truncate by word
+      const isChinese = /[\u4e00-\u9fa5]/.test(text);
+      
+      if (isChinese) {
+        // Chinese: truncate at character boundary
+        text = text.substring(0, MAX_QUOTE_LENGTH).trim();
+        // Remove incomplete sentence endings
+        text = text.replace(/[，。！？、]$/, '').trim();
+      } else {
+        // English: truncate at word boundary
+        const words = text.split(' ');
+        let truncated = '';
+        for (const word of words) {
+          if ((truncated + ' ' + word).length <= MAX_QUOTE_LENGTH) {
+            truncated = truncated ? truncated + ' ' + word : word;
+          } else {
+            break;
+          }
         }
+        text = truncated || text.substring(0, MAX_QUOTE_LENGTH).trim();
       }
-      text = truncated || text.substring(0, MAX_QUOTE_LENGTH).trim();
     }
 
     console.log('[ZhipuAI] Generated perspective:', text.substring(0, 50) + '...');
