@@ -176,21 +176,57 @@ export async function redeemCode(user: User, code: string): Promise<RedeemRespon
       };
     }
 
-    // Upsert user_membership
-    const { error: membershipError } = await client
+    // Upsert user_membership - try INSERT first, then UPDATE if exists
+    // This ensures RLS policies work correctly
+    let membershipError = null;
+    
+    // First, try to check if membership exists
+    const { data: existingMembership } = await client
       .from('user_membership')
-      .upsert({
-        user_id: user.id,
-        member_via_redeem: true,
-        redeem_code_id: redeemCodeData.id,
-        membership_since: now,
-        updated_at: now,
-      }, {
-        onConflict: 'user_id',
-      });
+      .select('user_id, membership_since')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existingMembership) {
+      // Update existing membership
+      const { error: updateError } = await client
+        .from('user_membership')
+        .update({
+          member_via_redeem: true,
+          redeem_code_id: redeemCodeData.id,
+          membership_since: existingMembership.membership_since || now, // Preserve existing or set new
+          updated_at: now,
+        })
+        .eq('user_id', user.id);
+
+      membershipError = updateError;
+      console.log('[Redeem] Updating existing membership');
+    } else {
+      // Insert new membership
+      const { error: insertError } = await client
+        .from('user_membership')
+        .insert({
+          user_id: user.id,
+          is_subscribed: false,
+          member_via_redeem: true,
+          redeem_code_id: redeemCodeData.id,
+          membership_since: now,
+          updated_at: now,
+        });
+
+      membershipError = insertError;
+      console.log('[Redeem] Inserting new membership');
+    }
 
     if (membershipError) {
       console.error('[Redeem] Failed to update membership:', membershipError);
+      console.error('[Redeem] Membership error details:', {
+        code: membershipError.code,
+        message: membershipError.message,
+        details: membershipError.details,
+        hint: membershipError.hint
+      });
+      
       // Try to rollback redeem_codes update (best effort)
       await client
         .from('redeem_codes')
@@ -204,7 +240,7 @@ export async function redeemCode(user: User, code: string): Promise<RedeemRespon
       return {
         ok: false,
         error_code: 'UNKNOWN_ERROR',
-        message: 'Failed to update membership. Please try again.',
+        message: `Failed to update membership: ${membershipError.message || 'Please try again.'}`,
       };
     }
 

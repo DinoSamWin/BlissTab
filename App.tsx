@@ -197,24 +197,39 @@ const App: React.FC = () => {
 
     setIsGenerating(true);
     
-    // Increment perspective count for unauthenticated users
-    if (!appState.user) {
-      incrementPerspectiveCount();
+    try {
+      // Increment perspective count for unauthenticated users
+      if (!appState.user) {
+        incrementPerspectiveCount();
+      }
+      
+      // Load recent history to prevent repetition
+      const history = loadHistory();
+      
+      console.log('[App] Generating new perspective...', {
+        prompt: randomReq.prompt.substring(0, 30),
+        language: appState.language,
+        historyCount: history.length,
+        timestamp: Date.now()
+      });
+      
+      // Generate with history awareness - always call API (no caching)
+      const result = await generateSnippet(randomReq.prompt, appState.language, history);
+      
+      console.log('[App] Generated perspective:', result.substring(0, 50));
+      
+      // Save to history
+      const updatedHistory = addToHistory(result, randomReq.id, history);
+      saveHistory(updatedHistory);
+      
+      setCurrentSnippet(result);
+      setRevealKey(prev => prev + 1);
+    } catch (error) {
+      console.error('[App] Error generating perspective:', error);
+      addToast('Failed to generate perspective', 'error');
+    } finally {
+      setIsGenerating(false);
     }
-    
-    // Load recent history to prevent repetition
-    const history = loadHistory();
-    
-    // Generate with history awareness
-    const result = await generateSnippet(randomReq.prompt, appState.language, history);
-    
-    // Save to history
-    const updatedHistory = addToHistory(result, randomReq.id, history);
-    saveHistory(updatedHistory);
-    
-    setCurrentSnippet(result);
-    setIsGenerating(false);
-    setRevealKey(prev => prev + 1);
   }, [appState]);
 
   const renderSnippet = (text: string) => {
