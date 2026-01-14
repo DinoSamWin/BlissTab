@@ -70,14 +70,30 @@ const App: React.FC = () => {
   
   const lastPromptIdRef = useRef<string | null>(null);
 
-  const saveState = useCallback((state: AppState, skipSync = false) => {
-    localStorage.setItem('focus_tab_state', JSON.stringify({ ...state, user: null }));
-    setAppState(state);
-    if (state.user && !skipSync) {
+  const saveState = useCallback(async (state: AppState | ((prev: AppState) => AppState), skipSync = false) => {
+    // Handle functional updates
+    const newState = typeof state === 'function' ? state(appState) : state;
+    
+    // Always update local state immediately for responsive UI
+    localStorage.setItem('focus_tab_state', JSON.stringify({ ...newState, user: null }));
+    setAppState(newState);
+    
+    // Sync to Supabase if user is logged in and not skipping
+    if (newState.user && !skipSync) {
       setIsSyncing(true);
-      syncToCloud(state).finally(() => setIsSyncing(false));
+      try {
+        await syncToCloud(newState);
+        console.log('[App] State saved and synced to Supabase successfully');
+      } catch (error) {
+        console.error('[App] Failed to sync state to Supabase:', error);
+        // Show error toast to user
+        addToast('Failed to save changes. Please try again.', 'error');
+        throw error; // Re-throw so caller can handle
+      } finally {
+        setIsSyncing(false);
+      }
     }
-  }, []);
+  }, [appState]);
 
   const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
     const id = Date.now().toString();
@@ -367,7 +383,7 @@ const App: React.FC = () => {
         };
         const subscriptionTier = determineSubscriptionTier(userWithAllData);
         
-        // Fetch cloud data first
+        // Fetch cloud data first - this is the source of truth
         const cloudData = await fetchFromCloud(user.id);
         
         if (cloudData) {
@@ -375,19 +391,20 @@ const App: React.FC = () => {
             links: cloudData.links?.length || 0,
             requests: cloudData.requests?.length || 0
           });
-          // Merge cloud data with current state
+          // Use cloud data as source of truth - don't merge with local state
           const mergedState = {
             ...appState,
-            ...cloudData,
-            user: userWithAllData, // Ensure user with all data is set
-            subscriptionTier, // Set subscription tier
-            // Preserve local state if cloud data is missing fields
-            links: cloudData.links || appState.links,
-            requests: cloudData.requests || appState.requests,
+            // Cloud data takes precedence
+            links: cloudData.links || [],
+            requests: cloudData.requests || [],
             language: cloudData.language || appState.language,
             theme: cloudData.theme || appState.theme,
+            user: userWithAllData, // Ensure user with all data is set
+            subscriptionTier, // Set subscription tier
+            version: cloudData.version || appState.version,
+            pinnedSnippetId: cloudData.pinnedSnippetId || appState.pinnedSnippetId,
           };
-          saveState(mergedState, true); // Skip sync on initial load
+          saveState(mergedState, true); // Skip sync on initial load (already from cloud)
         } else {
           console.log('[App] No cloud data found, syncing current state');
           // No cloud data, set user and sync current state

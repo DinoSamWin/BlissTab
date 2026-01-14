@@ -21,24 +21,28 @@ CREATE INDEX IF NOT EXISTS idx_user_data_email ON user_data(email);
 ALTER TABLE user_data ENABLE ROW LEVEL SECURITY;
 
 -- Create policy: Users can only access their own data
+DROP POLICY IF EXISTS "Users can view their own data" ON user_data;
 CREATE POLICY "Users can view their own data"
   ON user_data
   FOR SELECT
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = email);
 
 -- Create policy: Users can insert their own data
+DROP POLICY IF EXISTS "Users can insert their own data" ON user_data;
 CREATE POLICY "Users can insert their own data"
   ON user_data
   FOR INSERT
   WITH CHECK (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = email);
 
 -- Create policy: Users can update their own data
+DROP POLICY IF EXISTS "Users can update their own data" ON user_data;
 CREATE POLICY "Users can update their own data"
   ON user_data
   FOR UPDATE
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = email);
 
 -- Create policy: Users can delete their own data
+DROP POLICY IF EXISTS "Users can delete their own data" ON user_data;
 CREATE POLICY "Users can delete their own data"
   ON user_data
   FOR DELETE
@@ -54,6 +58,7 @@ END;
 $$ language 'plpgsql';
 
 -- Trigger to update updated_at on row update
+DROP TRIGGER IF EXISTS update_user_data_updated_at ON user_data;
 CREATE TRIGGER update_user_data_updated_at
   BEFORE UPDATE ON user_data
   FOR EACH ROW
@@ -81,6 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status ON user_subscriptions(s
 ALTER TABLE user_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Create policy: Users can only view their own subscription
+DROP POLICY IF EXISTS "Users can view their own subscription" ON user_subscriptions;
 CREATE POLICY "Users can view their own subscription"
   ON user_subscriptions
   FOR SELECT
@@ -88,12 +94,14 @@ CREATE POLICY "Users can view their own subscription"
 
 -- Create policy: Users can update their own subscription (for status checks)
 -- Note: Actual subscription updates should be done via webhooks/admin functions
+DROP POLICY IF EXISTS "Users can update their own subscription" ON user_subscriptions;
 CREATE POLICY "Users can update their own subscription"
   ON user_subscriptions
   FOR UPDATE
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_subscriptions.user_id));
 
 -- Trigger to update updated_at on subscription row update
+DROP TRIGGER IF EXISTS update_user_subscriptions_updated_at ON user_subscriptions;
 CREATE TRIGGER update_user_subscriptions_updated_at
   BEFORE UPDATE ON user_subscriptions
   FOR EACH ROW
@@ -136,18 +144,21 @@ CREATE INDEX IF NOT EXISTS idx_user_membership_member_via_redeem ON user_members
 ALTER TABLE user_membership ENABLE ROW LEVEL SECURITY;
 
 -- Create policy: Users can only view their own membership
+DROP POLICY IF EXISTS "Users can view their own membership" ON user_membership;
 CREATE POLICY "Users can view their own membership"
   ON user_membership
   FOR SELECT
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
 
 -- Create policy: Users can update their own membership (for redeem operations)
+DROP POLICY IF EXISTS "Users can update their own membership" ON user_membership;
 CREATE POLICY "Users can update their own membership"
   ON user_membership
   FOR UPDATE
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
 
 -- Trigger to update updated_at on membership row update
+DROP TRIGGER IF EXISTS update_user_membership_updated_at ON user_membership;
 CREATE TRIGGER update_user_membership_updated_at
   BEFORE UPDATE ON user_membership
   FOR EACH ROW
@@ -164,18 +175,21 @@ CREATE TABLE IF NOT EXISTS user_settings (
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 
 -- Create policy: Users can only view their own settings
+DROP POLICY IF EXISTS "Users can view their own settings" ON user_settings;
 CREATE POLICY "Users can view their own settings"
   ON user_settings
   FOR SELECT
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_settings.user_id));
 
 -- Create policy: Users can update their own settings
+DROP POLICY IF EXISTS "Users can update their own settings" ON user_settings;
 CREATE POLICY "Users can update their own settings"
   ON user_settings
   FOR UPDATE
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_settings.user_id));
 
 -- Trigger to update updated_at on settings row update
+DROP TRIGGER IF EXISTS update_user_settings_updated_at ON user_settings;
 CREATE TRIGGER update_user_settings_updated_at
   BEFORE UPDATE ON user_settings
   FOR EACH ROW

@@ -56,10 +56,17 @@ export async function syncToCloud(state: AppState): Promise<void> {
       requests: state.requests || [],
       language: state.language || 'English',
       theme: state.theme || 'light',
-      version: state.version || '1.0.0'
+      version: state.version || '1.0.0',
+      pinnedSnippetId: state.pinnedSnippetId || null
     };
 
-    const { error } = await client
+    console.log('[Sync] Syncing to Supabase:', {
+      userId: state.user.id,
+      linksCount: dataToSync.links.length,
+      requestsCount: dataToSync.requests.length
+    });
+
+    const { data, error } = await client
       .from('user_data')
       .upsert({
         user_id: state.user.id,
@@ -68,18 +75,41 @@ export async function syncToCloud(state: AppState): Promise<void> {
         updated_at: new Date().toISOString()
       }, {
         onConflict: 'user_id'
-      });
+      })
+      .select(); // Return the inserted/updated row
 
     if (error) {
       console.error('[Sync] Supabase error:', error);
+      console.error('[Sync] Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
       throw error;
     }
-    console.log(`[Sync] Successfully synced data for ${state.user.email}`, {
-      links: dataToSync.links.length,
-      requests: dataToSync.requests.length,
-      language: dataToSync.language,
-      theme: dataToSync.theme
-    });
+
+    // Verify the write succeeded
+    if (data && data.length > 0) {
+      const savedData = data[0].data;
+      console.log(`[Sync] Successfully synced data for ${state.user.email}`, {
+        links: savedData.links?.length || 0,
+        requests: savedData.requests?.length || 0,
+        language: savedData.language,
+        theme: savedData.theme,
+        savedAt: data[0].updated_at
+      });
+      
+      // Verify the data matches what we sent
+      if (savedData.links?.length !== dataToSync.links.length) {
+        console.warn('[Sync] Link count mismatch!', {
+          sent: dataToSync.links.length,
+          saved: savedData.links?.length
+        });
+      }
+    } else {
+      console.warn('[Sync] Upsert succeeded but no data returned');
+    }
   } catch (error) {
     console.error('[Sync] Failed to sync to cloud:', error);
     // Fallback to localStorage on error

@@ -10,7 +10,7 @@ interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
   state: AppState;
-  updateState: (newState: AppState) => void;
+  updateState: (newState: AppState | ((prev: AppState) => AppState)) => Promise<void>;
   addToast: (msg: string, type?: any) => void;
   onSignIn: () => void;
   onSignOut: () => void;
@@ -93,8 +93,9 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       color: COLORS[Math.floor(Math.random() * COLORS.length)]
     };
     
-    // Use functional update to ensure we're working with latest state
-    updateState(prevState => ({ ...prevState, links: [...prevState.links, optimisticLink] }));
+    // Optimistic update - add link immediately for responsive UI
+    const optimisticState = { ...state, links: [...state.links, optimisticLink] };
+    updateState(optimisticState);
     const currentUrl = normalizedUrl;
     setNewUrl('');
     
@@ -104,52 +105,80 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       
       // Always update the link - never remove it
       // Use functional update to work with latest state
-      updateState(prevState => ({
-        ...prevState,
-        links: prevState.links.map(link => 
-          link.id === tempId 
-            ? { 
-                ...link, 
-                url: meta?.url || normalizedUrl, 
-                title: meta?.title || fallbackTitle, 
-                icon: meta?.icon || null 
-              }
-            : link
-        )
-      }));
+      const updatedLink = {
+        id: tempId,
+        url: meta?.url || normalizedUrl,
+        title: meta?.title || fallbackTitle,
+        icon: meta?.icon || null,
+        color: optimisticLink.color
+      };
       
-      if (meta) {
-        addToast('Gateway added');
-      } else {
-        // Still keep the item, just with fallback data
-        addToast('Gateway added (using fallback details)', 'info');
+      // Build updated state
+      const updatedLinks = state.links.map(link => 
+        link.id === tempId ? updatedLink : link
+      );
+      const updatedState = {
+        ...state,
+        links: updatedLinks
+      };
+      
+      // Update state and wait for sync to complete
+      try {
+        await updateState(updatedState);
+        console.log('[Settings] Gateway added and synced to Supabase:', updatedLink.url);
+        if (meta) {
+          addToast('Gateway added', 'success');
+        } else {
+          addToast('Gateway added (using fallback details)', 'info');
+        }
+      } catch (error) {
+        console.error('[Settings] Failed to sync gateway:', error);
+        addToast('Gateway added locally, but sync failed. Please refresh and try again.', 'error');
       }
     } catch (error) {
       // NEVER remove the item - keep it with fallback data
-      updateState(prevState => ({
-        ...prevState,
-        links: prevState.links.map(link => 
-          link.id === tempId 
-            ? { 
-                ...link, 
-                title: fallbackTitle,
-                icon: null // Will use color fallback
-              }
-            : link
-        )
-      }));
-      addToast('Gateway added (using fallback details)', 'info');
+      const fallbackLink = {
+        id: tempId,
+        url: normalizedUrl,
+        title: fallbackTitle,
+        icon: null,
+        color: optimisticLink.color
+      };
+      const fallbackLinks = state.links.map(link => 
+        link.id === tempId ? fallbackLink : link
+      );
+      const fallbackState = { ...state, links: fallbackLinks };
+      try {
+        await updateState(fallbackState);
+        addToast('Gateway added (using fallback details)', 'info');
+      } catch (syncError) {
+        console.error('[Settings] Failed to sync fallback gateway:', syncError);
+        addToast('Gateway added locally, but sync failed.', 'error');
+      }
     } finally {
       setIsFetchingMetadata(false);
       setPendingLinkId(null);
     }
   };
 
-  const removeLink = (id: string) => {
-    updateState(prevState => ({ ...prevState, links: prevState.links.filter(l => l.id !== id) }));
+  const removeLink = async (id: string) => {
+    // Build updated state
+    const updatedState = { ...state, links: state.links.filter(l => l.id !== id) };
+    
+    // Update state and wait for sync to complete
+    try {
+      await updateState(updatedState);
+      console.log('[Settings] Gateway removed and synced to Supabase:', id);
+      addToast('Gateway removed', 'success');
+    } catch (error) {
+      console.error('[Settings] Failed to sync removal:', error);
+      addToast('Failed to remove gateway. Please try again.', 'error');
+      // Revert optimistic update on error
+      updateState(state);
+    }
   };
 
-  const handleAddSnippet = (e: React.FormEvent) => {
+  const handleAddSnippet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPrompt) return;
     
@@ -179,9 +208,15 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     }
     
     const newItem: SnippetRequest = { id: Date.now().toString(), prompt: newPrompt, active: true };
-    updateState(prevState => ({ ...prevState, requests: [...prevState.requests, newItem] }));
-    setNewPrompt('');
-    addToast('Seed planted');
+    const updatedState = { ...state, requests: [...state.requests, newItem] };
+    try {
+      await updateState(updatedState);
+      setNewPrompt('');
+      addToast('Seed planted', 'success');
+    } catch (error) {
+      console.error('[Settings] Failed to sync snippet:', error);
+      addToast('Failed to save. Please try again.', 'error');
+    }
   };
   
   const handleUpgrade = () => {
@@ -190,7 +225,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     addToast('Subscription coming soon', 'info');
   };
 
-  const toggleSnippetActive = (id: string) => {
+  const toggleSnippetActive = async (id: string) => {
     const targetRequest = state.requests.find(r => r.id === id);
     if (!targetRequest) return;
     
@@ -216,11 +251,30 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     }
     
     // Allow deactivation or activation if within limits
-    updateState(prevState => ({ ...prevState, requests: prevState.requests.map(r => r.id === id ? { ...r, active: !r.active } : r) }));
+    const updatedState = {
+      ...state,
+      requests: state.requests.map(r => r.id === id ? { ...r, active: !r.active } : r)
+    };
+    try {
+      await updateState(updatedState);
+    } catch (error) {
+      console.error('[Settings] Failed to sync snippet toggle:', error);
+      addToast('Failed to save. Please try again.', 'error');
+    }
   };
 
-  const removeSnippet = (id: string) => {
-    updateState(prevState => ({ ...prevState, requests: prevState.requests.filter(r => r.id !== id) }));
+  const removeSnippet = async (id: string) => {
+    const updatedState = {
+      ...state,
+      requests: state.requests.filter(r => r.id !== id)
+    };
+    try {
+      await updateState(updatedState);
+      addToast('Seed removed', 'success');
+    } catch (error) {
+      console.error('[Settings] Failed to sync snippet removal:', error);
+      addToast('Failed to remove. Please try again.', 'error');
+    }
   };
 
   return (
