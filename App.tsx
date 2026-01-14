@@ -16,11 +16,23 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('focus_tab_state');
     const systemTheme: Theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     
+    // Check for saved user in localStorage (from authService)
+    let savedUser: User | null = null;
+    try {
+      const userStr = localStorage.getItem('focus_tab_user');
+      if (userStr) {
+        savedUser = JSON.parse(userStr);
+      }
+    } catch (e) {
+      console.error('[App] Failed to parse saved user', e);
+    }
+    
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.version === APP_VERSION) {
-            return { ...parsed, user: null };
+            // Use saved user from authService if available, otherwise null
+            return { ...parsed, user: savedUser };
         }
       } catch (e) { console.error("Restore failed", e); }
     }
@@ -30,7 +42,7 @@ const App: React.FC = () => {
       requests: DEFAULT_REQUESTS,
       pinnedSnippetId: null,
       language: 'English',
-      user: null,
+      user: savedUser, // Use saved user if available
       theme: systemTheme
     };
   });
@@ -42,6 +54,7 @@ const App: React.FC = () => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [revealKey, setRevealKey] = useState(0);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
   
   const isAuthenticated = !!appState.user;
   
@@ -322,7 +335,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     console.log('[App] Initializing Google Auth...');
+    setIsAuthChecking(true);
+    
     initGoogleAuth(async (user) => {
+      setIsAuthChecking(false); // Auth check complete
+      
       if (user) {
         console.log('[App] User authenticated:', user.email);
         // Reset perspective count on login
@@ -550,7 +567,14 @@ const App: React.FC = () => {
       <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
         <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
             
-            {isAuthenticated ? (
+            {isAuthChecking ? (
+              // Show loading state during auth check to prevent flash
+              <div className="w-full flex flex-col items-center justify-center py-6 opacity-50">
+                <div className="animate-pulse">
+                  <div className="w-12 h-12 border-2 border-gray-300 dark:border-gray-600 rounded-2xl mb-3 mx-auto" />
+                </div>
+              </div>
+            ) : isAuthenticated ? (
               <div className="w-full flex flex-col md:flex-row gap-8 md:gap-10 items-start">
                   <div className="w-full md:w-1/3 flex flex-col text-left">
                       <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-3">Intentional Gateways</h2>
