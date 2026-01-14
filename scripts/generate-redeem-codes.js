@@ -8,6 +8,13 @@
  * Output: SQL INSERT statements to run in Supabase SQL Editor
  */
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Allowed characters (excluding ambiguous: 0, 1, I, O)
 const ALLOWED_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -83,8 +90,6 @@ try {
   const sql = generateSQL(codes, CAMPAIGN);
   
   // Output to file
-  const fs = require('fs');
-  const path = require('path');
   const outputPath = path.join(__dirname, 'redeem-codes.sql');
   fs.writeFileSync(outputPath, sql, 'utf8');
   

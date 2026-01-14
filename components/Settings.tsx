@@ -544,26 +544,62 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                         <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Turn on to use redeem codes</span>
                       </div>
                       <button
-                        onClick={async () => {
-                          const newValue = !state.user?.redeemEnabled;
-                          const success = await toggleRedeemFeature(state.user!.id, newValue);
-                          if (success) {
-                            updateState({
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          if (!state.user) {
+                            console.error('[Settings] No user found');
+                            return;
+                          }
+                          
+                          // Get current value: default to true if undefined
+                          const currentValue = state.user.redeemEnabled ?? true;
+                          const newValue = !currentValue;
+                          
+                          console.log('[Settings] Toggling redeem:', { 
+                            userId: state.user.id,
+                            currentValue, 
+                            newValue,
+                            currentUserState: state.user
+                          });
+                          
+                          // Optimistic update - update UI immediately
+                          const optimisticUser = { ...state.user, redeemEnabled: newValue };
+                          const optimisticState = { ...state, user: optimisticUser };
+                          
+                          try {
+                            // Update local state first for immediate UI feedback
+                            await updateState(optimisticState);
+                            console.log('[Settings] Local state updated optimistically');
+                            
+                            // Then try to sync to database
+                            const success = await toggleRedeemFeature(state.user.id, newValue);
+                            if (success) {
+                              console.log('[Settings] Database updated successfully');
+                              addToast(newValue ? 'Redeem enabled' : 'Redeem disabled', 'info');
+                            } else {
+                              console.warn('[Settings] Database update failed, but UI updated');
+                              // UI is already updated, just show a warning
+                              addToast('Setting updated locally, but sync failed', 'info');
+                            }
+                          } catch (error) {
+                            console.error('[Settings] Error updating state:', error);
+                            // Revert optimistic update on error
+                            await updateState({
                               ...state,
-                              user: { ...state.user!, redeemEnabled: newValue },
+                              user: { ...state.user, redeemEnabled: currentValue },
                             });
-                            addToast(newValue ? 'Redeem enabled' : 'Redeem disabled', 'info');
-                          } else {
                             addToast('Failed to update setting', 'error');
                           }
                         }}
                         className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                          state.user?.redeemEnabled !== false ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'
+                          (state.user?.redeemEnabled ?? true) ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'
                         }`}
                       >
                         <span
                           className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                            state.user?.redeemEnabled !== false ? 'translate-x-6' : 'translate-x-1'
+                            (state.user?.redeemEnabled ?? true) ? 'translate-x-6' : 'translate-x-1'
                           }`}
                         />
                       </button>
@@ -571,7 +607,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                   </div>
 
                   {/* Redeem Code Input */}
-                  {state.user?.redeemEnabled !== false ? (
+                  {(state.user?.redeemEnabled ?? true) ? (
                     <div className="space-y-4">
                       <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Redeem Code</label>
                       <form

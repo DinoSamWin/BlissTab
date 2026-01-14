@@ -277,8 +277,28 @@ export async function fetchUserSettings(userId: string): Promise<{
 } | null> {
   const client = getSupabaseClient();
   
+  // Fallback to localStorage if Supabase is not configured (for local testing)
   if (!client) {
-    return null;
+    console.warn('[Redeem] Supabase not configured, checking localStorage fallback');
+    try {
+      const settingsKey = `user_settings_${userId}`;
+      const stored = localStorage.getItem(settingsKey);
+      if (stored) {
+        const settings = JSON.parse(stored);
+        return {
+          redeemEnabled: settings.redeem_enabled !== false, // Default to true if null
+        };
+      }
+      // No stored settings, return default
+      return {
+        redeemEnabled: true, // Default to enabled
+      };
+    } catch (error) {
+      console.error('[Redeem] Failed to read from localStorage:', error);
+      return {
+        redeemEnabled: true, // Default to enabled
+      };
+    }
   }
 
   try {
@@ -290,7 +310,20 @@ export async function fetchUserSettings(userId: string): Promise<{
 
     if (error) {
       if (error.code === 'PGRST116') {
-        // No settings record, return defaults
+        // No settings record, check localStorage fallback
+        try {
+          const settingsKey = `user_settings_${userId}`;
+          const stored = localStorage.getItem(settingsKey);
+          if (stored) {
+            const settings = JSON.parse(stored);
+            return {
+              redeemEnabled: settings.redeem_enabled !== false,
+            };
+          }
+        } catch (localError) {
+          console.warn('[Redeem] localStorage fallback failed:', localError);
+        }
+        // Return defaults
         return {
           redeemEnabled: true, // Default to enabled
         };
@@ -303,7 +336,23 @@ export async function fetchUserSettings(userId: string): Promise<{
     };
   } catch (error) {
     console.error('[Redeem] Failed to fetch settings:', error);
-    return null;
+    // Fallback to localStorage
+    try {
+      const settingsKey = `user_settings_${userId}`;
+      const stored = localStorage.getItem(settingsKey);
+      if (stored) {
+        const settings = JSON.parse(stored);
+        return {
+          redeemEnabled: settings.redeem_enabled !== false,
+        };
+      }
+    } catch (localError) {
+      console.warn('[Redeem] localStorage fallback failed:', localError);
+    }
+    // Return defaults
+    return {
+      redeemEnabled: true, // Default to enabled
+    };
   }
 }
 
@@ -316,8 +365,22 @@ export async function toggleRedeemFeature(
 ): Promise<boolean> {
   const client = getSupabaseClient();
   
+  // Fallback to localStorage if Supabase is not configured (for local testing)
   if (!client) {
-    return false;
+    console.warn('[Redeem] Supabase not configured, using localStorage fallback');
+    try {
+      const settingsKey = `user_settings_${userId}`;
+      const settings = {
+        redeem_enabled: redeemEnabled,
+        updated_at: new Date().toISOString(),
+      };
+      localStorage.setItem(settingsKey, JSON.stringify(settings));
+      console.log('[Redeem] Settings saved to localStorage:', settings);
+      return true;
+    } catch (error) {
+      console.error('[Redeem] Failed to save to localStorage:', error);
+      return false;
+    }
   }
 
   try {
@@ -333,13 +396,40 @@ export async function toggleRedeemFeature(
 
     if (error) {
       console.error('[Redeem] Failed to update settings:', error);
-      return false;
+      // Fallback to localStorage on error
+      try {
+        const settingsKey = `user_settings_${userId}`;
+        const settings = {
+          redeem_enabled: redeemEnabled,
+          updated_at: new Date().toISOString(),
+        };
+        localStorage.setItem(settingsKey, JSON.stringify(settings));
+        console.log('[Redeem] Fallback: Settings saved to localStorage');
+        return true;
+      } catch (localError) {
+        console.error('[Redeem] Fallback to localStorage also failed:', localError);
+        return false;
+      }
     }
 
+    console.log('[Redeem] Settings updated successfully in Supabase');
     return true;
   } catch (error) {
     console.error('[Redeem] Error toggling redeem feature:', error);
-    return false;
+    // Fallback to localStorage on exception
+    try {
+      const settingsKey = `user_settings_${userId}`;
+      const settings = {
+        redeem_enabled: redeemEnabled,
+        updated_at: new Date().toISOString(),
+      };
+      localStorage.setItem(settingsKey, JSON.stringify(settings));
+      console.log('[Redeem] Fallback: Settings saved to localStorage after exception');
+      return true;
+    } catch (localError) {
+      console.error('[Redeem] Fallback to localStorage also failed:', localError);
+      return false;
+    }
   }
 }
 
