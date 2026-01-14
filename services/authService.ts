@@ -29,11 +29,16 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
 
   // 1. Check local storage first for immediate UI response
   const savedUser = localStorage.getItem('focus_tab_user');
+  let hasExistingUser = false;
+  
   if (savedUser) {
     try {
-      onUser(JSON.parse(savedUser));
+      const user = JSON.parse(savedUser);
+      onUser(user);
+      hasExistingUser = true;
+      console.log('[Auth] Restored user from localStorage:', user.email);
     } catch (e) {
-      console.error('Auth restore failed', e);
+      console.error('[Auth] Auth restore failed', e);
     }
   }
 
@@ -44,6 +49,7 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
       
       console.log('[Auth] Google SDK loaded, initializing...');
       console.log('[Auth] Using Client ID:', IS_PLACEHOLDER_ID ? 'MOCK_ID (placeholder)' : CLIENT_ID);
+      console.log('[Auth] Has existing user:', hasExistingUser);
       
       const handleCredentialResponse = (response: any) => {
         try {
@@ -73,17 +79,21 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
         (window as any).google.accounts.id.initialize({
           client_id: IS_PLACEHOLDER_ID ? 'MOCK_ID' : CLIENT_ID,
           callback: handleCredentialResponse,
-          auto_select: true,
+          // Only auto-select if no existing user (to avoid popup on every refresh)
+          auto_select: !hasExistingUser,
           // FedCM is the new standard, but can be finicky in iframes. 
           // We set it to false if the environment is restricted.
           use_fedcm_for_prompt: false 
         });
         console.log('[Auth] Google SDK initialized successfully');
         
-        // Attempt One Tap automatically if a real ID exists
-        if (!IS_PLACEHOLDER_ID) {
-          console.log('[Auth] Attempting One Tap prompt...');
+        // Only show One Tap if user is NOT already logged in
+        // This prevents the popup from appearing on every page refresh
+        if (!IS_PLACEHOLDER_ID && !hasExistingUser) {
+          console.log('[Auth] No existing user, attempting One Tap prompt...');
           (window as any).google.accounts.id.prompt();
+        } else if (hasExistingUser) {
+          console.log('[Auth] User already logged in, skipping One Tap prompt');
         }
       } catch (error) {
         console.error('[Auth] Failed to initialize Google SDK:', error);
