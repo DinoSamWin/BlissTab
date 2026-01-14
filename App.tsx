@@ -7,6 +7,7 @@ import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory } from './services/perspectiveService';
 import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier } from './services/usageLimitsService';
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
+import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 
@@ -78,23 +79,38 @@ const App: React.FC = () => {
         // Reset perspective count for unauthenticated users
         resetPerspectiveCount();
         
-        // Fetch subscription state from backend
-        const subscriptionData = await fetchSubscriptionState(user.id);
-        const userWithSubscription = { ...user, ...subscriptionData };
-        const subscriptionTier = determineSubscriptionTier(userWithSubscription);
+        // Fetch subscription state, membership, and settings from backend
+        const [subscriptionData, membershipData, settingsData] = await Promise.all([
+          fetchSubscriptionState(user.id),
+          fetchUserMembership(user.id),
+          fetchUserSettings(user.id),
+        ]);
+        
+        const userWithAllData = {
+          ...user,
+          ...subscriptionData,
+          ...(membershipData && {
+            memberViaRedeem: membershipData.memberViaRedeem,
+            membershipSince: membershipData.membershipSince,
+          }),
+          ...(settingsData && {
+            redeemEnabled: settingsData.redeemEnabled,
+          }),
+        };
+        const subscriptionTier = determineSubscriptionTier(userWithAllData);
         
         // First set user, then fetch cloud data
         const currentState = appState;
-        setAppState(prev => ({ ...prev, user: userWithSubscription, subscriptionTier }));
+        setAppState(prev => ({ ...prev, user: userWithAllData, subscriptionTier }));
         
         // Fetch cloud data and merge with current state
         const cloudData = await fetchFromCloud(user.id);
         if (cloudData) {
-          // Merge cloud data with current state, preserving user with subscription data
+          // Merge cloud data with current state, preserving user with all data
           const mergedState = {
             ...currentState,
             ...cloudData,
-            user: userWithSubscription, // Ensure user with subscription data is set
+            user: userWithAllData, // Ensure user with all data is set
             subscriptionTier, // Set subscription tier
             // Preserve local state if cloud data is missing fields
             links: cloudData.links || currentState.links,
@@ -106,7 +122,7 @@ const App: React.FC = () => {
           addToast('Data synced from cloud', 'success');
         } else {
           // No cloud data, sync current state to cloud
-          const stateWithUser = { ...currentState, user: userWithSubscription, subscriptionTier };
+          const stateWithUser = { ...currentState, user: userWithAllData, subscriptionTier };
           saveState(stateWithUser, false); // Sync current state to cloud
           addToast('Logged in successfully', 'success');
         }
@@ -314,10 +330,25 @@ const App: React.FC = () => {
         
         setIsSyncing(true);
         
-        // Fetch subscription state from backend
-        const subscriptionData = await fetchSubscriptionState(user.id);
-        const userWithSubscription = { ...user, ...subscriptionData };
-        const subscriptionTier = determineSubscriptionTier(userWithSubscription);
+        // Fetch subscription state, membership, and settings from backend
+        const [subscriptionData, membershipData, settingsData] = await Promise.all([
+          fetchSubscriptionState(user.id),
+          fetchUserMembership(user.id),
+          fetchUserSettings(user.id),
+        ]);
+        
+        const userWithAllData = {
+          ...user,
+          ...subscriptionData,
+          ...(membershipData && {
+            memberViaRedeem: membershipData.memberViaRedeem,
+            membershipSince: membershipData.membershipSince,
+          }),
+          ...(settingsData && {
+            redeemEnabled: settingsData.redeemEnabled,
+          }),
+        };
+        const subscriptionTier = determineSubscriptionTier(userWithAllData);
         
         // Fetch cloud data first
         const cloudData = await fetchFromCloud(user.id);
@@ -331,7 +362,7 @@ const App: React.FC = () => {
           const mergedState = {
             ...appState,
             ...cloudData,
-            user: userWithSubscription, // Ensure user with subscription data is set
+            user: userWithAllData, // Ensure user with all data is set
             subscriptionTier, // Set subscription tier
             // Preserve local state if cloud data is missing fields
             links: cloudData.links || appState.links,
@@ -343,7 +374,7 @@ const App: React.FC = () => {
         } else {
           console.log('[App] No cloud data found, syncing current state');
           // No cloud data, set user and sync current state
-          const stateWithUser = { ...appState, user: userWithSubscription, subscriptionTier };
+          const stateWithUser = { ...appState, user: userWithAllData, subscriptionTier };
           setAppState(stateWithUser);
           // Sync current state to cloud for first-time users
           await syncToCloud(stateWithUser);

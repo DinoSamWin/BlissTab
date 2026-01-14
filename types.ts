@@ -26,6 +26,11 @@ export interface User {
   subscriptionPlan?: SubscriptionPlan;
   subscriptionStatus?: SubscriptionStatus;
   subscriptionExpiresAt?: string | null; // ISO date string
+  // Membership fields (from backend)
+  memberViaRedeem?: boolean;
+  membershipSince?: string | null; // ISO date string
+  // Settings
+  redeemEnabled?: boolean;
 }
 
 export type Theme = 'light' | 'dark';

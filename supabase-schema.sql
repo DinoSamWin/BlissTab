@@ -99,3 +99,85 @@ CREATE TRIGGER update_user_subscriptions_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+-- Create redeem_codes table for membership unlock codes
+CREATE TABLE IF NOT EXISTS redeem_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'enabled' CHECK (status IN ('enabled', 'disabled')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  redeemed_at TIMESTAMPTZ,
+  redeemed_by_user_id TEXT,
+  redeemed_by_email TEXT,
+  campaign TEXT,
+  notes TEXT
+);
+
+-- Create index on code for fast lookups
+CREATE INDEX IF NOT EXISTS idx_redeem_codes_code ON redeem_codes(code);
+CREATE INDEX IF NOT EXISTS idx_redeem_codes_status ON redeem_codes(status);
+CREATE INDEX IF NOT EXISTS idx_redeem_codes_redeemed_by_user_id ON redeem_codes(redeemed_by_user_id);
+
+-- Create user_membership table (authoritative membership state)
+CREATE TABLE IF NOT EXISTS user_membership (
+  user_id TEXT PRIMARY KEY,
+  is_subscribed BOOLEAN NOT NULL DEFAULT false,
+  member_via_redeem BOOLEAN NOT NULL DEFAULT false,
+  redeem_code_id UUID REFERENCES redeem_codes(id),
+  membership_since TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create index on membership flags for queries
+CREATE INDEX IF NOT EXISTS idx_user_membership_is_subscribed ON user_membership(is_subscribed);
+CREATE INDEX IF NOT EXISTS idx_user_membership_member_via_redeem ON user_membership(member_via_redeem);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE user_membership ENABLE ROW LEVEL SECURITY;
+
+-- Create policy: Users can only view their own membership
+CREATE POLICY "Users can view their own membership"
+  ON user_membership
+  FOR SELECT
+  USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
+
+-- Create policy: Users can update their own membership (for redeem operations)
+CREATE POLICY "Users can update their own membership"
+  ON user_membership
+  FOR UPDATE
+  USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
+
+-- Trigger to update updated_at on membership row update
+CREATE TRIGGER update_user_membership_updated_at
+  BEFORE UPDATE ON user_membership
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Create user_settings table for feature toggles
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id TEXT PRIMARY KEY,
+  redeem_enabled BOOLEAN NOT NULL DEFAULT true,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+
+-- Create policy: Users can only view their own settings
+CREATE POLICY "Users can view their own settings"
+  ON user_settings
+  FOR SELECT
+  USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_settings.user_id));
+
+-- Create policy: Users can update their own settings
+CREATE POLICY "Users can update their own settings"
+  ON user_settings
+  FOR UPDATE
+  USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_settings.user_id));
+
+-- Trigger to update updated_at on settings row update
+CREATE TRIGGER update_user_settings_updated_at
+  BEFORE UPDATE ON user_settings
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+

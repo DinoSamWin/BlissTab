@@ -177,12 +177,16 @@ export async function updateSubscriptionState(
 
 /**
  * Determine subscription tier from user data
+ * Membership can come from subscription OR redeem code
  */
 export function determineSubscriptionTier(user: User | null): SubscriptionTier {
   if (!user) {
     return 'unauthenticated';
   }
 
+  // Check if user is a member via redeem code
+  const memberViaRedeem = user.memberViaRedeem === true;
+  
   // Check if user has active subscription
   const isSubscribed = user.isSubscribed === true;
   const status = user.subscriptionStatus || 'active';
@@ -193,12 +197,16 @@ export function determineSubscriptionTier(user: User | null): SubscriptionTier {
     const expirationDate = new Date(expiresAt);
     const now = new Date();
     if (expirationDate < now) {
+      // Subscription expired, but check if member via redeem
+      if (memberViaRedeem) {
+        return 'authenticated_subscribed'; // Still a member via redeem
+      }
       return 'authenticated_free'; // Expired subscription = free tier
     }
   }
 
-  // Check subscription status
-  if (isSubscribed && status === 'active') {
+  // Check subscription status OR redeem membership
+  if ((isSubscribed && status === 'active') || memberViaRedeem) {
     return 'authenticated_subscribed';
   }
 
