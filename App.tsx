@@ -501,7 +501,7 @@ const App: React.FC = () => {
       <nav className="w-full px-8 md:px-12 lg:px-16 py-10 flex justify-between items-center z-20 animate-reveal">
         {/* Left: Branding */}
         <div className="flex items-center gap-4">
-            <img src="/icons/icon-64x64.png" alt="StartlyTab" className="w-12 h-12 object-contain" />
+            <img src="/icons/icon-64x64.png" alt="StartlyTab" className="w-11 h-11 object-contain" />
             <span className="logo-text text-xl text-gray-800 dark:text-gray-200">StartlyTab</span>
             {isSyncing && <div className="ml-2 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />}
             
