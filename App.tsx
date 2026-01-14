@@ -67,6 +67,8 @@ const App: React.FC = () => {
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState<boolean>(false);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const perspectiveTitleRef = useRef<HTMLHeadingElement>(null);
+  const [isSingleLine, setIsSingleLine] = useState<boolean>(false);
   
   const lastPromptIdRef = useRef<string | null>(null);
 
@@ -379,6 +381,30 @@ const App: React.FC = () => {
     }
   };
 
+  // Detect if perspective text is single line
+  useEffect(() => {
+    const checkSingleLine = () => {
+      if (perspectiveTitleRef.current) {
+        const element = perspectiveTitleRef.current;
+        // Compare scrollHeight with line-height to detect if text wraps
+        const lineHeight = parseFloat(window.getComputedStyle(element).lineHeight);
+        const scrollHeight = element.scrollHeight;
+        // If scrollHeight is less than or equal to 1.5 * lineHeight, it's likely single line
+        // Using 1.5 to account for slight variations
+        setIsSingleLine(scrollHeight <= lineHeight * 1.5);
+      }
+    };
+
+    // Check after render and when snippet changes
+    const timeoutId = setTimeout(checkSingleLine, 100);
+    window.addEventListener('resize', checkSingleLine);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', checkSingleLine);
+    };
+  }, [currentSnippet, revealKey]);
+
   useEffect(() => {
     console.log('[App] Initializing Google Auth...');
     setIsAuthChecking(true);
@@ -579,10 +605,10 @@ const App: React.FC = () => {
       </nav>
 
       {/* 3. HERO SECTION */}
-      <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 py-16">
-        <div key={revealKey} className="animate-reveal max-w-4xl text-center flex flex-col items-center">
+      <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 pt-8 pb-16">
+        <div key={revealKey} className={`animate-reveal max-w-4xl text-center flex flex-col items-center ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
             {/* Perspective Title with Selective Highlighting and No Typography Changes */}
-            <h1 className="serif editorial-title text-5xl md:text-7xl lg:text-8xl font-normal leading-[1.15] md:leading-[1.1] tracking-[-0.02em] px-4 text-black dark:text-white">
+            <h1 ref={perspectiveTitleRef} className="serif editorial-title text-5xl md:text-7xl lg:text-8xl font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] px-4 text-black dark:text-white">
                 {renderSnippet(currentSnippet)}
             </h1>
 
