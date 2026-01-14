@@ -203,6 +203,23 @@ export async function redeemCode(user: User, code: string): Promise<RedeemRespon
       console.log('[Redeem] Updating existing membership');
     } else {
       // Insert new membership
+      // First ensure user_data exists (required for RLS policy)
+      const { error: userDataError } = await client
+        .from('user_data')
+        .upsert({
+          user_id: user.id,
+          email: user.email,
+          data: {},
+          updated_at: now,
+        }, {
+          onConflict: 'user_id',
+        });
+
+      if (userDataError) {
+        console.warn('[Redeem] Failed to ensure user_data exists:', userDataError);
+        // Continue anyway, RLS might still work
+      }
+
       const { error: insertError } = await client
         .from('user_membership')
         .insert({

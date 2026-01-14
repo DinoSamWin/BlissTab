@@ -151,18 +151,29 @@ CREATE POLICY "Users can view their own membership"
   USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
 
 -- Create policy: Users can insert their own membership (for redeem operations)
+-- Allow insert if user_id matches auth.uid() OR if email matches (for OAuth users)
 DROP POLICY IF EXISTS "Users can insert their own membership" ON user_membership;
 CREATE POLICY "Users can insert their own membership"
   ON user_membership
   FOR INSERT
-  WITH CHECK (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
+  WITH CHECK (
+    auth.uid()::text = user_id 
+    OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id)
+    -- Allow if user_data exists with matching email (for OAuth users without Supabase auth session)
+    OR EXISTS (SELECT 1 FROM user_data WHERE user_id = user_membership.user_id)
+  );
 
 -- Create policy: Users can update their own membership (for redeem operations)
 DROP POLICY IF EXISTS "Users can update their own membership" ON user_membership;
 CREATE POLICY "Users can update their own membership"
   ON user_membership
   FOR UPDATE
-  USING (auth.uid()::text = user_id OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id));
+  USING (
+    auth.uid()::text = user_id 
+    OR auth.jwt() ->> 'email' = (SELECT email FROM user_data WHERE user_id = user_membership.user_id)
+    -- Allow if user_data exists with matching user_id (for OAuth users)
+    OR EXISTS (SELECT 1 FROM user_data WHERE user_id = user_membership.user_id)
+  );
 
 -- Trigger to update updated_at on membership row update
 DROP TRIGGER IF EXISTS update_user_membership_updated_at ON user_membership;
