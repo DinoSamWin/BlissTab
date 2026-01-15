@@ -310,44 +310,523 @@ const App: React.FC = () => {
     return lines;
   };
 
+  // Helper: Draw marker-style highlight with hand-drawn look
+  const drawMarkerHighlight = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: string
+  ) => {
+    ctx.save();
+    
+    // Create hand-drawn effect with slight randomness
+    const offset = 2; // Slight offset for hand-drawn feel
+    const points: Array<{x: number, y: number}> = [];
+    
+    // Top edge with slight variation
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10;
+      const baseX = x + t * width;
+      const baseY = y;
+      points.push({
+        x: baseX + (Math.random() - 0.5) * offset,
+        y: baseY + (Math.random() - 0.5) * offset
+      });
+    }
+    
+    // Right edge
+    for (let i = 0; i <= 5; i++) {
+      const t = i / 5;
+      const baseX = x + width;
+      const baseY = y + t * height;
+      points.push({
+        x: baseX + (Math.random() - 0.5) * offset,
+        y: baseY + (Math.random() - 0.5) * offset
+      });
+    }
+    
+    // Bottom edge (reverse)
+    for (let i = 10; i >= 0; i--) {
+      const t = i / 10;
+      const baseX = x + t * width;
+      const baseY = y + height;
+      points.push({
+        x: baseX + (Math.random() - 0.5) * offset,
+        y: baseY + (Math.random() - 0.5) * offset
+      });
+    }
+    
+    // Left edge (reverse)
+    for (let i = 5; i >= 0; i--) {
+      const t = i / 5;
+      const baseX = x;
+      const baseY = y + t * height;
+      points.push({
+        x: baseX + (Math.random() - 0.5) * offset,
+        y: baseY + (Math.random() - 0.5) * offset
+      });
+    }
+    
+    // Draw filled shape
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.closePath();
+    
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.25; // Semi-transparent
+    ctx.fill();
+    ctx.restore();
+  };
+
+  // Helper: Generate avatar with first letter
+  const generateAvatar = (ctx: CanvasRenderingContext2D, letter: string, size: number, x: number, y: number) => {
+    // Draw circle background with gradient
+    const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
+    gradient.addColorStop(0, '#E8E8E8');
+    gradient.addColorStop(1, '#D0D0D0');
+    
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Draw letter
+    ctx.fillStyle = '#666666';
+    ctx.font = `500 ${size * 0.5}px "Inter", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(letter.toUpperCase(), x + size / 2, y + size / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+  };
+
+  // Helper: Parse quote with highlights and measure text
+  const parseQuoteWithHighlights = (text: string) => {
+    const parts: Array<{text: string, highlighted: boolean}> = [];
+    const regex = /\[h\](.*?)\[\/h\]/g;
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = regex.exec(text)) !== null) {
+      // Add text before highlight
+      if (match.index > lastIndex) {
+        parts.push({ text: text.substring(lastIndex, match.index), highlighted: false });
+      }
+      // Add highlighted text
+      parts.push({ text: match[1], highlighted: true });
+      lastIndex = regex.lastIndex;
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push({ text: text.substring(lastIndex), highlighted: false });
+    }
+    
+    // If no highlights found, treat entire text as non-highlighted
+    if (parts.length === 0) {
+      parts.push({ text, highlighted: false });
+    }
+    
+    return parts;
+  };
+
+  // Helper: Draw StartlyTab homepage mockup
+  const drawHomepageMockup = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) => {
+    const radius = 12;
+    
+    // Draw rounded rectangle background
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    
+    // White background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    
+    // Browser chrome (top bar)
+    const chromeHeight = 50;
+    ctx.fillStyle = '#F5F5F5';
+    ctx.fillRect(x, y, width, chromeHeight);
+    
+    // Window controls
+    const controlSize = 12;
+    const controlY = y + chromeHeight / 2 - controlSize / 2;
+    const controlSpacing = 18;
+    const controlStartX = x + 20;
+    
+    // Red, yellow, green circles
+    ctx.beginPath();
+    ctx.arc(controlStartX, controlY + controlSize / 2, controlSize / 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#FF5F57';
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(controlStartX + controlSpacing, controlY + controlSize / 2, controlSize / 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFBD2E';
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(controlStartX + controlSpacing * 2, controlY + controlSize / 2, controlSize / 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#28CA42';
+    ctx.fill();
+    
+    // Tab
+    const tabWidth = 120;
+    const tabHeight = 35;
+    const tabX = x + 60;
+    const tabY = y + chromeHeight;
+    
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
+    
+    // Tab content (icon + text)
+    ctx.fillStyle = '#FF9500';
+    ctx.font = '400 14px "Inter", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('●', tabX + 10, tabY + tabHeight / 2 + 5);
+    ctx.fillStyle = '#333333';
+    ctx.fillText('StartlyTab', tabX + 25, tabY + tabHeight / 2 + 5);
+    
+    // Search bar
+    const searchY = y + chromeHeight + tabHeight + 40;
+    const searchHeight = 50;
+    const searchPadding = 40;
+    
+    ctx.fillStyle = '#F8F8F8';
+    ctx.fillRect(x + searchPadding, searchY, width - searchPadding * 2, searchHeight);
+    
+    // Search icon
+    ctx.fillStyle = '#999999';
+    ctx.font = '400 16px "Inter", sans-serif';
+    ctx.fillText('🔍', x + searchPadding + 15, searchY + searchHeight / 2 + 5);
+    
+    // Search placeholder
+    ctx.fillStyle = '#CCCCCC';
+    ctx.fillText('Search', x + searchPadding + 40, searchY + searchHeight / 2 + 5);
+    
+    // Main quote area (centered)
+    const quoteY = searchY + searchHeight + 60;
+    ctx.fillStyle = '#111111';
+    ctx.font = '400 32px "Instrument Serif", serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Rest is not idleness,', width / 2, quoteY);
+    ctx.fillText('but a necessary pause.', width / 2, quoteY + 45);
+    
+    // Action buttons
+    const buttonY = quoteY + 100;
+    const buttonWidth = 140;
+    const buttonHeight = 40;
+    const buttonSpacing = 20;
+    
+    // "NEW PERSPECTIVE" button
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(width / 2 - buttonWidth - buttonSpacing / 2, buttonY, buttonWidth, buttonHeight);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '600 10px "Inter", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('NEW PERSPECTIVE', width / 2 - buttonSpacing / 2, buttonY + buttonHeight / 2 + 3);
+    
+    // "SHARE QUOTE" button
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#E0E0E0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(width / 2 + buttonSpacing / 2, buttonY, buttonWidth, buttonHeight);
+    ctx.fillStyle = '#666666';
+    ctx.fillText('SHARE QUOTE', width / 2 + buttonWidth / 2 + buttonSpacing / 2, buttonY + buttonHeight / 2 + 3);
+    
+    // "Intentional Gateways" section
+    const gatewaysY = buttonY + buttonHeight + 60;
+    ctx.fillStyle = '#111111';
+    ctx.font = '400 20px "Instrument Serif", serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Intentional Gateways', x + searchPadding, gatewaysY);
+    
+    ctx.fillStyle = '#999999';
+    ctx.font = '400 12px "Inter", sans-serif';
+    ctx.fillText('Your personal shortcuts, always ready.', x + searchPadding, gatewaysY + 30);
+    
+    // Gateway icons
+    const iconSize = 32;
+    const iconSpacing = 50;
+    const iconsStartX = x + searchPadding;
+    const iconsY = gatewaysY + 50;
+    
+    const icons = ['●', '●', '●', '●', '●'];
+    icons.forEach((icon, i) => {
+      ctx.fillStyle = '#E0E0E0';
+      ctx.fillRect(iconsStartX + i * iconSpacing, iconsY, iconSize, iconSize);
+      ctx.fillStyle = '#999999';
+      ctx.font = '400 16px "Inter", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(icon, iconsStartX + i * iconSpacing + iconSize / 2, iconsY + iconSize / 2 + 5);
+    });
+    
+    ctx.textAlign = 'left';
+    
+    // Subtle shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fillStyle = 'transparent';
+    ctx.fill();
+    ctx.restore();
+  };
+
   const createShareCard = async (quote: string) => {
+    // Ensure fonts are loaded before rendering
+    await document.fonts.ready;
+    
     const width = 1080;
-    const height = 1350;
+    const horizontalPadding = width * 0.12; // 12% padding
+    const maxContentWidth = width - horizontalPadding * 2;
+    
+    // Parse quote to identify highlighted sections
+    const quoteParts = parseQuoteWithHighlights(quote);
+    const cleanQuote = quote.replace(/\[h\](.*?)\[\/h\]/g, '$1');
+    
+    // Setup canvas for measurement
+    const measureCanvas = document.createElement('canvas');
+    const measureCtx = measureCanvas.getContext('2d');
+    if (!measureCtx) return null;
+    
+    // Measure quote height
+    measureCtx.font = '400 72px "Instrument Serif", serif';
+    const quoteLineHeight = 100;
+    const quoteLines = wrapText(measureCtx, cleanQuote, maxContentWidth);
+    const quoteHeight = quoteLines.length * quoteLineHeight + 40; // Extra padding
+    
+    // Calculate adaptive height
+    const topSectionHeight = 160 + quoteHeight; // Top padding + quote
+    const userSectionHeight = 120; // Avatar + text
+    const spacingBetweenSections = 80;
+    const homepageMockupHeight = 450;
+    const productInfoHeight = 180;
+    const bottomPadding = 100;
+    
+    const totalHeight = topSectionHeight + spacingBetweenSections + userSectionHeight + 
+                       spacingBetweenSections + homepageMockupHeight + spacingBetweenSections + 
+                       productInfoHeight + bottomPadding;
+    
+    // Create canvas
     const canvas = document.createElement('canvas');
     canvas.width = width;
-    canvas.height = height;
+    canvas.height = totalHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    // Background
-    ctx.fillStyle = appState.theme === 'dark' ? '#0C0C0D' : '#F8F8FB';
-    ctx.fillRect(0, 0, width, height);
+    // Background - off-white / very light warm gray
+    ctx.fillStyle = '#FAFAF8';
+    ctx.fillRect(0, 0, width, totalHeight);
+    
+    let currentY = 120; // Start from top
 
-    // Quote text
-    ctx.fillStyle = appState.theme === 'dark' ? '#F5F5F7' : '#0F172A';
-    ctx.font = 'bold 56px "Inter", sans-serif';
-    ctx.textAlign = 'center';
+    // ========== 1. TOP SECTION - PERSPECTIVE QUOTE ==========
+    
+    // Large quotation mark accent (top left)
+    ctx.fillStyle = '#E8E8E6';
+    ctx.font = '400 140px "Instrument Serif", serif';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    const maxQuoteWidth = width * 0.78;
-    const lines = wrapText(ctx, quote, maxQuoteWidth);
-    const lineHeight = 78;
-    const totalQuoteHeight = lines.length * lineHeight;
-    let y = (height - totalQuoteHeight) / 2 - 80;
-
-    lines.forEach(line => {
-      ctx.fillText(line, width / 2, y);
-      y += lineHeight;
+    ctx.fillText('"', horizontalPadding, currentY - 30);
+    
+    // Quote text with marker highlights
+    ctx.font = '400 72px "Instrument Serif", serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    
+    // Marker colors (warm beige, soft pastel yellow, light lavender)
+    const markerColors = ['#F5E6D3', '#FFF8DC', '#E6E6FA'];
+    let markerColorIndex = 0;
+    
+    // Calculate highlight positions by processing quote parts line by line
+    const highlightRects: Array<{x: number, y: number, width: number, height: number, color: string}> = [];
+    const quoteStartY = currentY;
+    
+    // Process each line and find highlighted segments
+    quoteLines.forEach((line, lineIndex) => {
+      const lineY = quoteStartY + lineIndex * quoteLineHeight;
+      
+      // Check each quote part to see if it appears in this line
+      quoteParts.forEach((part) => {
+        if (part.highlighted && part.text.trim()) {
+          const partText = part.text.trim();
+          
+          // Find if this highlighted text appears in current line
+          const partIndex = line.indexOf(partText);
+          if (partIndex !== -1) {
+            // Calculate position
+            const beforeText = line.substring(0, partIndex);
+            const highlightX = horizontalPadding + ctx.measureText(beforeText).width;
+            const highlightWidth = ctx.measureText(partText).width;
+            const highlightHeight = 72 * 0.85;
+            
+            highlightRects.push({
+              x: highlightX - 8,
+              y: lineY - highlightHeight * 0.15,
+              width: highlightWidth + 16,
+              height: highlightHeight,
+              color: markerColors[markerColorIndex % markerColors.length]
+            });
+            
+            markerColorIndex++;
+          }
+        }
+      });
     });
+    
+    // Draw highlights first (behind text)
+    highlightRects.forEach(rect => {
+      drawMarkerHighlight(ctx, rect.x, rect.y, rect.width, rect.height, rect.color);
+    });
+    
+    // Draw text on top
+    ctx.fillStyle = '#1A1A1A';
+    quoteLines.forEach((line, index) => {
+      ctx.fillText(line, horizontalPadding, quoteStartY + (index * quoteLineHeight));
+    });
+    
+    currentY += quoteHeight + 100; // Spacing after quote
 
-    // Product name
-    ctx.font = '600 28px "Inter", sans-serif';
-    ctx.fillStyle = appState.theme === 'dark' ? '#E5E7EB' : '#111827';
-    ctx.fillText('StartlyTab', width / 2, height - 180);
+    // ========== 2. MIDDLE SECTION - USER IDENTITY ==========
+    
+    const user = appState.user;
+    const avatarSize = 64;
+    const avatarX = horizontalPadding;
+    const avatarY = currentY;
+    
+    if (user) {
+      // Draw avatar
+      if (user.picture) {
+        // Try to load user picture
+        try {
+          const avatarImg = new Image();
+          avatarImg.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve) => {
+            avatarImg.onload = () => resolve();
+            avatarImg.onerror = () => resolve();
+            avatarImg.src = user.picture;
+          });
+          
+          if (avatarImg.complete && avatarImg.naturalWidth > 0) {
+            // Draw circular avatar
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
+            ctx.restore();
+          } else {
+            // Fallback to letter avatar
+            const firstLetter = (user.name || user.email || 'U')[0];
+            generateAvatar(ctx, firstLetter, avatarSize, avatarX, avatarY);
+          }
+        } catch {
+          // Fallback to letter avatar
+          const firstLetter = (user.name || user.email || 'U')[0];
+          generateAvatar(ctx, firstLetter, avatarSize, avatarX, avatarY);
+        }
+      } else {
+        // Generate letter avatar
+        const firstLetter = (user.name || user.email || 'U')[0];
+        generateAvatar(ctx, firstLetter, avatarSize, avatarX, avatarY);
+      }
+      
+      // User name or masked email
+      const textX = avatarX + avatarSize + 20;
+      const textY = avatarY + 8;
+      
+      ctx.fillStyle = '#2A2A2A';
+      ctx.font = '500 20px "Inter", sans-serif';
+      ctx.textAlign = 'left';
+      
+      const displayName = user.name || (user.email ? `${user.email.split('@')[0].substring(0, 1)}***@${user.email.split('@')[1]}` : 'User');
+      ctx.fillText(displayName, textX, textY);
+      
+      // Secondary line: "Shared via StartlyTab"
+      ctx.fillStyle = '#888888';
+      ctx.font = '400 14px "Inter", sans-serif';
+      ctx.fillText('Shared via StartlyTab', textX, textY + 32);
+    } else {
+      // No user - show generic
+      generateAvatar(ctx, 'U', avatarSize, avatarX, avatarY);
+      ctx.fillStyle = '#2A2A2A';
+      ctx.font = '500 20px "Inter", sans-serif';
+      ctx.fillText('Shared via StartlyTab', avatarX + avatarSize + 20, avatarY + 20);
+    }
+    
+    currentY += userSectionHeight + spacingBetweenSections;
 
-    // Slogan
+    // ========== 3. BOTTOM SECTION - PRODUCT PROMOTION ==========
+    
+    // Homepage mockup
+    const mockupWidth = width * 0.85;
+    const mockupHeight = homepageMockupHeight;
+    const mockupX = (width - mockupWidth) / 2;
+    const mockupY = currentY;
+    
+    drawHomepageMockup(ctx, mockupX, mockupY, mockupWidth, mockupHeight);
+    
+    currentY += mockupHeight + spacingBetweenSections;
+    
+    // Product info (centered)
+    ctx.textAlign = 'center';
+    
+    // Product name: StartlyTab
+    ctx.fillStyle = '#1A1A1A';
+    ctx.font = '500 36px "Inter", sans-serif';
+    ctx.fillText('StartlyTab', width / 2, currentY);
+    currentY += 50;
+    
+    // Slogan: Start your day softly
+    ctx.fillStyle = '#666666';
     ctx.font = '400 22px "Inter", sans-serif';
-    ctx.fillStyle = appState.theme === 'dark' ? '#9CA3AF' : '#6B7280';
-    ctx.fillText('Perspective for a focused day.', width / 2, height - 135);
+    ctx.fillText('Start your day softly', width / 2, currentY);
+    currentY += 50;
+    
+    // Positioning line
+    ctx.fillStyle = '#777777';
+    ctx.font = '400 18px "Inter", sans-serif';
+    ctx.fillText('A warm browser start page for focused minds.', width / 2, currentY);
+    currentY += 50;
+    
+    // Website URL
+    ctx.fillStyle = '#555555';
+    ctx.font = '400 18px "Inter", sans-serif';
+    ctx.fillText('www.startlytab.com', width / 2, currentY);
+    
+    ctx.textAlign = 'left'; // Reset
 
     return await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((blob) => resolve(blob), 'image/png', 1.0);
@@ -363,13 +842,13 @@ const App: React.FC = () => {
     if (isSharing) return;
     try {
       setIsSharing(true);
-      const cleanQuote = stripHighlights(currentSnippet);
-      const blob = await createShareCard(cleanQuote);
+      // Pass quote with highlights preserved - createShareCard will parse them
+      const blob = await createShareCard(currentSnippet);
       if (!blob) throw new Error('Failed to create image');
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `focustab-quote-${Date.now()}.png`;
+      link.download = `startlytab-quote-${Date.now()}.png`;
       link.click();
       URL.revokeObjectURL(url);
       addToast('Quote ready to share', 'success');

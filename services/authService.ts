@@ -30,12 +30,14 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
   // 1. Check local storage first for immediate UI response
   const savedUser = localStorage.getItem('focus_tab_user');
   let hasExistingUser = false;
+  let authCheckComplete = false;
   
   if (savedUser) {
     try {
       const user = JSON.parse(savedUser);
       onUser(user);
       hasExistingUser = true;
+      authCheckComplete = true;
       console.log('[Auth] Restored user from localStorage:', user.email);
     } catch (e) {
       console.error('[Auth] Auth restore failed', e);
@@ -69,9 +71,11 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
           console.log('[Auth] User authenticated:', user.email);
           localStorage.setItem('focus_tab_user', JSON.stringify(user));
           onUser(user);
+          authCheckComplete = true;
         } catch (e) {
           console.error('[Auth] Auth parsing failed', e);
           onUser(null);
+          authCheckComplete = true;
         }
       };
 
@@ -87,6 +91,13 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
         });
         console.log('[Auth] Google SDK initialized successfully');
         
+        // If no existing user, notify that auth check is complete (no user found)
+        if (!hasExistingUser && !authCheckComplete) {
+          console.log('[Auth] No existing user found, auth check complete');
+          onUser(null);
+          authCheckComplete = true;
+        }
+        
         // Only show One Tap if user is NOT already logged in
         // This prevents the popup from appearing on every page refresh
         if (!IS_PLACEHOLDER_ID && !hasExistingUser) {
@@ -97,12 +108,24 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
         }
       } catch (error) {
         console.error('[Auth] Failed to initialize Google SDK:', error);
+        // If initialization fails and no user exists, notify completion
+        if (!hasExistingUser && !authCheckComplete) {
+          onUser(null);
+          authCheckComplete = true;
+        }
       }
     }
   }, 300);
 
-  // Stop polling after 5 seconds to save resources
-  setTimeout(() => clearInterval(gsiInterval), 5000);
+  // Stop polling after 5 seconds and notify completion if not already done
+  setTimeout(() => {
+    clearInterval(gsiInterval);
+    if (!authCheckComplete) {
+      console.log('[Auth] Auth check timeout, no user found');
+      onUser(null);
+      authCheckComplete = true;
+    }
+  }, 5000);
 }
 
 /**
