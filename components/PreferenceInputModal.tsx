@@ -46,15 +46,19 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
     }
   }, [isAuthenticated, isOpen, onClose]);
 
-  if (!isOpen) return null;
-
-  // Store preference when user types (for migration after Google login)
-  useEffect(() => {
-    if (preference.trim() && !isAuthenticated) {
-      // Store preference temporarily for migration after login
-      localStorage.setItem('startly_intention_pending', preference.trim());
+  const handleSaveLocal = async () => {
+    if (!preference.trim()) return;
+    setIsSaving(true);
+    try {
+      onSaveLocal(preference.trim());
+      setPreference('');
+      onClose();
+    } finally {
+      setIsSaving(false);
     }
-  }, [preference, isAuthenticated]);
+  };
+
+  if (!isOpen) return null;
 
 
   return (
