@@ -57,6 +57,7 @@ const App: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isPreferenceModalOpen, setIsPreferenceModalOpen] = useState(false);
   const [showInlineGuidance, setShowInlineGuidance] = useState(false);
+  const [hasLocalPreference, setHasLocalPreference] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
   
   const isAuthenticated = !!appState.user;
@@ -134,6 +135,8 @@ const App: React.FC = () => {
     console.log('[App] User authenticated:', user.email);
     // Reset perspective count on login
     resetPerspectiveCount();
+    // Clear local preference flag
+    setHasLocalPreference(false);
     
     setIsSyncing(true);
     
@@ -1141,8 +1144,13 @@ const App: React.FC = () => {
       } else {
         setShowInlineGuidance(false);
       }
+      
+      // Check for local preference
+      const localPref = localStorage.getItem('startly_intention_local');
+      setHasLocalPreference(!!localPref);
     } else {
       setShowInlineGuidance(false);
+      setHasLocalPreference(false);
     }
   }, [isAuthenticated]);
 
@@ -1276,31 +1284,15 @@ const App: React.FC = () => {
             </h1>
 
             <div className="mt-10 flex flex-col items-center gap-4">
-                {showInlineGuidance && !isAuthenticated ? (
-                  <div className="max-w-md w-full text-center space-y-4 animate-reveal">
-                    <p className="text-lg text-gray-700 dark:text-gray-300">
-                      Still looking for the right tone?
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      We can do better with a little context.
-                    </p>
-                <button 
-                      onClick={() => setIsPreferenceModalOpen(true)}
-                      className="px-8 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-xl transition-all hover:scale-105 active:scale-95"
-                    >
-                      Tell us what you like
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-4">
-                <button 
+                {/* Action buttons - always visible */}
+                <div className="flex items-center gap-4">
+                    <button 
                         onClick={() => fetchRandomSnippet()}
-                        disabled={isGenerating || (showInlineGuidance && !isAuthenticated)}
+                        disabled={isGenerating}
                         className="px-10 py-5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={showInlineGuidance && !isAuthenticated ? "Want a better match? Tell us what you like." : undefined}
-                >
-                    {isGenerating ? 'Reflecting...' : 'New Perspective'}
-                </button>
+                    >
+                        {isGenerating ? 'Reflecting...' : 'New Perspective'}
+                    </button>
                     <button
                       onClick={handleShareQuote}
                       disabled={isSharing}
@@ -1312,7 +1304,41 @@ const App: React.FC = () => {
                         <path d="M8 8l4-4 4 4"/>
                       </svg>
                       <span>Share Quote</span>
-                </button>
+                    </button>
+                </div>
+
+                {/* Inline helper line - shown below buttons when threshold reached or after local save */}
+                {!isAuthenticated && (showInlineGuidance || hasLocalPreference) && (
+                  <div className="max-w-md w-full text-center animate-reveal mt-2">
+                    {hasLocalPreference ? (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Saved locally.{' '}
+                        <button
+                          onClick={handleSignIn}
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                          Sign in with Google
+                        </button>
+                        {' '}to unlock unlimited perspectives and sync across devices.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Still looking for the right tone?{' '}
+                        <button
+                          onClick={handleSignIn}
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                          Sign in with Google
+                        </button>
+                        {' '}to unlock unlimited perspectives.
+                      </p>
+                    )}
+                    <button
+                      onClick={() => setIsPreferenceModalOpen(true)}
+                      className="mt-3 text-xs text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline"
+                    >
+                      Tell us what you like
+                    </button>
                   </div>
                 )}
             </div>
@@ -1421,6 +1447,7 @@ const App: React.FC = () => {
         onSaveLocal={async (preference: string) => {
           // Save to local storage
           localStorage.setItem('startly_intention_local', preference);
+          setHasLocalPreference(true);
           
           // Create a temporary active request for immediate use
           const tempRequest = {
@@ -1435,7 +1462,7 @@ const App: React.FC = () => {
             requests: [...prev.requests, tempRequest]
           }));
           
-          addToast('Saved. We\'ll use this on this device.', 'success');
+          addToast('Saved on this device. Sign in to unlock unlimited perspectives.', 'success');
           
           // Allow one immediate content refresh
           setTimeout(() => {
@@ -1443,12 +1470,14 @@ const App: React.FC = () => {
           }, 300);
         }}
         onSaveAndSync={async (preference: string) => {
-          // Trigger login flow
-          setIsPreferenceModalOpen(false);
-          handleSignIn();
-          
           // Store preference temporarily to migrate after login
           localStorage.setItem('startly_intention_pending', preference);
+          
+          // Close modal first
+          setIsPreferenceModalOpen(false);
+          
+          // Immediately trigger Google sign-in
+          handleSignIn();
         }}
         theme={appState.theme}
         isAuthenticated={isAuthenticated}
