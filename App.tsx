@@ -1267,9 +1267,9 @@ const App: React.FC = () => {
             ) : (
               <div className="w-full flex flex-col items-center justify-center py-6">
                   <div className="max-w-md w-full flex flex-col items-center text-center">
-                      <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2">Start your day softly</h2>
+                      <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2">Start your day softly — with everything ready</h2>
                       <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
-                          Sign in with Google to sync your gateways across devices.
+                          Unlimited shortcuts, always one click away.
                   </p>
                   <div id="google-login-btn" className="transition-all hover:scale-[1.02] active:scale-[0.98]"></div>
                   </div>
