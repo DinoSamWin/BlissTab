@@ -58,6 +58,7 @@ const App: React.FC = () => {
   const [isPreferenceModalOpen, setIsPreferenceModalOpen] = useState(false);
   const [showInlineGuidance, setShowInlineGuidance] = useState(false);
   const [hasLocalPreference, setHasLocalPreference] = useState(false);
+  const [shouldShakeHelper, setShouldShakeHelper] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
   
   const isAuthenticated = !!appState.user;
@@ -315,14 +316,20 @@ const App: React.FC = () => {
         if (limitCheck.reason === 'context_needed') {
           // Show inline guidance instead of blocking
           setShowInlineGuidance(true);
+          // Trigger shake animation when user tries to click but is blocked
+          setShouldShakeHelper(true);
+          setTimeout(() => setShouldShakeHelper(false), 600);
           return;
         }
         return;
       }
     }
 
-    // Hide inline guidance if it was showing
-    setShowInlineGuidance(false);
+    // If inline guidance is showing and user clicks (but not blocked), trigger shake
+    if (!bypassLimit && !isAuthenticated && (showInlineGuidance || hasLocalPreference)) {
+      setShouldShakeHelper(true);
+      setTimeout(() => setShouldShakeHelper(false), 600);
+    }
 
     // Get active requests, including local preference for unauthenticated users
     let activeRequests = appState.requests.filter(r => r.active);
@@ -1309,7 +1316,7 @@ const App: React.FC = () => {
 
                 {/* Inline helper line - shown below buttons when threshold reached or after local save */}
                 {!isAuthenticated && (showInlineGuidance || hasLocalPreference) && (
-                  <div className="max-w-md w-full text-center animate-reveal mt-2">
+                  <div className={`max-w-md w-full text-center animate-reveal mt-2 ${shouldShakeHelper ? 'animate-shake' : ''}`}>
                     {hasLocalPreference ? (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Saved locally.{' '}
@@ -1333,12 +1340,6 @@ const App: React.FC = () => {
                         {' '}to unlock unlimited perspectives.
                       </p>
                     )}
-                    <button
-                      onClick={() => setIsPreferenceModalOpen(true)}
-                      className="mt-3 text-xs text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline"
-                    >
-                      Tell us what you like
-                    </button>
                   </div>
                 )}
             </div>
@@ -1470,14 +1471,8 @@ const App: React.FC = () => {
           }, 300);
         }}
         onSaveAndSync={async (preference: string) => {
-          // Store preference temporarily to migrate after login
-          localStorage.setItem('startly_intention_pending', preference);
-          
-          // Close modal first
-          setIsPreferenceModalOpen(false);
-          
-          // Immediately trigger Google sign-in
-          handleSignIn();
+          // This is now handled in PreferenceInputModal.handleSaveAndSync
+          // Preference is stored in localStorage and handleSignIn is called directly
         }}
         theme={appState.theme}
         isAuthenticated={isAuthenticated}

@@ -6,6 +6,7 @@ interface PreferenceInputModalProps {
   onClose: () => void;
   onSaveLocal: (preference: string) => void;
   onSaveAndSync: (preference: string) => void;
+  onSignIn: () => void;
   theme: Theme;
   isAuthenticated: boolean;
 }
@@ -15,6 +16,7 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
   onClose,
   onSaveLocal,
   onSaveAndSync,
+  onSignIn,
   theme,
   isAuthenticated
 }) => {
@@ -36,15 +38,16 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
   };
 
   const handleSaveAndSync = async () => {
-    if (!preference.trim()) return;
-    setIsSaving(true);
-    try {
-      onSaveAndSync(preference.trim());
-      setPreference('');
-      onClose();
-    } finally {
-      setIsSaving(false);
+    // Store preference temporarily
+    if (preference.trim()) {
+      localStorage.setItem('startly_intention_pending', preference.trim());
     }
+    
+    // Close modal first
+    onClose();
+    
+    // Immediately trigger Google sign-in (same as homepage button)
+    onSignIn();
   };
 
   return (
