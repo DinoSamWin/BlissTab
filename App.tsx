@@ -5,7 +5,7 @@ import { generateSnippet } from './services/geminiService';
 import { initGoogleAuth, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory } from './services/perspectiveService';
-import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier } from './services/usageLimitsService';
+import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount } from './services/usageLimitsService';
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import Settings from './components/Settings';
