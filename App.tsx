@@ -71,7 +71,7 @@ const App: React.FC = () => {
   const [isSingleLine, setIsSingleLine] = useState<boolean>(false);
   
   const lastPromptIdRef = useRef<string | null>(null);
-  
+
   // Store latest appState in ref to avoid dependency issues in storage event listener
   const appStateRef = useRef<AppState>(appState);
   
@@ -158,37 +158,42 @@ const App: React.FC = () => {
       // Fetch cloud data first - this is the source of truth
       const cloudData = await fetchFromCloud(user.id);
       
-      if (cloudData) {
-        console.log('[App] Cloud data fetched:', {
-          links: cloudData.links?.length || 0,
-          requests: cloudData.requests?.length || 0
-        });
-        // Use cloud data as source of truth - don't merge with local state
-        const mergedState = {
-          ...appState,
-          // Cloud data takes precedence
-          links: cloudData.links || [],
-          requests: cloudData.requests || [],
-          language: cloudData.language || appState.language,
-          theme: cloudData.theme || appState.theme,
-          user: userWithAllData, // Ensure user with all data is set
-          subscriptionTier, // Set subscription tier
-          version: cloudData.version || appState.version,
-          pinnedSnippetId: cloudData.pinnedSnippetId || appState.pinnedSnippetId,
-        };
-        saveState(mergedState, true); // Skip sync on initial load (already from cloud)
-      } else {
-        console.log('[App] No cloud data found, syncing current state');
-        // No cloud data, set user and sync current state
-        const stateWithUser = { ...appState, user: userWithAllData, subscriptionTier };
-        setAppState(stateWithUser);
-        // Sync current state to cloud for first-time users
-        await syncToCloud(stateWithUser);
-      }
+      // Use functional update to get latest state without dependency
+      setAppState(prevState => {
+        if (cloudData) {
+          console.log('[App] Cloud data fetched:', {
+            links: cloudData.links?.length || 0,
+            requests: cloudData.requests?.length || 0
+          });
+          // Use cloud data as source of truth - don't merge with local state
+          const mergedState = {
+            ...prevState,
+            // Cloud data takes precedence
+            links: cloudData.links || [],
+            requests: cloudData.requests || [],
+            language: cloudData.language || prevState.language,
+            theme: cloudData.theme || prevState.theme,
+            user: userWithAllData, // Ensure user with all data is set
+            subscriptionTier, // Set subscription tier
+            version: cloudData.version || prevState.version,
+            pinnedSnippetId: cloudData.pinnedSnippetId || prevState.pinnedSnippetId,
+          };
+          // Save state asynchronously without blocking
+          saveState(mergedState, true).catch(err => console.error('[App] Failed to save state:', err));
+          return mergedState;
+        } else {
+          console.log('[App] No cloud data found, syncing current state');
+          // No cloud data, set user and sync current state
+          const stateWithUser = { ...prevState, user: userWithAllData, subscriptionTier };
+          // Sync current state to cloud for first-time users
+          syncToCloud(stateWithUser).catch(err => console.error('[App] Failed to sync to cloud:', err));
+          return stateWithUser;
+        }
+      });
     } finally {
       setIsSyncing(false);
     }
-  }, [appState, saveState]);
+  }, [saveState]); // Removed appState dependency
 
   const handleSignIn = () => {
     setIsSyncing(true);
@@ -968,64 +973,81 @@ const App: React.FC = () => {
       } else {
         console.log('[App] No user, rendering Google button');
         // Delay button rendering to ensure SDK is loaded
+        // Use ref to get latest theme without dependency
         setTimeout(() => {
-        renderGoogleButton('google-login-btn', appState.theme);
+          renderGoogleButton('google-login-btn', appStateRef.current.theme);
         }, 500);
       }
     });
     fetchRandomSnippet();
-  }, [handleUserLogin, appState.theme]);
+  }, [handleUserLogin]); // Removed appState.theme dependency
 
   // Listen for cross-tab storage changes (when user logs in/out in another tab)
   useEffect(() => {
+    let isProcessing = false; // Flag to prevent concurrent processing
+    
     const handleStorageChange = async (e: StorageEvent) => {
       // Only handle changes to focus_tab_user (login/logout)
       if (e.key === 'focus_tab_user') {
-        console.log('[App] Detected user login/logout in another tab, syncing...');
-        
-        // Check if user state changed
-        let newUser: User | null = null;
-        if (e.newValue) {
-          try {
-            newUser = JSON.parse(e.newValue);
-          } catch (error) {
-            console.error('[App] Failed to parse user from storage event:', error);
-            return;
-          }
+        // Prevent concurrent processing
+        if (isProcessing) {
+          console.log('[App] Storage event already processing, skipping...');
+          return;
         }
         
-        // Use ref to get latest state without causing re-renders
-        const currentState = appStateRef.current;
-        const currentUser = currentState.user;
-        const currentUserId = currentUser?.id || null;
-        const newUserId = newUser?.id || null;
+        isProcessing = true;
+        console.log('[App] Detected user login/logout in another tab, syncing...');
         
-        // Only update if user state actually changed
-        if (currentUserId !== newUserId) {
-          console.log('[App] User state changed:', {
-            from: currentUserId ? 'logged in' : 'logged out',
-            to: newUserId ? 'logged in' : 'logged out'
-          });
-          
-          if (newUser) {
-            // User logged in in another tab
-            console.log('[App] User logged in in another tab, updating state...');
-            setIsAuthChecking(true);
-            await handleUserLogin(newUser);
-            setIsAuthChecking(false);
-            addToast('Logged in from another tab', 'success');
-          } else {
-            // User logged out in another tab
-            console.log('[App] User logged out in another tab, updating state...');
-            // Use functional update to avoid dependency on appState
-            setAppState(prevState => {
-              const newState = { ...prevState, user: null, subscriptionTier: undefined };
-              // Save state asynchronously without blocking
-              saveState(newState, true).catch(err => console.error('[App] Failed to save logout state:', err));
-              return newState;
-            });
-            addToast('Logged out from another tab', 'info');
+        try {
+          // Check if user state changed
+          let newUser: User | null = null;
+          if (e.newValue) {
+            try {
+              newUser = JSON.parse(e.newValue);
+            } catch (error) {
+              console.error('[App] Failed to parse user from storage event:', error);
+              isProcessing = false;
+              return;
+            }
           }
+          
+          // Use ref to get latest state without causing re-renders
+          const currentState = appStateRef.current;
+          const currentUser = currentState.user;
+          const currentUserId = currentUser?.id || null;
+          const newUserId = newUser?.id || null;
+          
+          // Only update if user state actually changed
+          if (currentUserId !== newUserId) {
+            console.log('[App] User state changed:', {
+              from: currentUserId ? 'logged in' : 'logged out',
+              to: newUserId ? 'logged in' : 'logged out'
+            });
+            
+            if (newUser) {
+              // User logged in in another tab
+              console.log('[App] User logged in in another tab, updating state...');
+              setIsAuthChecking(true);
+              await handleUserLogin(newUser);
+              setIsAuthChecking(false);
+              addToast('Logged in from another tab', 'success');
+            } else {
+              // User logged out in another tab
+              console.log('[App] User logged out in another tab, updating state...');
+              // Use functional update to avoid dependency on appState
+              setAppState(prevState => {
+                const newState = { ...prevState, user: null, subscriptionTier: undefined };
+                // Save state asynchronously without blocking
+                saveState(newState, true).catch(err => console.error('[App] Failed to save logout state:', err));
+                return newState;
+              });
+              addToast('Logged out from another tab', 'info');
+            }
+          } else {
+            console.log('[App] User state unchanged, skipping update');
+          }
+        } finally {
+          isProcessing = false;
         }
       }
     };
