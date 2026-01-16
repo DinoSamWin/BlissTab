@@ -23,11 +23,13 @@ const SubscriptionUpsellModal: React.FC<SubscriptionUpsellModalProps> = ({
       title: 'Unlock more gateways',
       description: 'Organize all your important destinations in one place.',
       highlight: 'Unlimited Gateways',
+      secondaryCta: 'Maybe later',
     },
     intentions: {
-      title: 'Multiple intentions, deeper focus',
-      description: 'Create and manage multiple intentions for different days or contexts.',
-      highlight: 'Multiple active intentions',
+      title: 'More ways to start your day, softly',
+      description: 'Pro lets you create unlimited themes and rotate them naturally, so each day fits how you feel.',
+      highlight: 'Unlimited Intentions',
+      secondaryCta: 'Keep 2 themes',
     },
   };
 
@@ -65,15 +67,21 @@ const SubscriptionUpsellModal: React.FC<SubscriptionUpsellModalProps> = ({
               onClick={handleUpgrade}
               className="w-full py-5 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-black/10"
             >
-              Upgrade
+              Get Pro
             </button>
             
             <button
               onClick={onClose}
               className="w-full py-4 text-gray-500 dark:text-gray-400 text-sm font-medium hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             >
-              {feature === 'intentions' ? 'Keep one intention' : 'Maybe later'}
+              {content.secondaryCta}
             </button>
+            
+            {feature === 'intentions' && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-2">
+                Cancel anytime · No ads
+              </p>
+            )}
           </div>
         </div>
       </div>
