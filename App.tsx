@@ -71,6 +71,14 @@ const App: React.FC = () => {
   const [isSingleLine, setIsSingleLine] = useState<boolean>(false);
   
   const lastPromptIdRef = useRef<string | null>(null);
+  
+  // Store latest appState in ref to avoid dependency issues in storage event listener
+  const appStateRef = useRef<AppState>(appState);
+  
+  // Keep ref in sync with appState
+  useEffect(() => {
+    appStateRef.current = appState;
+  }, [appState]);
 
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
     const id = Date.now().toString();
@@ -986,7 +994,9 @@ const App: React.FC = () => {
           }
         }
         
-        const currentUser = appState.user;
+        // Use ref to get latest state without causing re-renders
+        const currentState = appStateRef.current;
+        const currentUser = currentState.user;
         const currentUserId = currentUser?.id || null;
         const newUserId = newUser?.id || null;
         
@@ -1007,9 +1017,13 @@ const App: React.FC = () => {
           } else {
             // User logged out in another tab
             console.log('[App] User logged out in another tab, updating state...');
-            const newState = { ...appState, user: null, subscriptionTier: undefined };
-            setAppState(newState);
-            saveState(newState, true);
+            // Use functional update to avoid dependency on appState
+            setAppState(prevState => {
+              const newState = { ...prevState, user: null, subscriptionTier: undefined };
+              // Save state asynchronously without blocking
+              saveState(newState, true).catch(err => console.error('[App] Failed to save logout state:', err));
+              return newState;
+            });
             addToast('Logged out from another tab', 'info');
           }
         }
@@ -1022,7 +1036,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [appState, handleUserLogin, saveState, addToast]);
+  }, [handleUserLogin, saveState, addToast]); // Removed appState from dependencies
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
