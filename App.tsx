@@ -52,7 +52,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [revealKey, setRevealKey] = useState(0);
+  const [revealKey, setRevealKey] = useState(0); 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
   
@@ -117,6 +117,70 @@ const App: React.FC = () => {
       }
     }
   }, [addToast]);
+
+  // Function to handle user login and data sync (extracted for reuse)
+  const handleUserLogin = useCallback(async (user: User) => {
+    console.log('[App] User authenticated:', user.email);
+    // Reset perspective count on login
+    resetPerspectiveCount();
+    
+    setIsSyncing(true);
+    
+    try {
+      // Fetch subscription state, membership, and settings from backend
+      const [subscriptionData, membershipData, settingsData] = await Promise.all([
+        fetchSubscriptionState(user.id),
+        fetchUserMembership(user.id),
+        fetchUserSettings(user.id),
+      ]);
+      
+      const userWithAllData = {
+        ...user,
+        ...subscriptionData,
+        ...(membershipData && {
+          memberViaRedeem: membershipData.memberViaRedeem,
+          membershipSince: membershipData.membershipSince,
+        }),
+        ...(settingsData && {
+          redeemEnabled: settingsData.redeemEnabled,
+        }),
+      };
+      const subscriptionTier = determineSubscriptionTier(userWithAllData);
+      
+      // Fetch cloud data first - this is the source of truth
+      const cloudData = await fetchFromCloud(user.id);
+      
+      if (cloudData) {
+        console.log('[App] Cloud data fetched:', {
+          links: cloudData.links?.length || 0,
+          requests: cloudData.requests?.length || 0
+        });
+        // Use cloud data as source of truth - don't merge with local state
+        const mergedState = {
+          ...appState,
+          // Cloud data takes precedence
+          links: cloudData.links || [],
+          requests: cloudData.requests || [],
+          language: cloudData.language || appState.language,
+          theme: cloudData.theme || appState.theme,
+          user: userWithAllData, // Ensure user with all data is set
+          subscriptionTier, // Set subscription tier
+          version: cloudData.version || appState.version,
+          pinnedSnippetId: cloudData.pinnedSnippetId || appState.pinnedSnippetId,
+        };
+        saveState(mergedState, true); // Skip sync on initial load (already from cloud)
+      } else {
+        console.log('[App] No cloud data found, syncing current state');
+        // No cloud data, set user and sync current state
+        const stateWithUser = { ...appState, user: userWithAllData, subscriptionTier };
+        setAppState(stateWithUser);
+        // Sync current state to cloud for first-time users
+        await syncToCloud(stateWithUser);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [appState, saveState]);
 
   const handleSignIn = () => {
     setIsSyncing(true);
@@ -224,13 +288,13 @@ const App: React.FC = () => {
       const updatedHistory = addToHistory(result, randomReq.id, history);
       saveHistory(updatedHistory);
       
-      setCurrentSnippet(result);
+    setCurrentSnippet(result);
       setRevealKey(prev => prev + 1);
     } catch (error) {
       console.error('[App] Error generating perspective:', error);
       addToast('Failed to generate perspective', 'error');
     } finally {
-      setIsGenerating(false);
+    setIsGenerating(false);
     }
   }, [appState]);
 
@@ -892,73 +956,73 @@ const App: React.FC = () => {
       setIsAuthChecking(false); // Auth check complete
       
       if (user) {
-        console.log('[App] User authenticated:', user.email);
-        // Reset perspective count on login
-        resetPerspectiveCount();
-        
-        setIsSyncing(true);
-        
-        // Fetch subscription state, membership, and settings from backend
-        const [subscriptionData, membershipData, settingsData] = await Promise.all([
-          fetchSubscriptionState(user.id),
-          fetchUserMembership(user.id),
-          fetchUserSettings(user.id),
-        ]);
-        
-        const userWithAllData = {
-          ...user,
-          ...subscriptionData,
-          ...(membershipData && {
-            memberViaRedeem: membershipData.memberViaRedeem,
-            membershipSince: membershipData.membershipSince,
-          }),
-          ...(settingsData && {
-            redeemEnabled: settingsData.redeemEnabled,
-          }),
-        };
-        const subscriptionTier = determineSubscriptionTier(userWithAllData);
-        
-        // Fetch cloud data first - this is the source of truth
-        const cloudData = await fetchFromCloud(user.id);
-        
-        if (cloudData) {
-          console.log('[App] Cloud data fetched:', {
-            links: cloudData.links?.length || 0,
-            requests: cloudData.requests?.length || 0
-          });
-          // Use cloud data as source of truth - don't merge with local state
-          const mergedState = {
-            ...appState,
-            // Cloud data takes precedence
-            links: cloudData.links || [],
-            requests: cloudData.requests || [],
-            language: cloudData.language || appState.language,
-            theme: cloudData.theme || appState.theme,
-            user: userWithAllData, // Ensure user with all data is set
-            subscriptionTier, // Set subscription tier
-            version: cloudData.version || appState.version,
-            pinnedSnippetId: cloudData.pinnedSnippetId || appState.pinnedSnippetId,
-          };
-          saveState(mergedState, true); // Skip sync on initial load (already from cloud)
-        } else {
-          console.log('[App] No cloud data found, syncing current state');
-          // No cloud data, set user and sync current state
-          const stateWithUser = { ...appState, user: userWithAllData, subscriptionTier };
-          setAppState(stateWithUser);
-          // Sync current state to cloud for first-time users
-          await syncToCloud(stateWithUser);
-        }
-        setIsSyncing(false);
+        await handleUserLogin(user);
       } else {
         console.log('[App] No user, rendering Google button');
         // Delay button rendering to ensure SDK is loaded
         setTimeout(() => {
-          renderGoogleButton('google-login-btn', appState.theme);
+        renderGoogleButton('google-login-btn', appState.theme);
         }, 500);
       }
     });
     fetchRandomSnippet();
-  }, []);
+  }, [handleUserLogin, appState.theme]);
+
+  // Listen for cross-tab storage changes (when user logs in/out in another tab)
+  useEffect(() => {
+    const handleStorageChange = async (e: StorageEvent) => {
+      // Only handle changes to focus_tab_user (login/logout)
+      if (e.key === 'focus_tab_user') {
+        console.log('[App] Detected user login/logout in another tab, syncing...');
+        
+        // Check if user state changed
+        let newUser: User | null = null;
+        if (e.newValue) {
+          try {
+            newUser = JSON.parse(e.newValue);
+          } catch (error) {
+            console.error('[App] Failed to parse user from storage event:', error);
+            return;
+          }
+        }
+        
+        const currentUser = appState.user;
+        const currentUserId = currentUser?.id || null;
+        const newUserId = newUser?.id || null;
+        
+        // Only update if user state actually changed
+        if (currentUserId !== newUserId) {
+          console.log('[App] User state changed:', {
+            from: currentUserId ? 'logged in' : 'logged out',
+            to: newUserId ? 'logged in' : 'logged out'
+          });
+          
+          if (newUser) {
+            // User logged in in another tab
+            console.log('[App] User logged in in another tab, updating state...');
+            setIsAuthChecking(true);
+            await handleUserLogin(newUser);
+            setIsAuthChecking(false);
+            addToast('Logged in from another tab', 'success');
+          } else {
+            // User logged out in another tab
+            console.log('[App] User logged out in another tab, updating state...');
+            const newState = { ...appState, user: null, subscriptionTier: undefined };
+            setAppState(newState);
+            saveState(newState, true);
+            addToast('Logged out from another tab', 'info');
+          }
+        }
+      }
+    };
+
+    // Listen for storage events from other tabs
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [appState, handleUserLogin, saveState, addToast]);
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
@@ -1137,11 +1201,11 @@ const App: React.FC = () => {
                       {appState.links.length > 0 ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
                           {visibleLinks.map(link => (
-                            <a 
-                              key={link.id} 
-                              href={link.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
+                              <a 
+                                  key={link.id} 
+                                  href={link.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
                               className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors"
                             >
                               <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5">
@@ -1153,14 +1217,14 @@ const App: React.FC = () => {
                           {remainingLinks > 0 && (
                             <div className="flex items-center justify-center px-3 py-3 rounded-xl border border-dashed border-black/10 dark:border-white/10 text-xs font-semibold text-gray-500 dark:text-gray-300">
                               +{remainingLinks} More
-                            </div>
+                                  </div>
                           )}
-                        </div>
+                                  </div>
                       ) : (
                         <div className="py-10 flex flex-col items-center justify-center text-center opacity-60">
                             <div className="w-12 h-12 border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-2xl mb-3" />
                             <span className="text-[11px] font-bold uppercase tracking-widest">Connect your first link in Studio</span>
-                        </div>
+                          </div>
                       )}
                   </div>
               </div>
@@ -1170,8 +1234,8 @@ const App: React.FC = () => {
                       <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2">Start your day softly</h2>
                       <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
                           Sign in with Google to sync your gateways across devices.
-                      </p>
-                      <div id="google-login-btn" className="transition-all hover:scale-[1.02] active:scale-[0.98]"></div>
+                  </p>
+                  <div id="google-login-btn" className="transition-all hover:scale-[1.02] active:scale-[0.98]"></div>
                   </div>
               </div>
             )}
