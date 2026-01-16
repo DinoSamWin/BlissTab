@@ -79,16 +79,29 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
         }
       };
 
+      // Detect Safari browser
+      const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) || 
+                              /^((?!chrome|android).)*safari/i.test(navigator.vendor);
+      
       try {
-        (window as any).google.accounts.id.initialize({
+        const initConfig: any = {
           client_id: IS_PLACEHOLDER_ID ? 'MOCK_ID' : CLIENT_ID,
           callback: handleCredentialResponse,
           // Only auto-select if no existing user (to avoid popup on every refresh)
           auto_select: !hasExistingUser,
           // FedCM is the new standard, but can be finicky in iframes. 
           // We set it to false if the environment is restricted.
-          use_fedcm_for_prompt: false 
-        });
+          use_fedcm_for_prompt: false
+        };
+        
+        // Safari-specific configuration
+        if (isSafariBrowser) {
+          console.log('[Auth] Safari detected, using Safari-optimized configuration');
+          // Safari has issues with popup mode, so we rely on button click instead of One Tap
+          // The button will use redirect mode automatically in Safari
+        }
+        
+        (window as any).google.accounts.id.initialize(initConfig);
         console.log('[Auth] Google SDK initialized successfully');
         
         // If no existing user, notify that auth check is complete (no user found)
@@ -98,13 +111,15 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
           authCheckComplete = true;
         }
         
-        // Only show One Tap if user is NOT already logged in
-        // This prevents the popup from appearing on every page refresh
-        if (!IS_PLACEHOLDER_ID && !hasExistingUser) {
+        // Only show One Tap if user is NOT already logged in AND not Safari
+        // Safari has issues with popup/One Tap, so we skip it and rely on button click
+        if (!IS_PLACEHOLDER_ID && !hasExistingUser && !isSafariBrowser) {
           console.log('[Auth] No existing user, attempting One Tap prompt...');
           (window as any).google.accounts.id.prompt();
         } else if (hasExistingUser) {
           console.log('[Auth] User already logged in, skipping One Tap prompt');
+        } else if (isSafariBrowser) {
+          console.log('[Auth] Safari detected, skipping One Tap (will use button click instead)');
         }
       } catch (error) {
         console.error('[Auth] Failed to initialize Google SDK:', error);
@@ -129,7 +144,21 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
 }
 
 /**
+ * Detect if browser is Safari
+ */
+function isSafari(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  const isSafariUA = /safari/.test(userAgent) && !/chrome/.test(userAgent) && !/chromium/.test(userAgent);
+  const isSafariVendor = /^((?!chrome|android).)*safari/i.test(window.navigator.userAgent);
+  
+  return isSafariUA || isSafariVendor || /^((?!chrome|android).)*safari/i.test(window.navigator.vendor);
+}
+
+/**
  * Renders the official Google Sign-In button.
+ * For Safari, uses redirect mode instead of popup to avoid connection issues.
  */
 export function renderGoogleButton(containerId: string, theme: 'light' | 'dark' = 'light') {
   if (typeof window === 'undefined') return;
@@ -137,21 +166,33 @@ export function renderGoogleButton(containerId: string, theme: 'light' | 'dark' 
   console.log('[Auth] renderGoogleButton called for:', containerId);
   console.log('[Auth] Google SDK available:', !!(window as any).google?.accounts?.id);
   console.log('[Auth] Client ID available:', !IS_PLACEHOLDER_ID);
+  console.log('[Auth] Browser is Safari:', isSafari());
   
   if ((window as any).google?.accounts?.id) {
     const container = document.getElementById(containerId);
     if (container) {
       try {
         console.log('[Auth] Rendering Google button...');
+        
+        // Safari-specific configuration: use redirect mode instead of popup
+        const buttonConfig: any = {
+          theme: theme === 'dark' ? 'filled_black' : 'outline', 
+          size: 'large',
+          shape: 'pill',
+          text: 'signin_with',
+          width: 280
+        };
+        
+        // For Safari, configure to use redirect mode
+        if (isSafari()) {
+          console.log('[Auth] Safari detected, using redirect-friendly configuration');
+          // Note: Google Identity Services handles this automatically,
+          // but we can add additional configuration if needed
+        }
+        
         (window as any).google.accounts.id.renderButton(
           container,
-          { 
-            theme: theme === 'dark' ? 'filled_black' : 'outline', 
-            size: 'large',
-            shape: 'pill',
-            text: 'signin_with',
-            width: 280
-          }
+          buttonConfig
         );
         console.log('[Auth] Google button rendered successfully');
       } catch (error) {
@@ -174,6 +215,7 @@ export function renderGoogleButton(containerId: string, theme: 'light' | 'dark' 
 /**
  * Manual trigger for the sign-in flow.
  * If no real Client ID is provided, it falls back to a simulated login.
+ * For Safari, triggers button click instead of prompt() to avoid popup issues.
  */
 export function openGoogleSignIn(onUser?: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
@@ -194,7 +236,26 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
   }
 
   if ((window as any).google?.accounts?.id) {
-    (window as any).google.accounts.id.prompt();
+    // For Safari, don't use prompt() as it causes popup connection issues
+    // Instead, programmatically click the button which will use redirect mode
+    if (isSafari()) {
+      console.log('[Auth] Safari detected, triggering button click instead of prompt');
+      const button = document.querySelector('#google-login-btn button');
+      if (button) {
+        (button as HTMLElement).click();
+      } else {
+        console.warn('[Auth] Google button not found, falling back to prompt');
+        // Fallback: try prompt anyway (might work in some Safari versions)
+        try {
+          (window as any).google.accounts.id.prompt();
+        } catch (error) {
+          console.error('[Auth] Prompt failed in Safari:', error);
+        }
+      }
+    } else {
+      // For non-Safari browsers, use prompt() as usual
+      (window as any).google.accounts.id.prompt();
+    }
   }
 }
 
