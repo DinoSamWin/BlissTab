@@ -10,7 +10,8 @@ export const SUBSCRIPTION_LIMITS = {
     SUBSCRIBED: Infinity,
   },
   INTENTIONS: {
-    FREE: 1,
+    UNAUTHENTICATED: 1, // Unauthenticated users can have 1 intention via homepage modal
+    FREE: 2, // Free users get 2 intentions
     SUBSCRIBED: Infinity,
   },
 } as const;
@@ -45,14 +46,15 @@ export function isSubscribed(state: AppState): boolean {
 
 /**
  * Check if user can generate a new perspective
+ * New logic: Unauthenticated users get 2 free clicks, then need to provide context
  */
 export function canGeneratePerspective(state: AppState): { allowed: boolean; reason?: string } {
   const tier = getSubscriptionTier(state);
   
   if (tier === 'unauthenticated') {
     const count = getPerspectiveCount();
-    if (count >= 10) {
-      return { allowed: false, reason: 'limit_reached' };
+    if (count >= 2) {
+      return { allowed: false, reason: 'context_needed' };
     }
   }
   
@@ -85,12 +87,21 @@ export function canAddGateway(state: AppState): { allowed: boolean; reason?: str
 
 /**
  * Check if user can add a new intention
- * Single source of truth: Free users get 1 active intention, subscribed get unlimited
+ * New limits: Unauthenticated: 1 (homepage only), Free: 2, Pro: unlimited
  */
-export function canAddIntention(state: AppState): { allowed: boolean; reason?: string } {
+export function canAddIntention(state: AppState, isHomepageModal: boolean = false): { allowed: boolean; reason?: string } {
   const tier = getSubscriptionTier(state);
   
   if (tier === 'unauthenticated') {
+    // Unauthenticated users can add 1 intention via homepage modal only
+    if (isHomepageModal) {
+      const intentionCount = state.requests.length;
+      if (intentionCount >= SUBSCRIPTION_LIMITS.INTENTIONS.UNAUTHENTICATED) {
+        return { allowed: false, reason: 'limit_reached' };
+      }
+      return { allowed: true };
+    }
+    // Studio access requires auth
     return { allowed: false, reason: 'requires_auth' };
   }
   

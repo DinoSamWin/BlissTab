@@ -10,6 +10,7 @@ import { fetchSubscriptionState, determineSubscriptionTier } from './services/su
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
+import PreferenceInputModal from './components/PreferenceInputModal';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(() => {
@@ -54,6 +55,8 @@ const App: React.FC = () => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [revealKey, setRevealKey] = useState(0); 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isPreferenceModalOpen, setIsPreferenceModalOpen] = useState(false);
+  const [showInlineGuidance, setShowInlineGuidance] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
   
   const isAuthenticated = !!appState.user;
@@ -155,22 +158,48 @@ const App: React.FC = () => {
       };
       const subscriptionTier = determineSubscriptionTier(userWithAllData);
       
+      // Check for pending local preference to migrate
+      const pendingPreference = localStorage.getItem('startly_intention_pending');
+      const localPreference = localStorage.getItem('startly_intention_local');
+      const preferenceToMigrate = pendingPreference || localPreference;
+      
       // Fetch cloud data first - this is the source of truth
       const cloudData = await fetchFromCloud(user.id);
       
       // Use functional update to get latest state without dependency
       setAppState(prevState => {
+        let requests = cloudData?.requests || prevState.requests;
+        
+        // Migrate local preference to cloud if exists
+        if (preferenceToMigrate) {
+          const newIntention = {
+            id: `intention_${Date.now()}`,
+            prompt: preferenceToMigrate,
+            active: true
+          };
+          
+          // Add to requests if not already exists (don't overwrite existing)
+          const exists = requests.some(r => r.prompt === preferenceToMigrate);
+          if (!exists) {
+            requests = [...requests, newIntention];
+          }
+          
+          // Clear local storage
+          localStorage.removeItem('startly_intention_pending');
+          localStorage.removeItem('startly_intention_local');
+        }
+        
         if (cloudData) {
           console.log('[App] Cloud data fetched:', {
             links: cloudData.links?.length || 0,
-            requests: cloudData.requests?.length || 0
+            requests: requests.length
           });
           // Use cloud data as source of truth - don't merge with local state
           const mergedState = {
             ...prevState,
             // Cloud data takes precedence
             links: cloudData.links || [],
-            requests: cloudData.requests || [],
+            requests: requests, // Use migrated requests
             language: cloudData.language || prevState.language,
             theme: cloudData.theme || prevState.theme,
             user: userWithAllData, // Ensure user with all data is set
@@ -178,15 +207,36 @@ const App: React.FC = () => {
             version: cloudData.version || prevState.version,
             pinnedSnippetId: cloudData.pinnedSnippetId || prevState.pinnedSnippetId,
           };
-          // Save state asynchronously without blocking
+          // Save state asynchronously without blocking (will sync migrated preference)
           saveState(mergedState, true).catch(err => console.error('[App] Failed to save state:', err));
+          
+          // If preference was migrated, trigger immediate refresh
+          if (preferenceToMigrate) {
+            setTimeout(() => {
+              fetchRandomSnippet(true); // Bypass limit for immediate refresh
+            }, 500);
+          }
+          
           return mergedState;
         } else {
           console.log('[App] No cloud data found, syncing current state');
-          // No cloud data, set user and sync current state
-          const stateWithUser = { ...prevState, user: userWithAllData, subscriptionTier };
+          // No cloud data, set user and sync current state (with migrated preference)
+          const stateWithUser = { 
+            ...prevState, 
+            user: userWithAllData, 
+            subscriptionTier,
+            requests: requests // Include migrated preference
+          };
           // Sync current state to cloud for first-time users
           syncToCloud(stateWithUser).catch(err => console.error('[App] Failed to sync to cloud:', err));
+          
+          // If preference was migrated, trigger immediate refresh
+          if (preferenceToMigrate) {
+            setTimeout(() => {
+              fetchRandomSnippet(true); // Bypass limit for immediate refresh
+            }, 500);
+          }
+          
           return stateWithUser;
         }
       });
@@ -254,17 +304,39 @@ const App: React.FC = () => {
     });
   };
 
-  const fetchRandomSnippet = useCallback(async () => {
-    // Check usage limits before generating
-    const limitCheck = canGeneratePerspective(appState);
-    if (!limitCheck.allowed) {
-      if (limitCheck.reason === 'limit_reached') {
-        setIsLoginModalOpen(true);
+  const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false) => {
+    // Check usage limits before generating (unless bypassing for immediate refresh after preference save)
+    if (!bypassLimit) {
+      const limitCheck = canGeneratePerspective(appState);
+      if (!limitCheck.allowed) {
+        if (limitCheck.reason === 'context_needed') {
+          // Show inline guidance instead of blocking
+          setShowInlineGuidance(true);
+          return;
+        }
+        return;
       }
-      return;
     }
 
-    const activeRequests = appState.requests.filter(r => r.active);
+    // Hide inline guidance if it was showing
+    setShowInlineGuidance(false);
+
+    // Get active requests, including local preference for unauthenticated users
+    let activeRequests = appState.requests.filter(r => r.active);
+    
+    // Check for local preference for unauthenticated users
+    if (!appState.user) {
+      const localPreference = localStorage.getItem('startly_intention_local');
+      if (localPreference) {
+        // Use local preference as a temporary active request
+        activeRequests = [{
+          id: 'local_preference',
+          prompt: localPreference,
+          active: true
+        }];
+      }
+    }
+
     if (activeRequests.length === 0) return;
 
     const eligible = activeRequests.length > 1 && lastPromptIdRef.current 
@@ -277,8 +349,8 @@ const App: React.FC = () => {
     setIsGenerating(true);
     
     try {
-      // Increment perspective count for unauthenticated users
-      if (!appState.user) {
+      // Increment perspective count for unauthenticated users (only if not bypassing)
+      if (!appState.user && !bypassLimit) {
         incrementPerspectiveCount();
       }
       
@@ -302,7 +374,7 @@ const App: React.FC = () => {
       saveHistory(updatedHistory);
       
     setCurrentSnippet(result);
-      setRevealKey(prev => prev + 1);
+    setRevealKey(prev => prev + 1);
     } catch (error) {
       console.error('[App] Error generating perspective:', error);
       addToast('Failed to generate perspective', 'error');
@@ -803,7 +875,7 @@ const App: React.FC = () => {
     const avatarX = horizontalPadding;
     const avatarY = currentY;
     
-    if (user) {
+      if (user) {
       // Draw avatar
       if (user.picture) {
         // Try to load user picture
@@ -1060,6 +1132,20 @@ const App: React.FC = () => {
     };
   }, [handleUserLogin, saveState, addToast]); // Removed appState from dependencies
 
+  // Check if should show inline guidance on mount and when perspective count changes
+  useEffect(() => {
+    if (!isAuthenticated) {
+      const count = getPerspectiveCount();
+      if (count >= 2) {
+        setShowInlineGuidance(true);
+      } else {
+        setShowInlineGuidance(false);
+      }
+    } else {
+      setShowInlineGuidance(false);
+    }
+  }, [isAuthenticated]);
+
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
       
@@ -1189,26 +1275,46 @@ const App: React.FC = () => {
                 {renderSnippet(currentSnippet)}
             </h1>
 
-            <div className="mt-10 flex items-center gap-4">
+            <div className="mt-10 flex flex-col items-center gap-4">
+                {showInlineGuidance && !isAuthenticated ? (
+                  <div className="max-w-md w-full text-center space-y-4 animate-reveal">
+                    <p className="text-lg text-gray-700 dark:text-gray-300">
+                      Still looking for the right tone?
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      We can do better with a little context.
+                    </p>
                 <button 
-                    onClick={fetchRandomSnippet}
-                    disabled={isGenerating}
-                    className="px-10 py-5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3 disabled:opacity-50"
+                      onClick={() => setIsPreferenceModalOpen(true)}
+                      className="px-8 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-xl transition-all hover:scale-105 active:scale-95"
+                    >
+                      Tell us what you like
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                <button 
+                        onClick={() => fetchRandomSnippet()}
+                        disabled={isGenerating || (showInlineGuidance && !isAuthenticated)}
+                        className="px-10 py-5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={showInlineGuidance && !isAuthenticated ? "Want a better match? Tell us what you like." : undefined}
                 >
                     {isGenerating ? 'Reflecting...' : 'New Perspective'}
                 </button>
-                <button
-                  onClick={handleShareQuote}
-                  disabled={isSharing}
-                  className="px-6 py-4 rounded-full border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-600 dark:text-gray-200 transition-all hover:bg-white/80 dark:hover:bg-white/10 active:scale-95 flex items-center gap-2 disabled:opacity-60"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
-                    <path d="M12 16V4"/>
-                    <path d="M8 8l4-4 4 4"/>
-                  </svg>
-                  <span>Share Quote</span>
+                    <button
+                      onClick={handleShareQuote}
+                      disabled={isSharing}
+                      className="px-6 py-4 rounded-full border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-600 dark:text-gray-200 transition-all hover:bg-white/80 dark:hover:bg-white/10 active:scale-95 flex items-center gap-2 disabled:opacity-60"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
+                        <path d="M12 16V4"/>
+                        <path d="M8 8l4-4 4 4"/>
+                      </svg>
+                      <span>Share Quote</span>
                 </button>
+                  </div>
+                )}
             </div>
         </div>
       </main>
@@ -1243,10 +1349,10 @@ const App: React.FC = () => {
                                   target="_blank" 
                                   rel="noopener noreferrer"
                               className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors"
-                            >
+                              >
                               <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5">
                                 {link.icon ? <img src={link.icon} alt="" className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity" /> : <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />}
-                              </div>
+                                  </div>
                               <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{link.title}</span>
                             </a>
                           ))}
@@ -1307,6 +1413,45 @@ const App: React.FC = () => {
         onClose={() => setIsLoginModalOpen(false)}
         onSignIn={handleSignIn}
         theme={appState.theme}
+      />
+
+      <PreferenceInputModal
+        isOpen={isPreferenceModalOpen}
+        onClose={() => setIsPreferenceModalOpen(false)}
+        onSaveLocal={async (preference: string) => {
+          // Save to local storage
+          localStorage.setItem('startly_intention_local', preference);
+          
+          // Create a temporary active request for immediate use
+          const tempRequest = {
+            id: 'local_preference',
+            prompt: preference,
+            active: true
+          };
+          
+          // Add to appState temporarily (won't sync to cloud)
+          setAppState(prev => ({
+            ...prev,
+            requests: [...prev.requests, tempRequest]
+          }));
+          
+          addToast('Saved. We\'ll use this on this device.', 'success');
+          
+          // Allow one immediate content refresh
+          setTimeout(() => {
+            fetchRandomSnippet(true); // Bypass limit for immediate refresh
+          }, 300);
+        }}
+        onSaveAndSync={async (preference: string) => {
+          // Trigger login flow
+          setIsPreferenceModalOpen(false);
+          handleSignIn();
+          
+          // Store preference temporarily to migrate after login
+          localStorage.setItem('startly_intention_pending', preference);
+        }}
+        theme={appState.theme}
+        isAuthenticated={isAuthenticated}
       />
     </div>
   );

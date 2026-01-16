@@ -257,7 +257,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     }
     
     // Check usage limits before adding (secondary check)
-    const limitCheck = canAddIntention(state);
+    const limitCheck = canAddIntention(state, false);
     if (!limitCheck.allowed) {
       if (limitCheck.reason === 'limit_reached') {
         setSubscriptionModalFeature('intentions');
@@ -304,7 +304,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       }
       
       // Secondary check using service function
-      const limitCheck = canAddIntention(state);
+      const limitCheck = canAddIntention(state, false);
       if (!limitCheck.allowed && limitCheck.reason === 'limit_reached') {
         setSubscriptionModalFeature('intentions');
         setIsSubscriptionModalOpen(true);
@@ -532,7 +532,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                           <div className="flex-1">
                             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">Intention limit reached</h3>
                             <p className="text-xs text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
-                              You can have 1 active intention on the free plan. Upgrade to create and manage multiple intentions for different days or contexts.
+                              You can have 2 active intentions on the free plan. Upgrade to create and manage unlimited intentions for different days or contexts.
                             </p>
                             <button
                               onClick={() => {
