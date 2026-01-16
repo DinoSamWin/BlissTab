@@ -1464,33 +1464,8 @@ const App: React.FC = () => {
         isOpen={isPreferenceModalOpen}
         onClose={() => setIsPreferenceModalOpen(false)}
         onSaveLocal={async (preference: string) => {
-          // Save to local storage
-          localStorage.setItem('startly_intention_local', preference);
-          setHasLocalPreference(true);
-          
-          // Create a temporary active request for immediate use
-          const tempRequest = {
-            id: 'local_preference',
-            prompt: preference,
-            active: true
-          };
-          
-          // Add to appState temporarily (won't sync to cloud)
-          setAppState(prev => ({
-            ...prev,
-            requests: [...prev.requests, tempRequest]
-          }));
-          
-          addToast('Saved on this device. Sign in to unlock unlimited perspectives.', 'success');
-          
-          // Allow one immediate content refresh
-          setTimeout(() => {
-            fetchRandomSnippet(true); // Bypass limit for immediate refresh
-          }, 300);
-        }}
-        onSaveAndSync={async (preference: string) => {
-          // This is now handled in PreferenceInputModal.handleSaveAndSync
-          // Preference is stored in localStorage and handleSignIn is called directly
+          // This function is no longer used for unauthenticated users
+          // Google button handles login directly
         }}
         theme={appState.theme}
         isAuthenticated={isAuthenticated}
