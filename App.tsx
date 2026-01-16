@@ -361,7 +361,11 @@ const App: React.FC = () => {
     try {
       // Increment perspective count for unauthenticated users (only if not bypassing)
       if (!appState.user && !bypassLimit) {
-        incrementPerspectiveCount();
+        const newCount = incrementPerspectiveCount();
+        // Update inline guidance state when count reaches threshold
+        if (newCount >= 2) {
+          setShowInlineGuidance(true);
+        }
       }
       
       // Load recent history to prevent repetition
