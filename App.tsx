@@ -1146,6 +1146,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) {
       const count = getPerspectiveCount();
+      // Only show if user has actually clicked 2 times (not just on page load)
+      // This prevents showing on first visit when count might be stale
       if (count >= 2) {
         setShowInlineGuidance(true);
       } else {
@@ -1160,6 +1162,16 @@ const App: React.FC = () => {
       setHasLocalPreference(false);
     }
   }, [isAuthenticated]);
+  
+  // Also check when perspective count changes (after increment)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      const count = getPerspectiveCount();
+      if (count >= 2) {
+        setShowInlineGuidance(true);
+      }
+    }
+  }, [isAuthenticated, appState.user]); // Re-check when user state changes
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
