@@ -325,10 +325,12 @@ const App: React.FC = () => {
       }
     }
 
-    // If inline guidance is showing and user clicks (but not blocked), trigger shake
+    // If inline guidance is showing and user clicks (but not blocked), trigger shake only
+    // Don't refresh content, just shake to draw attention
     if (!bypassLimit && !isAuthenticated && (showInlineGuidance || hasLocalPreference)) {
       setShouldShakeHelper(true);
       setTimeout(() => setShouldShakeHelper(false), 600);
+      return; // Don't proceed with content generation
     }
 
     // Get active requests, including local preference for unauthenticated users
@@ -1348,12 +1350,12 @@ const App: React.FC = () => {
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Still looking for the right tone?{' '}
                         <button
-                          onClick={handleSignIn}
+                          onClick={() => setIsPreferenceModalOpen(true)}
                           className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
                         >
-                          Sign in with Google
+                          Tell us what you like
                         </button>
-                        {' '}to unlock unlimited perspectives.
+                        {' '}to get better matches.
                       </p>
                     )}
                   </div>
