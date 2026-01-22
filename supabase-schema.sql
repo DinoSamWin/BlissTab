@@ -311,13 +311,48 @@ USING (
 );
 
 -- Option 2: If using custom Google OAuth (auth.uid() doesn't work)
--- You may need to use service role or disable RLS for this bucket
--- OR use a different approach with email-based matching
+-- Since auth.uid() is not available, we have two options:
+
+-- Solution A: Make bucket public (RECOMMENDED - Simplest)
+-- 1. Go to Supabase Dashboard > Storage > gateway-logos > Settings
+-- 2. Enable "Public bucket"
+-- 3. No RLS policies needed for public buckets
+-- This allows anyone to read, but only authenticated users can upload (if you set upload policies)
+
+-- Solution B: Disable RLS for this bucket (Works but less secure)
+-- Run this SQL to disable RLS for storage.objects (affects all buckets):
+-- ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
 -- 
--- For now, if RLS is blocking uploads, you can temporarily:
--- 1. Make the bucket public (Settings > Public bucket = ON)
--- 2. OR disable RLS: ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
---    (Not recommended for production, but works for testing)
+-- Then create policies that allow authenticated users:
+-- Note: These policies will work if you're using Supabase client with anon key
+-- but may not work with custom OAuth. If they don't work, use Solution A.
+
+-- Solution C: Allow all authenticated requests (if using Supabase client)
+-- If your Supabase client is properly authenticated (even with custom OAuth),
+-- you can try these more permissive policies:
+DROP POLICY IF EXISTS "Allow authenticated uploads to gateway-logos" ON storage.objects;
+CREATE POLICY "Allow authenticated uploads to gateway-logos"
+ON storage.objects
+FOR INSERT
+WITH CHECK (bucket_id = 'gateway-logos');
+
+DROP POLICY IF EXISTS "Allow authenticated reads from gateway-logos" ON storage.objects;
+CREATE POLICY "Allow authenticated reads from gateway-logos"
+ON storage.objects
+FOR SELECT
+USING (bucket_id = 'gateway-logos');
+
+DROP POLICY IF EXISTS "Allow authenticated updates to gateway-logos" ON storage.objects;
+CREATE POLICY "Allow authenticated updates to gateway-logos"
+ON storage.objects
+FOR UPDATE
+USING (bucket_id = 'gateway-logos');
+
+DROP POLICY IF EXISTS "Allow authenticated deletes from gateway-logos" ON storage.objects;
+CREATE POLICY "Allow authenticated deletes from gateway-logos"
+ON storage.objects
+FOR DELETE
+USING (bucket_id = 'gateway-logos');
 
 -- ============================================================
 -- Migration: Add custom_logo_signed_url column (if table exists)
