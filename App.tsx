@@ -1075,7 +1075,7 @@ const App: React.FC = () => {
     let isProcessing = false; // Flag to prevent concurrent processing
     
     const handleStorageChange = async (e: StorageEvent) => {
-      // Only handle changes to focus_tab_user (login/logout)
+      // Handle changes to focus_tab_user (login/logout)
       if (e.key === 'focus_tab_user') {
         // Prevent concurrent processing
         if (isProcessing) {
@@ -1136,6 +1136,35 @@ const App: React.FC = () => {
           }
         } finally {
           isProcessing = false;
+        }
+      }
+      
+      // Handle changes to focus_tab_state (Gateway data changes)
+      if (e.key === 'focus_tab_state') {
+        // 防止当前标签页触发（storage 事件只在其他标签页触发）
+        if (!e.newValue) return;
+        
+        try {
+          const newStateData = JSON.parse(e.newValue);
+          const currentState = appStateRef.current;
+          
+          // 只同步 Gateway 相关的数据（links）
+          // 避免覆盖其他状态（如 currentSnippet 等）
+          if (newStateData.links && 
+              JSON.stringify(newStateData.links) !== JSON.stringify(currentState.links)) {
+            console.log('[App] Detected Gateway changes in another tab, syncing...');
+            
+            setAppState(prevState => ({
+              ...prevState,
+              links: newStateData.links || prevState.links,
+              // 保持其他状态不变
+            }));
+            
+            // 可选：显示提示（为了不打扰用户，这里不显示）
+            // addToast('Gateway updated from another tab', 'info');
+          }
+        } catch (error) {
+          console.error('[App] Failed to parse state from storage event:', error);
         }
       }
     };

@@ -5,8 +5,121 @@ interface SiteMetadata {
   icon: string;
 }
 
-// Cache for metadata to avoid repeated fetches
-const metadataCache = new Map<string, SiteMetadata>();
+interface CachedMetadata extends SiteMetadata {
+  cachedAt?: number;
+}
+
+// 缓存键名和配置
+const CACHE_STORAGE_KEY = 'focus_tab_metadata_cache';
+const CACHE_EXPIRY_DAYS = 30; // 缓存有效期 30 天
+const CACHE_STALE_DAYS = 60; // 缓存完全失效时间 60 天（超过这个时间才真正删除）
+
+// 从 localStorage 恢复缓存
+function loadCacheFromStorage(): Map<string, SiteMetadata> {
+  const cache = new Map<string, SiteMetadata>();
+  try {
+    const saved = localStorage.getItem(CACHE_STORAGE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      const now = Date.now();
+      
+      for (const [key, value] of Object.entries(data)) {
+        const metadata = value as CachedMetadata;
+        if (metadata.cachedAt) {
+          const age = now - metadata.cachedAt;
+          const maxAge = CACHE_STALE_DAYS * 24 * 60 * 60 * 1000;
+          
+          // 只加载未完全失效的缓存（超过 60 天才删除）
+          if (age < maxAge) {
+            // 移除 cachedAt 字段，只保留元数据
+            const { cachedAt, ...cleanMetadata } = metadata;
+            cache.set(key, cleanMetadata as SiteMetadata);
+          }
+        } else {
+          // 兼容旧格式（没有 cachedAt）
+          cache.set(key, metadata as SiteMetadata);
+        }
+      }
+      console.log(`[Metadata] Loaded ${cache.size} cached items from storage`);
+    }
+  } catch (error) {
+    console.error('[Metadata] Failed to load cache from storage:', error);
+  }
+  return cache;
+}
+
+// 保存缓存到 localStorage
+function saveCacheToStorage(cache: Map<string, SiteMetadata>) {
+  try {
+    const data: Record<string, CachedMetadata> = {};
+    const now = Date.now();
+    
+    for (const [key, value] of cache.entries()) {
+      data[key] = {
+        ...value,
+        cachedAt: now
+      };
+    }
+    
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error('[Metadata] Failed to save cache to storage:', error);
+    // 如果存储空间不足，清理旧缓存
+    try {
+      localStorage.removeItem(CACHE_STORAGE_KEY);
+    } catch (e) {
+      // 忽略清理错误
+    }
+  }
+}
+
+// 防抖保存缓存
+let saveCacheTimeout: NodeJS.Timeout | null = null;
+
+function saveCacheToStorageDebounced(cache: Map<string, SiteMetadata>) {
+  if (saveCacheTimeout) {
+    clearTimeout(saveCacheTimeout);
+  }
+  
+  saveCacheTimeout = setTimeout(() => {
+    saveCacheToStorage(cache);
+    saveCacheTimeout = null;
+  }, 1000); // 1秒后保存，避免频繁写入
+}
+
+// 检查缓存是否过期（但不过期太久）
+function isCacheStale(cachedAt: number): boolean {
+  const now = Date.now();
+  const age = now - cachedAt;
+  const expiryTime = CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  return age >= expiryTime;
+}
+
+// 检查缓存是否完全失效
+function isCacheExpired(cachedAt: number): boolean {
+  const now = Date.now();
+  const age = now - cachedAt;
+  const maxAge = CACHE_STALE_DAYS * 24 * 60 * 60 * 1000;
+  return age >= maxAge;
+}
+
+// 获取缓存时间信息
+function getCacheTime(cacheKey: string): number | null {
+  try {
+    const saved = localStorage.getItem(CACHE_STORAGE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      const cachedData = data[cacheKey] as CachedMetadata;
+      return cachedData?.cachedAt || null;
+    }
+  } catch (error) {
+    // 忽略错误
+  }
+  return null;
+}
+
+// 初始化缓存（从 localStorage 恢复）
+const metadataCache = loadCacheFromStorage();
 
 function normalizeUrl(url: string): string {
   let normalized = url.trim();
@@ -188,14 +301,55 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
       throw new Error('Invalid URL');
     }
     
-    // Check cache first
     const cacheKey = domain.toLowerCase();
-    if (metadataCache.has(cacheKey)) {
-      const cached = metadataCache.get(cacheKey)!;
-      return { ...cached, url: targetUrl }; // Use the normalized URL from input
+    
+    // 检查缓存
+    const cached = metadataCache.get(cacheKey);
+    if (cached) {
+      // 从 localStorage 获取缓存时间信息
+      const cachedAt = getCacheTime(cacheKey);
+      
+      if (cachedAt) {
+        if (isCacheExpired(cachedAt)) {
+          // 缓存完全失效，删除并重新获取
+          metadataCache.delete(cacheKey);
+          console.log(`[Metadata] Cache expired for ${domain}, fetching fresh data`);
+        } else if (isCacheStale(cachedAt)) {
+          // 缓存过期但未完全失效，先返回旧数据，后台更新
+          console.log(`[Metadata] Cache stale for ${domain}, using cached data, refreshing in background`);
+          
+          // 后台异步获取新数据（不阻塞返回）
+          Promise.all([
+            fetchFavicon(domain).catch(() => cached.icon),
+            fetchSiteName(targetUrl, domain).catch(() => cached.title)
+          ]).then(([icon, title]) => {
+            const freshMetadata: SiteMetadata = {
+              url: targetUrl,
+              title,
+              icon
+            };
+            
+            // 更新缓存
+            metadataCache.set(cacheKey, freshMetadata);
+            saveCacheToStorageDebounced(metadataCache);
+            console.log(`[Metadata] Background refresh completed for ${domain}`);
+          }).catch(err => {
+            console.log(`[Metadata] Background refresh failed for ${domain}, keeping cached data:`, err);
+          });
+          
+          // 立即返回缓存的旧数据（不等待）
+          return { ...cached, url: targetUrl };
+        } else {
+          // 缓存未过期，直接使用
+          return { ...cached, url: targetUrl };
+        }
+      } else {
+        // 没有时间信息，直接使用（兼容旧格式）
+        return { ...cached, url: targetUrl };
+      }
     }
     
-    // 立即返回快速结果（不等待完整数据）
+    // 没有缓存，获取新数据
     const quickResult: SiteMetadata = {
       url: targetUrl,
       title: formatDomainAsTitle(domain), // 立即使用域名
@@ -215,6 +369,7 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
       
       // 更新缓存
       metadataCache.set(cacheKey, fullMetadata);
+      saveCacheToStorageDebounced(metadataCache);
     }).catch(err => {
       console.log('Background metadata fetch failed:', err);
     });
