@@ -173,10 +173,16 @@ export async function uploadGatewayLogo(params: {
       .upload(path, params.file, { upsert: true, contentType: params.contentType });
 
     if (upErr) {
-      console.error('[GatewayLogo] Upload failed:', upErr);
-      // Check if bucket doesn't exist
-      if (upErr.message?.includes('Bucket not found') || upErr.message?.includes('not found')) {
+      const errorMessage = upErr.message || String(upErr);
+      console.error('[GatewayLogo] Upload failed:', {
+        error: upErr,
+        message: errorMessage,
+      });
+      // Check for common errors
+      if (errorMessage.includes('Bucket not found') || errorMessage.includes('not found')) {
         console.error('[GatewayLogo] Bucket "gateway-logos" does not exist. Please create it in Supabase Storage.');
+      } else if (errorMessage.includes('row-level security') || errorMessage.includes('RLS') || errorMessage.includes('permission') || errorMessage.includes('Forbidden') || errorMessage.includes('403')) {
+        console.error('[GatewayLogo] Permission denied. Check Storage bucket RLS policies. You may need to allow authenticated users to upload.');
       }
       return null;
     }

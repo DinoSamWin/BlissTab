@@ -542,70 +542,82 @@ const App: React.FC = () => {
     ));
   };
 
-  const HandwritingLoading: React.FC<{ text: string }> = ({ text }) => {
+  // Positive Chinese characters pool for loading animation
+  const POSITIVE_CN_CHARS = [
+    '安','好','喜','乐','悦','和','顺','宁','静','暖','光','明','善','勇','信','爱','福','吉','祥','慧','心','新','纯','真'
+  ];
+
+  const randInt = (n: number) => Math.floor(Math.random() * n);
+
+  const pickUnique = (arr: string[], count: number) => {
+    const copy = [...arr];
+    const out: string[] = [];
+    while (out.length < count && copy.length) {
+      out.push(copy.splice(randInt(copy.length), 1)[0]);
+    }
+    return out;
+  };
+
+  const makeLoadingGlyphs = (langCode: string, count: number) => {
+    const isChinese = langCode === 'Chinese (Simplified)';
+    if (isChinese) {
+      // Random positive Chinese characters
+      const pool = POSITIVE_CN_CHARS;
+      const picked = pickUnique(pool, Math.min(count, pool.length));
+      // Fill remaining slots with random picks (allow duplicates for variety)
+      while (picked.length < count) {
+        picked.push(pool[randInt(pool.length)]);
+      }
+      return picked;
+    }
+
+    // Non-Chinese: random letters from current language alphabet
+    // Using uppercase letters for a cleaner look
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    return Array.from({ length: count }, () => alphabet[randInt(alphabet.length)]);
+  };
+
+  // Blocks loading animation: 5 squares that highlight sequentially
+  const BlocksLoading: React.FC<{ langCode: string }> = ({ langCode }) => {
+    const [active, setActive] = useState(0);
+    const [glyphs, setGlyphs] = useState<string[]>(() => makeLoadingGlyphs(langCode, 5));
+
+    // Sequentially highlight each block (matches the animation pattern)
+    useEffect(() => {
+      const id = window.setInterval(() => {
+        setActive((a) => (a + 1) % 5);
+      }, 220);
+      return () => window.clearInterval(id);
+    }, []);
+
+    // Regenerate glyphs each cycle for variety
+    useEffect(() => {
+      if (active === 0) {
+        setGlyphs(makeLoadingGlyphs(langCode, 5));
+      }
+    }, [active, langCode]);
+
     return (
-      <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
-        <style>{`
-          @keyframes st-write {
-            0% { stroke-dashoffset: 1200; opacity: 0.85; }
-            60% { stroke-dashoffset: 0; opacity: 0.95; }
-            100% { stroke-dashoffset: 0; opacity: 0.35; }
-          }
-          @keyframes st-pen-move {
-            0% { transform: translateX(-220px) translateY(-12px) rotate(-18deg); opacity: 0; }
-            10% { opacity: 1; }
-            60% { transform: translateX(220px) translateY(12px) rotate(8deg); opacity: 1; }
-            100% { transform: translateX(220px) translateY(12px) rotate(8deg); opacity: 0; }
-          }
-          @keyframes st-caret {
-            0%, 45% { opacity: 0; }
-            50%, 95% { opacity: 1; }
-            100% { opacity: 0; }
-          }
-        `}</style>
-
-        {/* subtle warm glow */}
-        <div className="pointer-events-none absolute -inset-x-10 -inset-y-10 blur-3xl opacity-70">
-          <div className="w-full h-full rounded-[3rem] bg-gradient-to-r from-purple-500/18 via-pink-500/14 to-indigo-500/18" />
-        </div>
-
-        <div className="relative w-full max-w-4xl px-4 flex items-center justify-center">
-          <div className="absolute left-1/2 top-1/2" style={{ animation: 'st-pen-move 1.8s ease-in-out infinite' }}>
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" className="text-gray-700/70 dark:text-gray-200/70">
-              <path d="M3 21l3.8-1 12-12a2.2 2.2 0 0 0 0-3.1l-.7-.7a2.2 2.2 0 0 0-3.1 0l-12 12L3 21z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-              <path d="M14.5 5.5l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-            </svg>
-          </div>
-
-          <svg className="w-full" viewBox="0 0 1000 220" preserveAspectRatio="xMidYMid meet">
-            <text
-              x="50%"
-              y="55%"
-              textAnchor="middle"
-              dominantBaseline="middle"
-              className="serif"
-              style={{
-                fontSize: 120,
-                fill: 'transparent',
-                stroke: 'currentColor',
-                strokeWidth: 2.25,
-                strokeLinecap: 'round',
-                strokeLinejoin: 'round',
-                strokeDasharray: 1200,
-                strokeDashoffset: 1200,
-                animation: 'st-write 1.8s ease-in-out infinite',
-              }}
+      <div className="flex items-center justify-center gap-3" role="status" aria-live="polite" aria-busy="true">
+        {glyphs.map((ch, i) => {
+          const isOn = i === active;
+          return (
+            <div
+              key={`${ch}-${i}-${glyphs.join('')}`}
+              className={[
+                'w-10 h-10 rounded-lg flex items-center justify-center',
+                'transition-all duration-200 ease-in-out',
+                isOn
+                  ? 'bg-sky-400 dark:bg-sky-500 text-white shadow-[0_10px_30px_rgba(56,189,248,0.35)] dark:shadow-[0_10px_30px_rgba(56,189,248,0.5)] scale-105'
+                  : 'bg-sky-400/40 dark:bg-sky-500/30 text-white/80 dark:text-white/70'
+              ].join(' ')}
             >
-              {text}
-            </text>
-          </svg>
-
-          <span className="absolute right-6 top-1/2 -translate-y-1/2 w-[2px] h-10 bg-purple-500/40 dark:bg-purple-400/40 rounded-full" style={{ animation: 'st-caret 1.8s ease-in-out infinite' }} />
-        </div>
-
-        <div className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
-          Writing…
-        </div>
+              <span className={`text-sm font-semibold tracking-wide select-none ${langCode === 'Chinese (Simplified)' ? 'font-serif' : 'font-sans'}`}>
+                {ch}
+              </span>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -1568,9 +1580,7 @@ const App: React.FC = () => {
                 {currentSnippet ? (
                   renderSnippet(currentSnippet)
                 ) : (
-                  <HandwritingLoading
-                    text={(SUPPORTED_LANGUAGES.find(l => l.code === appState.language)?.name || appState.language).trim()}
-                  />
+                  <BlocksLoading langCode={appState.language} />
                 )}
             </h1>
 

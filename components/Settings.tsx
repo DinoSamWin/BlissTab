@@ -297,14 +297,31 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                 contentType: processed.contentType,
                 hash: processed.hash,
               });
-              if (uploaded) {
+              if (uploaded && uploaded.path) {
                 nextLogoPath = uploaded.path;
                 // Prefer publicUrl, fallback to signedUrl for private buckets
                 nextLogoUrl = uploaded.publicUrl || null;
                 nextLogoSignedUrl = uploaded.signedUrl || null;
+                console.log('[Settings] Logo uploaded successfully:', {
+                  path: uploaded.path,
+                  hasPublicUrl: !!uploaded.publicUrl,
+                  hasSignedUrl: !!uploaded.signedUrl,
+                });
+              } else {
+                console.error('[Settings] Upload returned null or no path');
+                addToast('Failed to upload logo to cloud. Logo saved locally only.', 'error');
               }
-            } catch (uploadError) {
-              console.warn('[Settings] Failed to upload logo to cloud, using local cache only:', uploadError);
+            } catch (uploadError: any) {
+              console.error('[Settings] Failed to upload logo to cloud:', uploadError);
+              const errorMsg = uploadError?.message || 'Unknown error';
+              // Check for common errors
+              if (errorMsg.includes('Bucket not found') || errorMsg.includes('not found')) {
+                addToast('Storage bucket not found. Please check Supabase configuration.', 'error');
+              } else if (errorMsg.includes('row-level security') || errorMsg.includes('RLS')) {
+                addToast('Permission denied. Please check Storage bucket permissions.', 'error');
+              } else {
+                addToast('Failed to upload logo to cloud. Logo saved locally only.', 'error');
+              }
               // Continue with local cache only
             }
           }

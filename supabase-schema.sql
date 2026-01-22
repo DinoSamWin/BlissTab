@@ -268,6 +268,58 @@ CREATE TRIGGER update_user_gateway_overrides_updated_at
 -- - Public bucket if you are okay with public asset URLs
 
 -- ============================================================
+-- Storage RLS Policies (run after creating the bucket)
+-- ============================================================
+-- IMPORTANT: Run these policies AFTER creating the bucket in Supabase Dashboard
+-- Go to: Storage > gateway-logos > Policies
+
+-- Option 1: If using Supabase Auth (auth.uid() works)
+-- Allow authenticated users to upload to their own folder
+CREATE POLICY "Users can upload their own logos"
+ON storage.objects
+FOR INSERT
+WITH CHECK (
+  bucket_id = 'gateway-logos' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Allow users to read their own files
+CREATE POLICY "Users can read their own logos"
+ON storage.objects
+FOR SELECT
+USING (
+  bucket_id = 'gateway-logos' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Allow users to update their own files
+CREATE POLICY "Users can update their own logos"
+ON storage.objects
+FOR UPDATE
+USING (
+  bucket_id = 'gateway-logos' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Allow users to delete their own files
+CREATE POLICY "Users can delete their own logos"
+ON storage.objects
+FOR DELETE
+USING (
+  bucket_id = 'gateway-logos' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Option 2: If using custom Google OAuth (auth.uid() doesn't work)
+-- You may need to use service role or disable RLS for this bucket
+-- OR use a different approach with email-based matching
+-- 
+-- For now, if RLS is blocking uploads, you can temporarily:
+-- 1. Make the bucket public (Settings > Public bucket = ON)
+-- 2. OR disable RLS: ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
+--    (Not recommended for production, but works for testing)
+
+-- ============================================================
 -- Migration: Add custom_logo_signed_url column (if table exists)
 -- ============================================================
 -- Run this if you already have user_gateway_overrides table:
