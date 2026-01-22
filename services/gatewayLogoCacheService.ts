@@ -52,4 +52,56 @@ export function removeLocalLogo(canonicalUrl: string) {
   setLocalLogoCache(cache);
 }
 
+/**
+ * Download logo from URL and save to local cache.
+ * Used when loading from cloud (e.g., after login on a new browser).
+ */
+export async function downloadAndCacheLogo(
+  canonicalUrl: string,
+  logoUrl: string,
+  expectedHash: string
+): Promise<boolean> {
+  // Skip if already cached with same hash
+  const existing = getLocalLogoDataUrl(canonicalUrl, expectedHash);
+  if (existing) {
+    return true;
+  }
+
+  try {
+    const response = await fetch(logoUrl);
+    if (!response.ok) {
+      console.warn(`[LogoCache] Failed to download logo from ${logoUrl}: ${response.statusText}`);
+      return false;
+    }
+
+    const blob = await response.blob();
+    const reader = new FileReader();
+    
+    return new Promise((resolve) => {
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        if (dataUrl) {
+          upsertLocalLogo(canonicalUrl, {
+            dataUrl,
+            hash: expectedHash,
+            updatedAt: Date.now(),
+          });
+          console.log(`[LogoCache] Downloaded and cached logo for ${canonicalUrl}`);
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      };
+      reader.onerror = () => {
+        console.warn(`[LogoCache] Failed to read logo blob for ${canonicalUrl}`);
+        resolve(false);
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.warn(`[LogoCache] Exception downloading logo for ${canonicalUrl}:`, error);
+    return false;
+  }
+}
+
 

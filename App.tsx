@@ -9,7 +9,7 @@ import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCoun
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import { canonicalizeUrl } from './services/urlCanonicalService';
-import { getLocalLogoDataUrl } from './services/gatewayLogoCacheService';
+import { getLocalLogoDataUrl, downloadAndCacheLogo } from './services/gatewayLogoCacheService';
 import { fetchUserGatewayOverrides } from './services/supabaseService';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
@@ -216,7 +216,7 @@ const App: React.FC = () => {
             let canonicalUrl = l.canonicalUrl || l.url;
             try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch {}
             const ov = overridesByCanonical[canonicalUrl];
-            return {
+            const linkWithOverride = {
               ...l,
               canonicalUrl,
               customTitle: ov?.custom_title ?? l.customTitle ?? null,
@@ -224,6 +224,24 @@ const App: React.FC = () => {
               customLogoUrl: ov?.custom_logo_url ?? l.customLogoUrl ?? null,
               customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
             };
+
+            // Download logo from cloud to local cache if needed (async, non-blocking)
+            if (linkWithOverride.customLogoUrl && linkWithOverride.customLogoHash) {
+              const hasLocalCache = getLocalLogoDataUrl(canonicalUrl, linkWithOverride.customLogoHash);
+              if (!hasLocalCache) {
+                // Download in background - don't await
+                downloadAndCacheLogo(canonicalUrl, linkWithOverride.customLogoUrl, linkWithOverride.customLogoHash)
+                  .then(success => {
+                    if (success) {
+                      // Trigger re-render to show cached logo
+                      setAppState(prev => ({ ...prev }));
+                    }
+                  })
+                  .catch(err => console.warn('[App] Failed to download logo:', err));
+              }
+            }
+
+            return linkWithOverride;
           });
 
           const mergedState = {
@@ -321,7 +339,7 @@ const App: React.FC = () => {
             let canonicalUrl = l.canonicalUrl || l.url;
             try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch {}
             const ov = overridesByCanonical[canonicalUrl];
-            return {
+            const linkWithOverride = {
               ...l,
               canonicalUrl,
               customTitle: ov?.custom_title ?? l.customTitle ?? null,
@@ -329,6 +347,24 @@ const App: React.FC = () => {
               customLogoUrl: ov?.custom_logo_url ?? l.customLogoUrl ?? null,
               customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
             };
+
+            // Download logo from cloud to local cache if needed (async, non-blocking)
+            if (linkWithOverride.customLogoUrl && linkWithOverride.customLogoHash) {
+              const hasLocalCache = getLocalLogoDataUrl(canonicalUrl, linkWithOverride.customLogoHash);
+              if (!hasLocalCache) {
+                // Download in background - don't await
+                downloadAndCacheLogo(canonicalUrl, linkWithOverride.customLogoUrl, linkWithOverride.customLogoHash)
+                  .then(success => {
+                    if (success) {
+                      // Trigger re-render to show cached logo
+                      setAppState(prev => ({ ...prev }));
+                    }
+                  })
+                  .catch(err => console.warn('[App] Failed to download logo:', err));
+              }
+            }
+
+            return linkWithOverride;
           });
           // Merge cloud data with current state, preserving user with all data
           const mergedState = {
@@ -1474,7 +1510,7 @@ const App: React.FC = () => {
             ) : isAuthenticated ? (
               <div className="w-full">
                 {appState.links.length > 0 ? (
-                  <div className="flex flex-wrap justify-start gap-3 md:gap-4 px-4 md:px-8">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4 px-4 md:px-8">
                     {visibleLinks.map(link => {
                       let canonicalUrl = link.canonicalUrl || link.url;
                       try { canonicalUrl = link.canonicalUrl || canonicalizeUrl(link.url); } catch {}
@@ -1487,17 +1523,19 @@ const App: React.FC = () => {
                         href={link.url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors"
+                        className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors h-[64px] w-full"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5">
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0">
                           {effectiveIcon ? <img src={effectiveIcon} alt="" className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity" /> : <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />}
                         </div>
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{effectiveTitle}</span>
+                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap" style={{maxWidth: 'calc(100% - 52px)'}}>
+                          {effectiveTitle}
+                        </span>
                       </a>
                       );
                     })}
                     {remainingLinks > 0 && (
-                      <div className="flex items-center justify-center px-3 py-3 rounded-xl border border-dashed border-black/10 dark:border-white/10 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      <div className="flex items-center justify-center px-3 py-3 rounded-xl border border-dashed border-black/10 dark:border-white/10 text-xs font-semibold text-gray-500 dark:text-gray-300 h-[64px] w-full">
                         +{remainingLinks} More
                       </div>
                     )}

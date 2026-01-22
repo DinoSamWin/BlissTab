@@ -156,26 +156,45 @@ export async function uploadGatewayLogo(params: {
   hash: string;
 }): Promise<{ path: string; publicUrl: string | null } | null> {
   const client = getSupabaseClient();
-  if (!client) return null;
+  if (!client) {
+    console.warn('[GatewayLogo] Supabase client not available');
+    return null;
+  }
 
   try {
     const safeKey = encodeURIComponent(params.canonicalUrl);
     const path = `${params.userId}/${safeKey}/${params.hash}`;
+
+    console.log('[GatewayLogo] Uploading logo:', { path, size: params.file.size, contentType: params.contentType });
 
     const { error: upErr } = await client.storage
       .from('gateway-logos')
       .upload(path, params.file, { upsert: true, contentType: params.contentType });
 
     if (upErr) {
-      console.warn('[GatewayLogo] upload failed:', upErr);
+      console.error('[GatewayLogo] Upload failed:', upErr);
+      // Check if bucket doesn't exist
+      if (upErr.message?.includes('Bucket not found') || upErr.message?.includes('not found')) {
+        console.error('[GatewayLogo] Bucket "gateway-logos" does not exist. Please create it in Supabase Storage.');
+      }
       return null;
     }
 
-    // Prefer public URL if bucket is public. If not, callers can generate signed URLs later.
+    console.log('[GatewayLogo] Upload successful:', path);
+
+    // Try to get public URL (works if bucket is public)
     const { data } = client.storage.from('gateway-logos').getPublicUrl(path);
-    return { path, publicUrl: data?.publicUrl || null };
+    const publicUrl = data?.publicUrl || null;
+    
+    if (publicUrl) {
+      console.log('[GatewayLogo] Public URL:', publicUrl);
+    } else {
+      console.warn('[GatewayLogo] No public URL available. Bucket may be private. Consider making it public or using signed URLs.');
+    }
+
+    return { path, publicUrl };
   } catch (e) {
-    console.warn('[GatewayLogo] upload exception:', e);
+    console.error('[GatewayLogo] Upload exception:', e);
     return null;
   }
 }
