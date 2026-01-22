@@ -271,6 +271,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     let nextLogoHash: string | null = reset ? null : (editingLink.customLogoHash || null);
     let nextLogoPath: string | null = reset ? null : (editingLink.customLogoPath || null);
     let nextLogoUrl: string | null = reset ? null : (editingLink.customLogoUrl || null);
+    let nextLogoSignedUrl: string | null = reset ? null : (editingLink.customLogoSignedUrl || null);
 
     if (reset) {
       removeLocalLogo(canonicalUrl);
@@ -298,7 +299,9 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
               });
               if (uploaded) {
                 nextLogoPath = uploaded.path;
-                nextLogoUrl = uploaded.publicUrl;
+                // Prefer publicUrl, fallback to signedUrl for private buckets
+                nextLogoUrl = uploaded.publicUrl || null;
+                nextLogoSignedUrl = uploaded.signedUrl || null;
               }
             } catch (uploadError) {
               console.warn('[Settings] Failed to upload logo to cloud, using local cache only:', uploadError);
@@ -325,6 +328,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
           customLogoHash: nextLogoHash,
           customLogoPath: nextLogoPath,
           customLogoUrl: nextLogoUrl,
+          customLogoSignedUrl: nextLogoSignedUrl,
         };
       })
     };
@@ -338,18 +342,21 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         customTitle: editingLink.customTitle || null,
         customLogoPath: editingLink.customLogoPath || null,
         customLogoUrl: editingLink.customLogoUrl || null,
+        customLogoSignedUrl: editingLink.customLogoSignedUrl || null,
         customLogoHash: editingLink.customLogoHash || null,
       };
       const after = {
         customTitle: nextTitle,
         customLogoPath: nextLogoPath,
         customLogoUrl: nextLogoUrl,
+        customLogoSignedUrl: nextLogoSignedUrl,
         customLogoHash: nextLogoHash,
       };
       const changed =
         before.customTitle !== after.customTitle ||
         before.customLogoPath !== after.customLogoPath ||
         before.customLogoUrl !== after.customLogoUrl ||
+        before.customLogoSignedUrl !== after.customLogoSignedUrl ||
         before.customLogoHash !== after.customLogoHash;
 
       if (changed) {
@@ -359,6 +366,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
           custom_title: after.customTitle,
           custom_logo_path: after.customLogoPath,
           custom_logo_url: after.customLogoUrl,
+          custom_logo_signed_url: after.customLogoSignedUrl,
           custom_logo_hash: after.customLogoHash,
         });
       }

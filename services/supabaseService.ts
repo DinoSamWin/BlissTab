@@ -41,6 +41,7 @@ export interface UserGatewayOverrideRow {
   custom_title: string | null;
   custom_logo_path: string | null;
   custom_logo_url: string | null;
+  custom_logo_signed_url: string | null; // For private buckets
   custom_logo_hash: string | null;
   updated_at?: string;
 }
@@ -103,7 +104,7 @@ export async function fetchUserGatewayOverrides(userId: string): Promise<UserGat
   try {
     const { data, error } = await client
       .from('user_gateway_overrides')
-      .select('user_id, canonical_url, custom_title, custom_logo_path, custom_logo_url, custom_logo_hash, updated_at')
+      .select('user_id, canonical_url, custom_title, custom_logo_path, custom_logo_url, custom_logo_signed_url, custom_logo_hash, updated_at')
       .eq('user_id', userId);
 
     if (error) {
@@ -154,7 +155,7 @@ export async function uploadGatewayLogo(params: {
   file: Blob;
   contentType: string;
   hash: string;
-}): Promise<{ path: string; publicUrl: string | null } | null> {
+}): Promise<{ path: string; publicUrl: string | null; signedUrl: string | null } | null> {
   const client = getSupabaseClient();
   if (!client) {
     console.warn('[GatewayLogo] Supabase client not available');
@@ -183,18 +184,60 @@ export async function uploadGatewayLogo(params: {
     console.log('[GatewayLogo] Upload successful:', path);
 
     // Try to get public URL (works if bucket is public)
-    const { data } = client.storage.from('gateway-logos').getPublicUrl(path);
-    const publicUrl = data?.publicUrl || null;
+    const { data: publicData } = client.storage.from('gateway-logos').getPublicUrl(path);
+    const publicUrl = publicData?.publicUrl || null;
+    
+    let signedUrl: string | null = null;
     
     if (publicUrl) {
       console.log('[GatewayLogo] Public URL:', publicUrl);
     } else {
-      console.warn('[GatewayLogo] No public URL available. Bucket may be private. Consider making it public or using signed URLs.');
+      // Bucket is private, generate signed URL (valid for 1 year)
+      console.log('[GatewayLogo] Bucket is private, generating signed URL...');
+      try {
+        const { data: signedData, error: signedErr } = await client.storage
+          .from('gateway-logos')
+          .createSignedUrl(path, 31536000); // 1 year expiry
+        
+        if (signedErr) {
+          console.warn('[GatewayLogo] Failed to create signed URL:', signedErr);
+        } else if (signedData?.signedUrl) {
+          signedUrl = signedData.signedUrl;
+          console.log('[GatewayLogo] Signed URL generated (valid for 1 year)');
+        }
+      } catch (signedError) {
+        console.warn('[GatewayLogo] Exception creating signed URL:', signedError);
+      }
     }
 
-    return { path, publicUrl };
+    return { path, publicUrl, signedUrl };
   } catch (e) {
     console.error('[GatewayLogo] Upload exception:', e);
+    return null;
+  }
+}
+
+/**
+ * Get a signed URL for a logo file (useful for private buckets or expired URLs).
+ * Returns null if the file doesn't exist or if signed URL generation fails.
+ */
+export async function getLogoSignedUrl(path: string, expiresIn: number = 31536000): Promise<string | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client.storage
+      .from('gateway-logos')
+      .createSignedUrl(path, expiresIn);
+
+    if (error) {
+      console.warn('[GatewayLogo] Failed to create signed URL:', error);
+      return null;
+    }
+
+    return data?.signedUrl || null;
+  } catch (e) {
+    console.warn('[GatewayLogo] Exception creating signed URL:', e);
     return null;
   }
 }

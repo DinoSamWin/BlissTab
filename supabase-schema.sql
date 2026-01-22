@@ -240,7 +240,8 @@ CREATE TABLE IF NOT EXISTS user_gateway_overrides (
   canonical_url TEXT NOT NULL,
   custom_title TEXT,
   custom_logo_path TEXT,
-  custom_logo_url TEXT,
+  custom_logo_url TEXT, -- Public URL (if bucket is public)
+  custom_logo_signed_url TEXT, -- Signed URL (for private buckets, valid for 1 year)
   custom_logo_hash TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, canonical_url)
@@ -265,4 +266,11 @@ CREATE TRIGGER update_user_gateway_overrides_updated_at
 -- Recommended access:
 -- - Private bucket + signed URLs, OR
 -- - Public bucket if you are okay with public asset URLs
+
+-- ============================================================
+-- Migration: Add custom_logo_signed_url column (if table exists)
+-- ============================================================
+-- Run this if you already have user_gateway_overrides table:
+-- ALTER TABLE user_gateway_overrides 
+-- ADD COLUMN IF NOT EXISTS custom_logo_signed_url TEXT;
 

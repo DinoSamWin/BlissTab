@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
-import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
+import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine, SUPPORTED_LANGUAGES } from './constants';
 import { generateSnippet } from './services/geminiService';
 import { initGoogleAuth, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
@@ -10,7 +10,7 @@ import { fetchSubscriptionState, determineSubscriptionTier } from './services/su
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import { canonicalizeUrl } from './services/urlCanonicalService';
 import { getLocalLogoDataUrl, downloadAndCacheLogo } from './services/gatewayLogoCacheService';
-import { fetchUserGatewayOverrides } from './services/supabaseService';
+import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabaseService';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
@@ -51,7 +51,7 @@ const App: React.FC = () => {
     };
   });
 
-  const [currentSnippet, setCurrentSnippet] = useState<string>('Breathe in, let the [h]world settle[/h]...');
+  const [currentSnippet, setCurrentSnippet] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -81,6 +81,8 @@ const App: React.FC = () => {
   const [isSingleLine, setIsSingleLine] = useState<boolean>(false);
   
   const lastPromptIdRef = useRef<string | null>(null);
+  const snippetRequestIdRef = useRef<number>(0);
+  const didInitialSnippetFetchRef = useRef<boolean>(false);
 
   // Store latest appState in ref to avoid dependency issues in storage event listener
   const appStateRef = useRef<AppState>(appState);
@@ -222,22 +224,42 @@ const App: React.FC = () => {
               customTitle: ov?.custom_title ?? l.customTitle ?? null,
               customLogoPath: ov?.custom_logo_path ?? l.customLogoPath ?? null,
               customLogoUrl: ov?.custom_logo_url ?? l.customLogoUrl ?? null,
+              customLogoSignedUrl: ov?.custom_logo_signed_url ?? l.customLogoSignedUrl ?? null,
               customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
             };
 
             // Download logo from cloud to local cache if needed (async, non-blocking)
-            if (linkWithOverride.customLogoUrl && linkWithOverride.customLogoHash) {
+            if (linkWithOverride.customLogoHash) {
               const hasLocalCache = getLocalLogoDataUrl(canonicalUrl, linkWithOverride.customLogoHash);
               if (!hasLocalCache) {
-                // Download in background - don't await
-                downloadAndCacheLogo(canonicalUrl, linkWithOverride.customLogoUrl, linkWithOverride.customLogoHash)
-                  .then(success => {
-                    if (success) {
-                      // Trigger re-render to show cached logo
-                      setAppState(prev => ({ ...prev }));
-                    }
-                  })
-                  .catch(err => console.warn('[App] Failed to download logo:', err));
+                // Try to download: prefer publicUrl, fallback to signedUrl, or regenerate signedUrl
+                const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
+                
+                if (logoUrlToDownload) {
+                  // Download in background - don't await
+                  downloadAndCacheLogo(canonicalUrl, logoUrlToDownload, linkWithOverride.customLogoHash)
+                    .then(success => {
+                      if (success) {
+                        // Trigger re-render to show cached logo
+                        setAppState(prev => ({ ...prev }));
+                      }
+                    })
+                    .catch(err => console.warn('[App] Failed to download logo:', err));
+                } else if (linkWithOverride.customLogoPath) {
+                  // No URL available, but we have path - try to generate signed URL
+                  getLogoSignedUrl(linkWithOverride.customLogoPath)
+                    .then(signedUrl => {
+                      if (signedUrl && linkWithOverride.customLogoHash) {
+                        downloadAndCacheLogo(canonicalUrl, signedUrl, linkWithOverride.customLogoHash)
+                          .then(success => {
+                            if (success) {
+                              setAppState(prev => ({ ...prev }));
+                            }
+                          });
+                      }
+                    })
+                    .catch(err => console.warn('[App] Failed to generate signed URL:', err));
+                }
               }
             }
 
@@ -345,22 +367,42 @@ const App: React.FC = () => {
               customTitle: ov?.custom_title ?? l.customTitle ?? null,
               customLogoPath: ov?.custom_logo_path ?? l.customLogoPath ?? null,
               customLogoUrl: ov?.custom_logo_url ?? l.customLogoUrl ?? null,
+              customLogoSignedUrl: ov?.custom_logo_signed_url ?? l.customLogoSignedUrl ?? null,
               customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
             };
 
             // Download logo from cloud to local cache if needed (async, non-blocking)
-            if (linkWithOverride.customLogoUrl && linkWithOverride.customLogoHash) {
+            if (linkWithOverride.customLogoHash) {
               const hasLocalCache = getLocalLogoDataUrl(canonicalUrl, linkWithOverride.customLogoHash);
               if (!hasLocalCache) {
-                // Download in background - don't await
-                downloadAndCacheLogo(canonicalUrl, linkWithOverride.customLogoUrl, linkWithOverride.customLogoHash)
-                  .then(success => {
-                    if (success) {
-                      // Trigger re-render to show cached logo
-                      setAppState(prev => ({ ...prev }));
-                    }
-                  })
-                  .catch(err => console.warn('[App] Failed to download logo:', err));
+                // Try to download: prefer publicUrl, fallback to signedUrl, or regenerate signedUrl
+                const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
+                
+                if (logoUrlToDownload) {
+                  // Download in background - don't await
+                  downloadAndCacheLogo(canonicalUrl, logoUrlToDownload, linkWithOverride.customLogoHash)
+                    .then(success => {
+                      if (success) {
+                        // Trigger re-render to show cached logo
+                        setAppState(prev => ({ ...prev }));
+                      }
+                    })
+                    .catch(err => console.warn('[App] Failed to download logo:', err));
+                } else if (linkWithOverride.customLogoPath) {
+                  // No URL available, but we have path - try to generate signed URL
+                  getLogoSignedUrl(linkWithOverride.customLogoPath)
+                    .then(signedUrl => {
+                      if (signedUrl && linkWithOverride.customLogoHash) {
+                        downloadAndCacheLogo(canonicalUrl, signedUrl, linkWithOverride.customLogoHash)
+                          .then(success => {
+                            if (success) {
+                              setAppState(prev => ({ ...prev }));
+                            }
+                          });
+                      }
+                    })
+                    .catch(err => console.warn('[App] Failed to generate signed URL:', err));
+                }
               }
             }
 
@@ -441,7 +483,10 @@ const App: React.FC = () => {
     const randomReq = eligible[Math.floor(Math.random() * eligible.length)];
     lastPromptIdRef.current = randomReq.id;
 
+    const requestId = ++snippetRequestIdRef.current;
     setIsGenerating(true);
+    // Show loading while generating (prevents stale content flashes)
+    setCurrentSnippet(null);
     
     try {
       // Increment perspective count for unauthenticated users (only if not bypassing)
@@ -465,6 +510,9 @@ const App: React.FC = () => {
       
       // Generate with history awareness - always call API (no caching)
       const result = await generateSnippet(randomReq.prompt, appState.language, history);
+
+      // Only apply the latest in-flight request result
+      if (requestId !== snippetRequestIdRef.current) return;
       
       console.log('[App] Generated perspective:', result.substring(0, 50));
       
@@ -472,13 +520,16 @@ const App: React.FC = () => {
       const updatedHistory = addToHistory(result, randomReq.id, history);
       saveHistory(updatedHistory);
       
-    setCurrentSnippet(result);
-    setRevealKey(prev => prev + 1);
+      setCurrentSnippet(result);
+      setRevealKey(prev => prev + 1);
     } catch (error) {
+      if (requestId !== snippetRequestIdRef.current) return;
       console.error('[App] Error generating perspective:', error);
       addToast('Failed to generate perspective', 'error');
     } finally {
-    setIsGenerating(false);
+      if (requestId === snippetRequestIdRef.current) {
+        setIsGenerating(false);
+      }
     }
   }, [appState]);
 
@@ -489,6 +540,74 @@ const App: React.FC = () => {
         ? <span key={i} className="text-purple-600 dark:text-purple-400">{part}</span> 
         : <span key={i}>{part}</span>
     ));
+  };
+
+  const HandwritingLoading: React.FC<{ text: string }> = ({ text }) => {
+    return (
+      <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
+        <style>{`
+          @keyframes st-write {
+            0% { stroke-dashoffset: 1200; opacity: 0.85; }
+            60% { stroke-dashoffset: 0; opacity: 0.95; }
+            100% { stroke-dashoffset: 0; opacity: 0.35; }
+          }
+          @keyframes st-pen-move {
+            0% { transform: translateX(-220px) translateY(-12px) rotate(-18deg); opacity: 0; }
+            10% { opacity: 1; }
+            60% { transform: translateX(220px) translateY(12px) rotate(8deg); opacity: 1; }
+            100% { transform: translateX(220px) translateY(12px) rotate(8deg); opacity: 0; }
+          }
+          @keyframes st-caret {
+            0%, 45% { opacity: 0; }
+            50%, 95% { opacity: 1; }
+            100% { opacity: 0; }
+          }
+        `}</style>
+
+        {/* subtle warm glow */}
+        <div className="pointer-events-none absolute -inset-x-10 -inset-y-10 blur-3xl opacity-70">
+          <div className="w-full h-full rounded-[3rem] bg-gradient-to-r from-purple-500/18 via-pink-500/14 to-indigo-500/18" />
+        </div>
+
+        <div className="relative w-full max-w-4xl px-4 flex items-center justify-center">
+          <div className="absolute left-1/2 top-1/2" style={{ animation: 'st-pen-move 1.8s ease-in-out infinite' }}>
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" className="text-gray-700/70 dark:text-gray-200/70">
+              <path d="M3 21l3.8-1 12-12a2.2 2.2 0 0 0 0-3.1l-.7-.7a2.2 2.2 0 0 0-3.1 0l-12 12L3 21z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+              <path d="M14.5 5.5l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </div>
+
+          <svg className="w-full" viewBox="0 0 1000 220" preserveAspectRatio="xMidYMid meet">
+            <text
+              x="50%"
+              y="55%"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="serif"
+              style={{
+                fontSize: 120,
+                fill: 'transparent',
+                stroke: 'currentColor',
+                strokeWidth: 2.25,
+                strokeLinecap: 'round',
+                strokeLinejoin: 'round',
+                strokeDasharray: 1200,
+                strokeDashoffset: 1200,
+                animation: 'st-write 1.8s ease-in-out infinite',
+              }}
+            >
+              {text}
+            </text>
+          </svg>
+
+          <span className="absolute right-6 top-1/2 -translate-y-1/2 w-[2px] h-10 bg-purple-500/40 dark:bg-purple-400/40 rounded-full" style={{ animation: 'st-caret 1.8s ease-in-out infinite' }} />
+        </div>
+
+        <div className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
+          Writing…
+        </div>
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -1101,6 +1220,7 @@ const App: React.FC = () => {
 
   const handleShareQuote = async () => {
     if (isSharing) return;
+    if (!currentSnippet) return;
     try {
       setIsSharing(true);
       // Pass quote with highlights preserved - createShareCard will parse them
@@ -1123,6 +1243,11 @@ const App: React.FC = () => {
 
   // Detect if perspective text is single line
   useEffect(() => {
+    if (!currentSnippet) {
+      setIsSingleLine(false);
+      return;
+    }
+
     const checkSingleLine = () => {
       if (perspectiveTitleRef.current) {
         const element = perspectiveTitleRef.current;
@@ -1163,7 +1288,10 @@ const App: React.FC = () => {
         }, 500);
       }
     });
-    fetchRandomSnippet();
+    if (!didInitialSnippetFetchRef.current) {
+      didInitialSnippetFetchRef.current = true;
+      fetchRandomSnippet();
+    }
   }, [handleUserLogin]); // Removed appState.theme dependency
 
   // Listen for cross-tab storage changes (when user logs in/out in another tab)
@@ -1437,7 +1565,13 @@ const App: React.FC = () => {
         <div key={revealKey} className={`animate-reveal max-w-4xl text-center flex flex-col items-center ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
             {/* Perspective Title with Selective Highlighting and No Typography Changes */}
             <h1 ref={perspectiveTitleRef} className="serif editorial-title text-5xl md:text-7xl lg:text-8xl font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] px-4 text-black dark:text-white">
-                {renderSnippet(currentSnippet)}
+                {currentSnippet ? (
+                  renderSnippet(currentSnippet)
+                ) : (
+                  <HandwritingLoading
+                    text={(SUPPORTED_LANGUAGES.find(l => l.code === appState.language)?.name || appState.language).trim()}
+                  />
+                )}
             </h1>
 
             <div className="mt-10 flex flex-col items-center gap-4">
@@ -1452,7 +1586,7 @@ const App: React.FC = () => {
                     </button>
                     <button
                       onClick={handleShareQuote}
-                      disabled={isSharing}
+                      disabled={isSharing || !currentSnippet}
                       className="px-6 py-4 rounded-full border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-600 dark:text-gray-200 transition-all hover:bg-white/80 dark:hover:bg-white/10 active:scale-95 flex items-center gap-2 disabled:opacity-60"
                     >
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1515,7 +1649,8 @@ const App: React.FC = () => {
                       let canonicalUrl = link.canonicalUrl || link.url;
                       try { canonicalUrl = link.canonicalUrl || canonicalizeUrl(link.url); } catch {}
                       const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
-                      const effectiveIcon = localLogo || link.customLogoUrl || link.icon;
+                      // Priority: local cache > publicUrl > signedUrl > default icon
+                      const effectiveIcon = localLogo || link.customLogoUrl || link.customLogoSignedUrl || link.icon;
                       const effectiveTitle = link.customTitle || link.title;
                       return (
                       <a 

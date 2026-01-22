@@ -17,7 +17,8 @@ export interface QuickLink {
    */
   customTitle?: string | null;
   customLogoPath?: string | null; // Supabase Storage path
-  customLogoUrl?: string | null; // Cached public/signed URL (optional)
+  customLogoUrl?: string | null; // Public URL (if bucket is public)
+  customLogoSignedUrl?: string | null; // Signed URL (for private buckets)
   customLogoHash?: string | null; // Content hash to avoid re-uploading same logo
 }
 
