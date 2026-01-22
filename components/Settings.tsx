@@ -372,6 +372,18 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
           
           {activeTab === 'links' && (
             <div className="space-y-10 animate-reveal">
+              {/* Usage Indicator */}
+              {state.user && (
+                <div className="mb-6 p-4 bg-gray-50/50 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Gateways</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {state.links.length} / {isSubscribed(state) ? '∞' : SUBSCRIPTION_LIMITS.GATEWAYS.FREE}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {(() => {
                 const gatewayLimitCheck = canAddGateway(state);
                 const isLimitReached = !gatewayLimitCheck.allowed && gatewayLimitCheck.reason === 'limit_reached';
@@ -416,12 +428,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                             </p>
                             <button
                               onClick={() => {
-                                setSubscriptionModalFeature('gateways');
-                                setIsSubscriptionModalOpen(true);
+                                const subscriptionUrl = window.location.origin + '/subscription';
+                                window.open(subscriptionUrl, '_blank');
                               }}
                               className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
                             >
-                              Upgrade to Pro
+                              Upgrade
                             </button>
                           </div>
                         </div>
@@ -492,6 +504,18 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
           {activeTab === 'snippets' && (
             <div className="space-y-10 animate-reveal">
+              {/* Usage Indicator */}
+              {state.user && (
+                <div className="mb-6 p-4 bg-gray-50/50 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Intentions</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {state.requests.filter(r => r.active).length} / {isSubscribed(state) ? '∞' : SUBSCRIPTION_LIMITS.INTENTIONS.FREE}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {(() => {
                 const intentionLimitCheck = canAddIntention(state);
                 const isLimitReached = !intentionLimitCheck.allowed && intentionLimitCheck.reason === 'limit_reached';
@@ -536,12 +560,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                             </p>
                             <button
                               onClick={() => {
-                                setSubscriptionModalFeature('intentions');
-                                setIsSubscriptionModalOpen(true);
+                                const subscriptionUrl = window.location.origin + '/subscription';
+                                window.open(subscriptionUrl, '_blank');
                               }}
                               className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
                             >
-                              Upgrade to Pro
+                              Upgrade
                             </button>
                           </div>
                         </div>

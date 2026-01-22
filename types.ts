@@ -13,7 +13,7 @@ export interface SnippetRequest {
   active: boolean;
 }
 
-export type SubscriptionPlan = 'free' | 'pro' | 'team';
+export type SubscriptionPlan = 'free' | 'plus' | 'pro';
 export type SubscriptionStatus = 'active' | 'expired' | 'canceled';
 
 export interface User {

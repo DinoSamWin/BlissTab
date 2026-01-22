@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT UNIQUE NOT NULL,
   is_subscribed BOOLEAN NOT NULL DEFAULT false,
-  subscription_plan TEXT NOT NULL DEFAULT 'free' CHECK (subscription_plan IN ('free', 'pro', 'team')),
+  subscription_plan TEXT NOT NULL DEFAULT 'free' CHECK (subscription_plan IN ('free', 'plus', 'pro')),
   subscription_status TEXT NOT NULL DEFAULT 'active' CHECK (subscription_status IN ('active', 'expired', 'canceled')),
   subscription_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),

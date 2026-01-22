@@ -1376,44 +1376,35 @@ const App: React.FC = () => {
                 </div>
               </div>
             ) : isAuthenticated ? (
-              <div className="w-full flex flex-col md:flex-row gap-8 md:gap-10 items-start">
-                  <div className="w-full md:w-1/3 flex flex-col text-left">
-                      <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-3">Intentional Gateways</h2>
-                      <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed">
-                          Your personal shortcuts, always ready.
-                      </p>
+              <div className="w-full">
+                {appState.links.length > 0 ? (
+                  <div className="flex flex-wrap justify-start gap-3 md:gap-4 px-4 md:px-8">
+                    {visibleLinks.map(link => (
+                      <a 
+                        key={link.id} 
+                        href={link.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5">
+                          {link.icon ? <img src={link.icon} alt="" className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity" /> : <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{link.title}</span>
+                      </a>
+                    ))}
+                    {remainingLinks > 0 && (
+                      <div className="flex items-center justify-center px-3 py-3 rounded-xl border border-dashed border-black/10 dark:border-white/10 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                        +{remainingLinks} More
+                      </div>
+                    )}
                   </div>
-
-                  <div className="flex-1 w-full">
-                      {appState.links.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
-                          {visibleLinks.map(link => (
-                              <a 
-                                  key={link.id} 
-                                  href={link.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                              className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors"
-                              >
-                              <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5">
-                                {link.icon ? <img src={link.icon} alt="" className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity" /> : <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />}
-                                  </div>
-                              <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{link.title}</span>
-                            </a>
-                          ))}
-                          {remainingLinks > 0 && (
-                            <div className="flex items-center justify-center px-3 py-3 rounded-xl border border-dashed border-black/10 dark:border-white/10 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                              +{remainingLinks} More
-                                  </div>
-                          )}
-                                  </div>
-                      ) : (
-                        <div className="py-10 flex flex-col items-center justify-center text-center opacity-60">
-                            <div className="w-12 h-12 border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-2xl mb-3" />
-                            <span className="text-[11px] font-bold uppercase tracking-widest">Connect your first link in Studio</span>
-                          </div>
-                      )}
+                ) : (
+                  <div className="py-10 flex flex-col items-center justify-center text-center opacity-60">
+                    <div className="w-12 h-12 border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-2xl mb-3" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest">Connect your first link in Studio</span>
                   </div>
+                )}
               </div>
             ) : (
               <div className="w-full flex flex-col items-center justify-center py-6">
