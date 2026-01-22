@@ -5,6 +5,20 @@ export interface QuickLink {
   title: string;
   icon: string | null;
   color: string;
+
+  /**
+   * Canonical URL used for deduping metadata / overrides across sessions.
+   * Backward compatible: older saved states may not have it.
+   */
+  canonicalUrl?: string;
+
+  /**
+   * User overrides (optional). If unset, UI falls back to default metadata/title/icon.
+   */
+  customTitle?: string | null;
+  customLogoPath?: string | null; // Supabase Storage path
+  customLogoUrl?: string | null; // Cached public/signed URL (optional)
+  customLogoHash?: string | null; // Content hash to avoid re-uploading same logo
 }
 
 export interface SnippetRequest {

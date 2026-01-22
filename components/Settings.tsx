@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { AppState, QuickLink, SnippetRequest } from '../types';
 import { fetchSiteMetadata } from '../services/metadataService';
+import { canonicalizeUrl } from '../services/urlCanonicalService';
+import { getLocalLogoDataUrl, removeLocalLogo, upsertLocalLogo } from '../services/gatewayLogoCacheService';
+import { imageFileToSquareWebp } from '../services/imageProcessingService';
+import { fetchUserGatewayOverrides, upsertUserGatewayOverride, uploadGatewayLogo } from '../services/supabaseService';
 import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG } from '../constants';
 import { canAddGateway, canAddIntention, getSubscriptionTier, SUBSCRIPTION_LIMITS, isSubscribed } from '../services/usageLimitsService';
 import { redeemCode, toggleRedeemFeature, RedeemErrorCode, fetchUserMembership, fetchUserSettings } from '../services/redeemService';
 import { determineSubscriptionTier } from '../services/subscriptionService';
 import SubscriptionUpsellModal from './SubscriptionUpsellModal';
+import GatewayEditModal from './GatewayEditModal';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -26,6 +31,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [subscriptionModalFeature, setSubscriptionModalFeature] = useState<'gateways' | 'intentions'>('gateways');
+  const [editingLink, setEditingLink] = useState<QuickLink | null>(null);
+  const [isGatewayEditOpen, setIsGatewayEditOpen] = useState(false);
   // Redeem code state
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
@@ -126,10 +133,14 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     const tempId = `gateway-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setPendingLinkId(tempId);
     
-    // Normalize URL immediately
+    // Normalize + canonicalize URL immediately
     let normalizedUrl = newUrl.trim();
-    if (!/^https?:\/\//i.test(normalizedUrl)) {
-      normalizedUrl = 'https://' + normalizedUrl;
+    if (!/^https?:\/\//i.test(normalizedUrl)) normalizedUrl = 'https://' + normalizedUrl;
+    let canonicalUrl: string | undefined;
+    try {
+      canonicalUrl = canonicalizeUrl(normalizedUrl);
+    } catch {
+      canonicalUrl = undefined;
     }
     
     // Extract domain for fallback
@@ -147,10 +158,11 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     // Create optimistic link with loading state - ALWAYS keep this item
     const optimisticLink: QuickLink = {
       id: tempId,
-      url: normalizedUrl,
+      url: canonicalUrl || normalizedUrl,
       title: 'Fetching details...',
       icon: null,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)]
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      canonicalUrl: canonicalUrl,
     };
     
     // Optimistic update - add link immediately for responsive UI
@@ -168,10 +180,15 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       // Build updated state based on optimistic state (includes the new link)
       const updatedLink = {
         id: tempId,
-        url: meta?.url || normalizedUrl,
+        url: meta?.url || canonicalUrl || normalizedUrl,
         title: meta?.title || fallbackTitle,
         icon: meta?.icon || null,
-        color: optimisticLink.color
+        color: optimisticLink.color,
+        canonicalUrl: canonicalUrl || meta?.url || normalizedUrl,
+        customTitle: null,
+        customLogoPath: null,
+        customLogoUrl: null,
+        customLogoHash: null,
       };
       
       // Build updated state - use optimisticState.links which includes the new link
@@ -200,10 +217,15 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       // NEVER remove the item - keep it with fallback data
       const fallbackLink = {
         id: tempId,
-        url: normalizedUrl,
+        url: canonicalUrl || normalizedUrl,
         title: fallbackTitle,
         icon: null,
-        color: optimisticLink.color
+        color: optimisticLink.color,
+        canonicalUrl: canonicalUrl || normalizedUrl,
+        customTitle: null,
+        customLogoPath: null,
+        customLogoUrl: null,
+        customLogoHash: null,
       };
       // Use optimisticState.links which includes the new link
       const fallbackLinks = optimisticState.links.map(link => 
@@ -221,6 +243,130 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       setIsFetchingMetadata(false);
       setPendingLinkId(null);
     }
+  };
+
+  const openEditGateway = (link: QuickLink) => {
+    setEditingLink(link);
+    setIsGatewayEditOpen(true);
+  };
+
+  const handleSaveGatewayEdit = async (params: { customTitle: string | null; logoFile: File | null; reset: boolean }) => {
+    if (!editingLink) return;
+    const userId = state.user?.id;
+    
+    // Calculate canonical URL if not present
+    let canonicalUrl = editingLink.canonicalUrl;
+    if (!canonicalUrl) {
+      try {
+        canonicalUrl = canonicalizeUrl(editingLink.url);
+      } catch {
+        canonicalUrl = editingLink.url;
+      }
+    }
+
+    const reset = params.reset;
+    const nextTitle = reset ? null : (params.customTitle?.trim() || null);
+
+    // Upload + local cache for logo if provided
+    let nextLogoHash: string | null = reset ? null : (editingLink.customLogoHash || null);
+    let nextLogoPath: string | null = reset ? null : (editingLink.customLogoPath || null);
+    let nextLogoUrl: string | null = reset ? null : (editingLink.customLogoUrl || null);
+
+    if (reset) {
+      removeLocalLogo(canonicalUrl);
+    }
+
+    if (!reset && params.logoFile) {
+      try {
+        const processed = await imageFileToSquareWebp({ file: params.logoFile, size: 128, quality: 0.86 });
+        if (processed) {
+          // Local-only cache for instant render (save immediately)
+          upsertLocalLogo(canonicalUrl, { dataUrl: processed.dataUrl, hash: processed.hash, updatedAt: Date.now() });
+
+          // Always update hash when new file is uploaded
+          nextLogoHash = processed.hash;
+
+          // Best-effort cloud backup to Supabase Storage
+          if (userId) {
+            try {
+              const uploaded = await uploadGatewayLogo({
+                userId,
+                canonicalUrl,
+                file: processed.blob,
+                contentType: processed.contentType,
+                hash: processed.hash,
+              });
+              if (uploaded) {
+                nextLogoPath = uploaded.path;
+                nextLogoUrl = uploaded.publicUrl;
+              }
+            } catch (uploadError) {
+              console.warn('[Settings] Failed to upload logo to cloud, using local cache only:', uploadError);
+              // Continue with local cache only
+            }
+          }
+        }
+      } catch (processError) {
+        console.error('[Settings] Failed to process logo image:', processError);
+        addToast('Failed to process image. Please try another file.', 'error');
+        return;
+      }
+    }
+
+    // Update local state (and triggers focus_tab_state cross-tab sync)
+    const updatedState: AppState = {
+      ...state,
+      links: state.links.map(l => {
+        if (l.id !== editingLink.id) return l;
+        return {
+          ...l,
+          canonicalUrl, // Ensure canonicalUrl is set
+          customTitle: nextTitle,
+          customLogoHash: nextLogoHash,
+          customLogoPath: nextLogoPath,
+          customLogoUrl: nextLogoUrl,
+        };
+      })
+    };
+
+    await updateState(updatedState);
+
+    // Best-effort: save override to cloud (small table, deduped by URL)
+    if (userId) {
+      // Skip if nothing changed
+      const before = {
+        customTitle: editingLink.customTitle || null,
+        customLogoPath: editingLink.customLogoPath || null,
+        customLogoUrl: editingLink.customLogoUrl || null,
+        customLogoHash: editingLink.customLogoHash || null,
+      };
+      const after = {
+        customTitle: nextTitle,
+        customLogoPath: nextLogoPath,
+        customLogoUrl: nextLogoUrl,
+        customLogoHash: nextLogoHash,
+      };
+      const changed =
+        before.customTitle !== after.customTitle ||
+        before.customLogoPath !== after.customLogoPath ||
+        before.customLogoUrl !== after.customLogoUrl ||
+        before.customLogoHash !== after.customLogoHash;
+
+      if (changed) {
+        await upsertUserGatewayOverride({
+          user_id: userId,
+          canonical_url: canonicalUrl,
+          custom_title: after.customTitle,
+          custom_logo_path: after.customLogoPath,
+          custom_logo_url: after.customLogoUrl,
+          custom_logo_hash: after.customLogoHash,
+        });
+      }
+    }
+
+    addToast('Gateway updated', 'success');
+    setIsGatewayEditOpen(false);
+    setEditingLink(null);
   };
 
   const removeLink = async (id: string) => {
@@ -461,14 +607,19 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                 <div className="grid grid-cols-1 gap-3">
                   {state.links.map(link => {
                     const isPending = link.id === pendingLinkId && isFetchingMetadata;
+                    const canonicalUrl = link.canonicalUrl || (() => {
+                      try { return canonicalizeUrl(link.url); } catch { return link.url; }
+                    })();
+                    const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
+                    const effectiveIcon = localLogo || link.customLogoUrl || link.icon;
                     return (
                       <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
                         <div className="flex items-center gap-4">
                           <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
                             {isPending ? (
                               <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
-                            ) : link.icon ? (
-                              <img src={link.icon} className="w-6 h-6 object-contain opacity-60" alt="" onError={(e) => {
+                            ) : effectiveIcon ? (
+                              <img src={effectiveIcon} className="w-6 h-6 object-contain opacity-60" alt="" onError={(e) => {
                                 // Fallback to colored dot if icon fails to load
                                 const target = e.target as HTMLImageElement;
                                 target.style.display = 'none';
@@ -486,14 +637,26 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                           </div>
                           <div className="flex flex-col">
                             <span className={`text-sm font-semibold ${isPending ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-200'}`}>
-                              {link.title}
+                              {link.customTitle || link.title}
                             </span>
                             <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
                           </div>
                         </div>
-                        <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors" disabled={isPending}>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
-                        </button>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => openEditGateway(link)}
+                            className="p-3 text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
+                            disabled={isPending}
+                            aria-label="Edit gateway"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487a2.1 2.1 0 012.97 2.97L8.5 18.79 4 20l1.21-4.5L16.862 4.487z" />
+                            </svg>
+                          </button>
+                          <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors" disabled={isPending} aria-label="Remove gateway">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -501,6 +664,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
               </div>
             </div>
           )}
+
+          <GatewayEditModal
+            isOpen={isGatewayEditOpen}
+            link={editingLink}
+            onClose={() => { setIsGatewayEditOpen(false); setEditingLink(null); }}
+            onSave={handleSaveGatewayEdit}
+          />
 
           {activeTab === 'snippets' && (
             <div className="space-y-10 animate-reveal">

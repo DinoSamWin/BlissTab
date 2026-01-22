@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppState } from '../types';
+import { canonicalizeUrl, extractHostname } from './urlCanonicalService';
 
 const supabaseUrl = (import.meta.env as any).VITE_SUPABASE_URL;
 const supabaseAnonKey = (import.meta.env as any).VITE_SUPABASE_ANON_KEY;
@@ -22,6 +23,159 @@ function getSupabaseClient(): SupabaseClient | null {
     return supabaseClient;
   } catch (e) {
     console.error('Failed to initialize Supabase:', e);
+    return null;
+  }
+}
+
+export interface GatewayMetadataRow {
+  canonical_url: string;
+  hostname: string;
+  site_title: string | null;
+  icon_url: string | null;
+  updated_at?: string;
+}
+
+export interface UserGatewayOverrideRow {
+  user_id: string;
+  canonical_url: string;
+  custom_title: string | null;
+  custom_logo_path: string | null;
+  custom_logo_url: string | null;
+  custom_logo_hash: string | null;
+  updated_at?: string;
+}
+
+/**
+ * Upsert gateway metadata into a global table, but avoid write if the row already exists.
+ * This reduces write volume significantly when many users add the same URL.
+ */
+export async function upsertGatewayMetadataIfMissing(input: {
+  url: string;
+  title?: string | null;
+  iconUrl?: string | null;
+}): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  const canonicalUrl = canonicalizeUrl(input.url);
+  const hostname = extractHostname(canonicalUrl);
+  if (!canonicalUrl || !hostname) return;
+
+  try {
+    const { data: existing, error: selErr } = await client
+      .from('gateway_metadata')
+      .select('canonical_url')
+      .eq('canonical_url', canonicalUrl)
+      .maybeSingle();
+
+    if (selErr) {
+      // If select fails due to missing table/RLS, don't block the app.
+      console.warn('[GatewayMetadata] select failed:', selErr);
+      return;
+    }
+
+    if (existing?.canonical_url) {
+      // Already exists; skip write.
+      return;
+    }
+
+    const row: GatewayMetadataRow = {
+      canonical_url: canonicalUrl,
+      hostname,
+      site_title: input.title ?? null,
+      icon_url: input.iconUrl ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: insErr } = await client.from('gateway_metadata').insert(row);
+    if (insErr) {
+      console.warn('[GatewayMetadata] insert failed:', insErr);
+    }
+  } catch (e) {
+    console.warn('[GatewayMetadata] upsert-if-missing failed:', e);
+  }
+}
+
+export async function fetchUserGatewayOverrides(userId: string): Promise<UserGatewayOverrideRow[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from('user_gateway_overrides')
+      .select('user_id, canonical_url, custom_title, custom_logo_path, custom_logo_url, custom_logo_hash, updated_at')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.warn('[GatewayOverrides] fetch failed:', error);
+      return [];
+    }
+    return (data as UserGatewayOverrideRow[]) || [];
+  } catch (e) {
+    console.warn('[GatewayOverrides] fetch exception:', e);
+    return [];
+  }
+}
+
+/**
+ * Upsert user overrides keyed by (user_id, canonical_url).
+ * Callers should only call when values actually changed to reduce write volume.
+ */
+export async function upsertUserGatewayOverride(row: UserGatewayOverrideRow): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  try {
+    const { error } = await client
+      .from('user_gateway_overrides')
+      .upsert(
+        {
+          ...row,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,canonical_url' }
+      );
+
+    if (error) {
+      console.warn('[GatewayOverrides] upsert failed:', error);
+    }
+  } catch (e) {
+    console.warn('[GatewayOverrides] upsert exception:', e);
+  }
+}
+
+/**
+ * Upload a gateway logo to Supabase Storage (bucket must exist).
+ * Returns { path, publicUrl } if successful.
+ */
+export async function uploadGatewayLogo(params: {
+  userId: string;
+  canonicalUrl: string;
+  file: Blob;
+  contentType: string;
+  hash: string;
+}): Promise<{ path: string; publicUrl: string | null } | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const safeKey = encodeURIComponent(params.canonicalUrl);
+    const path = `${params.userId}/${safeKey}/${params.hash}`;
+
+    const { error: upErr } = await client.storage
+      .from('gateway-logos')
+      .upload(path, params.file, { upsert: true, contentType: params.contentType });
+
+    if (upErr) {
+      console.warn('[GatewayLogo] upload failed:', upErr);
+      return null;
+    }
+
+    // Prefer public URL if bucket is public. If not, callers can generate signed URLs later.
+    const { data } = client.storage.from('gateway-logos').getPublicUrl(path);
+    return { path, publicUrl: data?.publicUrl || null };
+  } catch (e) {
+    console.warn('[GatewayLogo] upload exception:', e);
     return null;
   }
 }

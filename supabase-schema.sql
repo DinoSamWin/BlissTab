@@ -213,3 +213,56 @@ CREATE TRIGGER update_user_settings_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+-- ============================================================
+-- Gateways: global metadata (deduped by canonical_url) + per-user overrides
+-- ============================================================
+
+-- Global metadata cache (shared across users, deduped by canonical_url)
+CREATE TABLE IF NOT EXISTS gateway_metadata (
+  canonical_url TEXT PRIMARY KEY,
+  hostname TEXT NOT NULL,
+  site_title TEXT,
+  icon_url TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  fetched_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_gateway_metadata_hostname ON gateway_metadata(hostname);
+
+-- Optional: enable RLS if you use Supabase Auth or Edge Functions.
+-- If you're using custom Google OAuth without Supabase Auth sessions,
+-- consider keeping RLS OFF and/or writing via Edge Functions (service role).
+-- ALTER TABLE gateway_metadata ENABLE ROW LEVEL SECURITY;
+
+-- Per-user overrides (custom name + uploaded logo refs), deduped by (user_id, canonical_url)
+CREATE TABLE IF NOT EXISTS user_gateway_overrides (
+  user_id TEXT NOT NULL,
+  canonical_url TEXT NOT NULL,
+  custom_title TEXT,
+  custom_logo_path TEXT,
+  custom_logo_url TEXT,
+  custom_logo_hash TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, canonical_url)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_gateway_overrides_user_id ON user_gateway_overrides(user_id);
+
+-- Optional: enable RLS if you use Supabase Auth or Edge Functions.
+-- ALTER TABLE user_gateway_overrides ENABLE ROW LEVEL SECURITY;
+
+-- Trigger to update updated_at on overrides row update
+DROP TRIGGER IF EXISTS update_user_gateway_overrides_updated_at ON user_gateway_overrides;
+CREATE TRIGGER update_user_gateway_overrides_updated_at
+  BEFORE UPDATE ON user_gateway_overrides
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- Storage (manual setup)
+-- ============================================================
+-- Create a Storage bucket named: gateway-logos
+-- Recommended access:
+-- - Private bucket + signed URLs, OR
+-- - Public bucket if you are okay with public asset URLs
+

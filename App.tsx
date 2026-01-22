@@ -8,6 +8,9 @@ import { loadHistory, saveHistory, addToHistory } from './services/perspectiveSe
 import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount } from './services/usageLimitsService';
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
+import { canonicalizeUrl } from './services/urlCanonicalService';
+import { getLocalLogoDataUrl } from './services/gatewayLogoCacheService';
+import { fetchUserGatewayOverrides } from './services/supabaseService';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
@@ -60,6 +63,7 @@ const App: React.FC = () => {
   const [hasLocalPreference, setHasLocalPreference] = useState(false);
   const [shouldShakeHelper, setShouldShakeHelper] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
+  const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
   
   const isAuthenticated = !!appState.user;
   
@@ -70,6 +74,7 @@ const App: React.FC = () => {
     return saved || DEFAULT_SEARCH_ENGINE;
   });
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState<boolean>(false);
+  const [isComposing, setIsComposing] = useState<boolean>(false); // 输入法组合状态
   const searchDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const perspectiveTitleRef = useRef<HTMLHeadingElement>(null);
@@ -167,8 +172,16 @@ const App: React.FC = () => {
       const localPreference = localStorage.getItem('startly_intention_local');
       const preferenceToMigrate = pendingPreference || localPreference;
       
-      // Fetch cloud data first - this is the source of truth
-      const cloudData = await fetchFromCloud(user.id);
+      // Fetch cloud data + user gateway overrides
+      const [cloudData, gatewayOverrides] = await Promise.all([
+        fetchFromCloud(user.id),
+        fetchUserGatewayOverrides(user.id),
+      ]);
+
+      const overridesByCanonical: Record<string, typeof gatewayOverrides[number]> = {};
+      for (const o of gatewayOverrides) {
+        overridesByCanonical[o.canonical_url] = o;
+      }
       
       // Use functional update to get latest state without dependency
       setAppState(prevState => {
@@ -199,10 +212,24 @@ const App: React.FC = () => {
             requests: requests.length
           });
           // Use cloud data as source of truth - don't merge with local state
+          const linksWithOverrides = (cloudData.links || []).map((l: any) => {
+            let canonicalUrl = l.canonicalUrl || l.url;
+            try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch {}
+            const ov = overridesByCanonical[canonicalUrl];
+            return {
+              ...l,
+              canonicalUrl,
+              customTitle: ov?.custom_title ?? l.customTitle ?? null,
+              customLogoPath: ov?.custom_logo_path ?? l.customLogoPath ?? null,
+              customLogoUrl: ov?.custom_logo_url ?? l.customLogoUrl ?? null,
+              customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
+            };
+          });
+
           const mergedState = {
             ...prevState,
             // Cloud data takes precedence
-            links: cloudData.links || [],
+            links: linksWithOverrides,
             requests: requests, // Use migrated requests
             language: cloudData.language || prevState.language,
             theme: cloudData.theme || prevState.theme,
@@ -280,9 +307,29 @@ const App: React.FC = () => {
         const currentState = appState;
         setAppState(prev => ({ ...prev, user: userWithAllData, subscriptionTier }));
         
-        // Fetch cloud data and merge with current state
-        const cloudData = await fetchFromCloud(user.id);
+        // Fetch cloud data + user gateway overrides and merge with current state
+        const [cloudData, gatewayOverrides] = await Promise.all([
+          fetchFromCloud(user.id),
+          fetchUserGatewayOverrides(user.id),
+        ]);
+        const overridesByCanonical: Record<string, typeof gatewayOverrides[number]> = {};
+        for (const o of gatewayOverrides) {
+          overridesByCanonical[o.canonical_url] = o;
+        }
         if (cloudData) {
+          const linksWithOverrides = (cloudData.links || []).map((l: any) => {
+            let canonicalUrl = l.canonicalUrl || l.url;
+            try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch {}
+            const ov = overridesByCanonical[canonicalUrl];
+            return {
+              ...l,
+              canonicalUrl,
+              customTitle: ov?.custom_title ?? l.customTitle ?? null,
+              customLogoPath: ov?.custom_logo_path ?? l.customLogoPath ?? null,
+              customLogoUrl: ov?.custom_logo_url ?? l.customLogoUrl ?? null,
+              customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
+            };
+          });
           // Merge cloud data with current state, preserving user with all data
           const mergedState = {
             ...currentState,
@@ -290,7 +337,7 @@ const App: React.FC = () => {
             user: userWithAllData, // Ensure user with all data is set
             subscriptionTier, // Set subscription tier
             // Preserve local state if cloud data is missing fields
-            links: cloudData.links || currentState.links,
+            links: linksWithOverrides.length ? linksWithOverrides : (cloudData.links || currentState.links),
             requests: cloudData.requests || currentState.requests,
             language: cloudData.language || currentState.language,
             theme: cloudData.theme || currentState.theme,
@@ -446,12 +493,25 @@ const App: React.FC = () => {
     const engine = SEARCH_ENGINES.find(e => e.id === selectedEngine) || SEARCH_ENGINES[0];
     const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
     window.open(searchUrl, '_blank', 'noopener,noreferrer');
+    setSearchQuery(''); // 搜索后清空输入框
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    // 如果正在输入法组合输入中，不处理回车键（让输入法先确认输入）
+    if (e.key === 'Enter' && !isComposing) {
+      e.preventDefault(); // 防止默认行为
       handleSearch();
     }
+  };
+
+  // 处理输入法组合开始
+  const handleCompositionStart = () => {
+    setIsComposing(true);
+  };
+
+  // 处理输入法组合结束
+  const handleCompositionEnd = () => {
+    setIsComposing(false);
   };
 
   const stripHighlights = (text: string) => text.replace(/\[h\](.*?)\[\/h\]/g, '$1');
@@ -1167,6 +1227,11 @@ const App: React.FC = () => {
           console.error('[App] Failed to parse state from storage event:', error);
         }
       }
+
+      // Handle changes to local gateway logo cache (cross-tab UI refresh)
+      if (e.key === 'focus_tab_gateway_logo_cache') {
+        setLogoCacheVersion(v => v + 1);
+      }
     };
 
     // Listen for storage events from other tabs
@@ -1258,6 +1323,8 @@ const App: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
                   className="flex-1 px-[18px] py-[12px] pr-[60px] bg-transparent text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none"
                   style={{ 
                     fontSize: '15px',
@@ -1408,7 +1475,13 @@ const App: React.FC = () => {
               <div className="w-full">
                 {appState.links.length > 0 ? (
                   <div className="flex flex-wrap justify-start gap-3 md:gap-4 px-4 md:px-8">
-                    {visibleLinks.map(link => (
+                    {visibleLinks.map(link => {
+                      let canonicalUrl = link.canonicalUrl || link.url;
+                      try { canonicalUrl = link.canonicalUrl || canonicalizeUrl(link.url); } catch {}
+                      const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
+                      const effectiveIcon = localLogo || link.customLogoUrl || link.icon;
+                      const effectiveTitle = link.customTitle || link.title;
+                      return (
                       <a 
                         key={link.id} 
                         href={link.url} 
@@ -1417,11 +1490,12 @@ const App: React.FC = () => {
                         className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors"
                       >
                         <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5">
-                          {link.icon ? <img src={link.icon} alt="" className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity" /> : <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />}
+                          {effectiveIcon ? <img src={effectiveIcon} alt="" className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity" /> : <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />}
                         </div>
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{link.title}</span>
+                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{effectiveTitle}</span>
                       </a>
-                    ))}
+                      );
+                    })}
                     {remainingLinks > 0 && (
                       <div className="flex items-center justify-center px-3 py-3 rounded-xl border border-dashed border-black/10 dark:border-white/10 text-xs font-semibold text-gray-500 dark:text-gray-300">
                         +{remainingLinks} More

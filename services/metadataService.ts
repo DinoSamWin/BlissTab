@@ -9,6 +9,9 @@ interface CachedMetadata extends SiteMetadata {
   cachedAt?: number;
 }
 
+import { canonicalizeUrl, extractHostname } from './urlCanonicalService';
+import { upsertGatewayMetadataIfMissing } from './supabaseService';
+
 // 缓存键名和配置
 const CACHE_STORAGE_KEY = 'focus_tab_metadata_cache';
 const CACHE_EXPIRY_DAYS = 30; // 缓存有效期 30 天
@@ -120,22 +123,6 @@ function getCacheTime(cacheKey: string): number | null {
 
 // 初始化缓存（从 localStorage 恢复）
 const metadataCache = loadCacheFromStorage();
-
-function normalizeUrl(url: string): string {
-  let normalized = url.trim();
-  if (!/^https?:\/\//i.test(normalized)) {
-    normalized = 'https://' + normalized;
-  }
-  return normalized;
-}
-
-function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return '';
-  }
-}
 
 function formatDomainAsTitle(domain: string): string {
   const parts = domain.split('.');
@@ -293,15 +280,15 @@ async function fetchSiteName(url: string, domain: string): Promise<string> {
 
 export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | null> {
   try {
-    // Normalize URL
-    const targetUrl = normalizeUrl(url);
-    const domain = extractDomain(targetUrl);
+    // Canonicalize URL (used for cache + cloud dedupe)
+    const canonicalUrl = canonicalizeUrl(url);
+    const domain = extractHostname(canonicalUrl);
     
     if (!domain) {
       throw new Error('Invalid URL');
     }
     
-    const cacheKey = domain.toLowerCase();
+    const cacheKey = canonicalUrl;
     
     // 检查缓存
     const cached = metadataCache.get(cacheKey);
@@ -321,10 +308,10 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
           // 后台异步获取新数据（不阻塞返回）
           Promise.all([
             fetchFavicon(domain).catch(() => cached.icon),
-            fetchSiteName(targetUrl, domain).catch(() => cached.title)
+            fetchSiteName(canonicalUrl, domain).catch(() => cached.title)
           ]).then(([icon, title]) => {
             const freshMetadata: SiteMetadata = {
-              url: targetUrl,
+              url: canonicalUrl,
               title,
               icon
             };
@@ -338,20 +325,20 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
           });
           
           // 立即返回缓存的旧数据（不等待）
-          return { ...cached, url: targetUrl };
+          return { ...cached, url: canonicalUrl };
         } else {
           // 缓存未过期，直接使用
-          return { ...cached, url: targetUrl };
+          return { ...cached, url: canonicalUrl };
         }
       } else {
         // 没有时间信息，直接使用（兼容旧格式）
-        return { ...cached, url: targetUrl };
+        return { ...cached, url: canonicalUrl };
       }
     }
     
     // 没有缓存，获取新数据
     const quickResult: SiteMetadata = {
-      url: targetUrl,
+      url: canonicalUrl,
       title: formatDomainAsTitle(domain), // 立即使用域名
       icon: `https://www.google.com/s2/favicons?domain=${domain}&sz=128` // 立即使用 Google CDN
     };
@@ -359,10 +346,10 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
     // 后台异步获取完整数据（不阻塞返回）
     Promise.all([
       fetchFavicon(domain).catch(() => quickResult.icon),
-      fetchSiteName(targetUrl, domain).catch(() => quickResult.title)
+      fetchSiteName(canonicalUrl, domain).catch(() => quickResult.title)
     ]).then(([icon, title]) => {
       const fullMetadata: SiteMetadata = {
-        url: targetUrl,
+        url: canonicalUrl,
         title,
         icon
       };
@@ -370,6 +357,9 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
       // 更新缓存
       metadataCache.set(cacheKey, fullMetadata);
       saveCacheToStorageDebounced(metadataCache);
+
+      // Best-effort: de-duped cloud metadata store (skip if already exists)
+      upsertGatewayMetadataIfMissing({ url: canonicalUrl, title, iconUrl: icon }).catch(() => {});
     }).catch(err => {
       console.log('Background metadata fetch failed:', err);
     });
@@ -382,12 +372,12 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
     
     // Fallback: Return basic metadata
     try {
-      const targetUrl = normalizeUrl(url);
-      const domain = extractDomain(targetUrl);
+      const canonicalUrl = canonicalizeUrl(url);
+      const domain = extractHostname(canonicalUrl);
       return {
-        url: targetUrl,
-        title: formatDomainAsTitle(domain),
-        icon: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
+        url: canonicalUrl,
+        title: formatDomainAsTitle(domain || 'link'),
+        icon: `https://www.google.com/s2/favicons?domain=${domain || 'example.com'}&sz=128`
       };
     } catch {
       return null;
