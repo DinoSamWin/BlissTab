@@ -10,7 +10,7 @@ let supabaseClient: SupabaseClient | null = null;
 /**
  * Initialize Supabase client
  */
-function getSupabaseClient(): SupabaseClient | null {
+export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
   
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -164,7 +164,8 @@ export async function uploadGatewayLogo(params: {
 
   try {
     const safeKey = encodeURIComponent(params.canonicalUrl);
-    const path = `${params.userId}/${safeKey}/${params.hash}`;
+    // Add .webp extension to the hash for proper file type recognition
+    const path = `${params.userId}/${safeKey}/${params.hash}.webp`;
 
     console.log('[GatewayLogo] Uploading logo:', { path, size: params.file.size, contentType: params.contentType });
 
@@ -197,6 +198,8 @@ export async function uploadGatewayLogo(params: {
     
     if (publicUrl) {
       console.log('[GatewayLogo] Public URL:', publicUrl);
+      // Note: File verification via HEAD request may not work with Supabase Storage public URLs
+      // If upload() succeeded, the file should exist. Verification is optional.
     } else {
       // Bucket is private, generate signed URL (valid for 1 year)
       console.log('[GatewayLogo] Bucket is private, generating signed URL...');

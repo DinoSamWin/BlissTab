@@ -55,11 +55,17 @@ export function removeLocalLogo(canonicalUrl: string) {
 /**
  * Download logo from URL and save to local cache.
  * Used when loading from cloud (e.g., after login on a new browser).
+ * 
+ * @param canonicalUrl - The canonical URL of the gateway
+ * @param logoUrl - The public or signed URL to download from
+ * @param expectedHash - The expected hash of the logo file
+ * @param storagePath - Optional: The storage path to use with Supabase download() method
  */
 export async function downloadAndCacheLogo(
   canonicalUrl: string,
   logoUrl: string,
-  expectedHash: string
+  expectedHash: string,
+  storagePath?: string
 ): Promise<boolean> {
   // Skip if already cached with same hash
   const existing = getLocalLogoDataUrl(canonicalUrl, expectedHash);
@@ -68,9 +74,66 @@ export async function downloadAndCacheLogo(
   }
 
   try {
-    const response = await fetch(logoUrl);
+    // Try using Supabase Storage download() method first if path is provided
+    if (storagePath) {
+      try {
+        // Use the existing Supabase client from supabaseService to avoid creating multiple instances
+        const { getSupabaseClient } = await import('./supabaseService');
+        const client = getSupabaseClient();
+        
+        if (client) {
+          const { data, error } = await client.storage
+            .from('gateway-logos')
+            .download(storagePath);
+          
+          if (error) {
+            console.warn(`[LogoCache] Supabase download failed, trying direct fetch:`, error);
+          } else if (data) {
+            const reader = new FileReader();
+            return new Promise((resolve) => {
+              reader.onloadend = () => {
+                const dataUrl = reader.result as string;
+                if (dataUrl) {
+                  upsertLocalLogo(canonicalUrl, {
+                    dataUrl,
+                    hash: expectedHash,
+                    updatedAt: Date.now(),
+                  });
+                  console.log(`[LogoCache] Downloaded and cached logo for ${canonicalUrl} (via Supabase)`);
+                  resolve(true);
+                } else {
+                  resolve(false);
+                }
+              };
+              reader.onerror = () => {
+                console.warn(`[LogoCache] Failed to read logo blob for ${canonicalUrl}`);
+                resolve(false);
+              };
+              reader.readAsDataURL(data);
+            });
+          }
+        }
+      } catch (supabaseError) {
+        console.warn(`[LogoCache] Supabase download exception, trying direct fetch:`, supabaseError);
+      }
+    }
+
+    // Fallback to direct fetch
+    const response = await fetch(logoUrl, {
+      mode: 'cors',
+      credentials: 'omit',
+    });
+    
     if (!response.ok) {
-      console.warn(`[LogoCache] Failed to download logo from ${logoUrl}: ${response.statusText}`);
+      console.warn(`[LogoCache] Failed to download logo from ${logoUrl}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        url: logoUrl
+      });
+      // If 404, the file might not exist - log for debugging
+      if (response.status === 404) {
+        console.warn(`[LogoCache] Logo file not found at ${logoUrl}. It may not have been uploaded successfully.`);
+      }
       return false;
     }
 

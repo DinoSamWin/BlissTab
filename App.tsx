@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
-import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine, SUPPORTED_LANGUAGES } from './constants';
+import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
 import { generateSnippet } from './services/geminiService';
 import { initGoogleAuth, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
@@ -236,21 +236,51 @@ const App: React.FC = () => {
                 const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
                 
                 if (logoUrlToDownload) {
+                  // Fix URL if it doesn't have .webp extension (for backward compatibility)
+                  let fixedUrl = logoUrlToDownload;
+                  if (linkWithOverride.customLogoPath && !logoUrlToDownload.includes('.webp')) {
+                    // If path exists and URL doesn't have extension, try to fix it
+                    const pathParts = linkWithOverride.customLogoPath.split('/');
+                    const fileName = pathParts[pathParts.length - 1];
+                    if (!fileName.includes('.')) {
+                      // Path doesn't have extension, add .webp to URL
+                      fixedUrl = logoUrlToDownload.replace(/([^/]+)$/, '$1.webp');
+                      console.log('[App] Fixed logo URL:', { original: logoUrlToDownload, fixed: fixedUrl });
+                    }
+                  }
+                  
                   // Download in background - don't await
-                  downloadAndCacheLogo(canonicalUrl, logoUrlToDownload, linkWithOverride.customLogoHash)
+                  // Pass storagePath to use Supabase download() method instead of direct fetch
+                  downloadAndCacheLogo(
+                    canonicalUrl, 
+                    fixedUrl, 
+                    linkWithOverride.customLogoHash,
+                    linkWithOverride.customLogoPath || undefined
+                  )
                     .then(success => {
                       if (success) {
                         // Trigger re-render to show cached logo
                         setAppState(prev => ({ ...prev }));
+                      } else {
+                        // Download failed, but we still have the URL - it should display directly
+                        console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
                       }
                     })
-                    .catch(err => console.warn('[App] Failed to download logo:', err));
+                    .catch(err => {
+                      console.warn('[App] Failed to download logo:', err);
+                      // Even if download fails, the URL should still work for direct display
+                    });
                 } else if (linkWithOverride.customLogoPath) {
                   // No URL available, but we have path - try to generate signed URL
                   getLogoSignedUrl(linkWithOverride.customLogoPath)
                     .then(signedUrl => {
                       if (signedUrl && linkWithOverride.customLogoHash) {
-                        downloadAndCacheLogo(canonicalUrl, signedUrl, linkWithOverride.customLogoHash)
+                        downloadAndCacheLogo(
+                          canonicalUrl, 
+                          signedUrl, 
+                          linkWithOverride.customLogoHash,
+                          linkWithOverride.customLogoPath || undefined
+                        )
                           .then(success => {
                             if (success) {
                               setAppState(prev => ({ ...prev }));
@@ -379,21 +409,51 @@ const App: React.FC = () => {
                 const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
                 
                 if (logoUrlToDownload) {
+                  // Fix URL if it doesn't have .webp extension (for backward compatibility)
+                  let fixedUrl = logoUrlToDownload;
+                  if (linkWithOverride.customLogoPath && !logoUrlToDownload.includes('.webp')) {
+                    // If path exists and URL doesn't have extension, try to fix it
+                    const pathParts = linkWithOverride.customLogoPath.split('/');
+                    const fileName = pathParts[pathParts.length - 1];
+                    if (!fileName.includes('.')) {
+                      // Path doesn't have extension, add .webp to URL
+                      fixedUrl = logoUrlToDownload.replace(/([^/]+)$/, '$1.webp');
+                      console.log('[App] Fixed logo URL:', { original: logoUrlToDownload, fixed: fixedUrl });
+                    }
+                  }
+                  
                   // Download in background - don't await
-                  downloadAndCacheLogo(canonicalUrl, logoUrlToDownload, linkWithOverride.customLogoHash)
+                  // Pass storagePath to use Supabase download() method instead of direct fetch
+                  downloadAndCacheLogo(
+                    canonicalUrl, 
+                    fixedUrl, 
+                    linkWithOverride.customLogoHash,
+                    linkWithOverride.customLogoPath || undefined
+                  )
                     .then(success => {
                       if (success) {
                         // Trigger re-render to show cached logo
                         setAppState(prev => ({ ...prev }));
+                      } else {
+                        // Download failed, but we still have the URL - it should display directly
+                        console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
                       }
                     })
-                    .catch(err => console.warn('[App] Failed to download logo:', err));
+                    .catch(err => {
+                      console.warn('[App] Failed to download logo:', err);
+                      // Even if download fails, the URL should still work for direct display
+                    });
                 } else if (linkWithOverride.customLogoPath) {
                   // No URL available, but we have path - try to generate signed URL
                   getLogoSignedUrl(linkWithOverride.customLogoPath)
                     .then(signedUrl => {
                       if (signedUrl && linkWithOverride.customLogoHash) {
-                        downloadAndCacheLogo(canonicalUrl, signedUrl, linkWithOverride.customLogoHash)
+                        downloadAndCacheLogo(
+                          canonicalUrl, 
+                          signedUrl, 
+                          linkWithOverride.customLogoHash,
+                          linkWithOverride.customLogoPath || undefined
+                        )
                           .then(success => {
                             if (success) {
                               setAppState(prev => ({ ...prev }));
@@ -542,82 +602,62 @@ const App: React.FC = () => {
     ));
   };
 
-  // Positive Chinese characters pool for loading animation
-  const POSITIVE_CN_CHARS = [
-    '安','好','喜','乐','悦','和','顺','宁','静','暖','光','明','善','勇','信','爱','福','吉','祥','慧','心','新','纯','真'
-  ];
-
-  const randInt = (n: number) => Math.floor(Math.random() * n);
-
-  const pickUnique = (arr: string[], count: number) => {
-    const copy = [...arr];
-    const out: string[] = [];
-    while (out.length < count && copy.length) {
-      out.push(copy.splice(randInt(copy.length), 1)[0]);
-    }
-    return out;
-  };
-
-  const makeLoadingGlyphs = (langCode: string, count: number) => {
-    const isChinese = langCode === 'Chinese (Simplified)';
-    if (isChinese) {
-      // Random positive Chinese characters
-      const pool = POSITIVE_CN_CHARS;
-      const picked = pickUnique(pool, Math.min(count, pool.length));
-      // Fill remaining slots with random picks (allow duplicates for variety)
-      while (picked.length < count) {
-        picked.push(pool[randInt(pool.length)]);
-      }
-      return picked;
-    }
-
-    // Non-Chinese: random letters from current language alphabet
-    // Using uppercase letters for a cleaner look
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    return Array.from({ length: count }, () => alphabet[randInt(alphabet.length)]);
-  };
-
-  // Blocks loading animation: 5 squares that highlight sequentially
-  const BlocksLoading: React.FC<{ langCode: string }> = ({ langCode }) => {
-    const [active, setActive] = useState(0);
-    const [glyphs, setGlyphs] = useState<string[]>(() => makeLoadingGlyphs(langCode, 5));
-
-    // Sequentially highlight each block (matches the animation pattern)
-    useEffect(() => {
-      const id = window.setInterval(() => {
-        setActive((a) => (a + 1) % 5);
-      }, 220);
-      return () => window.clearInterval(id);
-    }, []);
-
-    // Regenerate glyphs each cycle for variety
-    useEffect(() => {
-      if (active === 0) {
-        setGlyphs(makeLoadingGlyphs(langCode, 5));
-      }
-    }, [active, langCode]);
-
+  // Jump loading (inspired by the reference): a soft "jumping star" with squash + shadow
+  const JumpStarLoading: React.FC<{ caption?: string }> = ({ caption = 'Reflecting…' }) => {
     return (
-      <div className="flex items-center justify-center gap-3" role="status" aria-live="polite" aria-busy="true">
-        {glyphs.map((ch, i) => {
-          const isOn = i === active;
-          return (
+      <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
+        <style>{`
+          @keyframes st-jump {
+            0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+            18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
+            50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
+            80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
+            100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+          }
+          @keyframes st-shadow {
+            0%   { transform: scaleX(1); opacity: 0.22; }
+            50%  { transform: scaleX(0.62); opacity: 0.10; }
+            100% { transform: scaleX(1); opacity: 0.22; }
+          }
+          @keyframes st-glow {
+            0%, 100% { opacity: 0.18; filter: blur(26px); }
+            50% { opacity: 0.28; filter: blur(34px); }
+          }
+        `}</style>
+
+        {/* soft glow behind the star */}
+        <div
+          className="pointer-events-none absolute -inset-x-16 -inset-y-20 rounded-[4rem]"
+          style={{
+            animation: 'st-glow 1.15s ease-in-out infinite',
+            background:
+              'radial-gradient(circle at 50% 45%, rgba(236,72,153,0.14), rgba(168,85,247,0.10), rgba(99,102,241,0.08), rgba(0,0,0,0))',
+          }}
+        />
+
+        <div className="relative flex flex-col items-center justify-center py-10">
+          <div className="relative">
+            {/* shadow */}
             <div
-              key={`${ch}-${i}-${glyphs.join('')}`}
-              className={[
-                'w-10 h-10 rounded-lg flex items-center justify-center',
-                'transition-all duration-200 ease-in-out',
-                isOn
-                  ? 'bg-sky-400 dark:bg-sky-500 text-white shadow-[0_10px_30px_rgba(56,189,248,0.35)] dark:shadow-[0_10px_30px_rgba(56,189,248,0.5)] scale-105'
-                  : 'bg-sky-400/40 dark:bg-sky-500/30 text-white/80 dark:text-white/70'
-              ].join(' ')}
-            >
-              <span className={`text-sm font-semibold tracking-wide select-none ${langCode === 'Chinese (Simplified)' ? 'font-serif' : 'font-sans'}`}>
-                {ch}
-              </span>
+              className="absolute left-1/2 -translate-x-1/2 top-[56px] w-[42px] h-[10px] rounded-full bg-black/20 dark:bg-white/10"
+              style={{ animation: 'st-shadow 1.15s ease-in-out infinite' }}
+            />
+
+            {/* star */}
+            <div style={{ animation: 'st-jump 1.15s cubic-bezier(.22,.9,.3,1) infinite', transformOrigin: '50% 70%' }}>
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M12 2.3l2.6 6.1 6.6.6-5 4.3 1.5 6.4L12 16.9 6.3 19.7l1.5-6.4-5-4.3 6.6-.6L12 2.3z"
+                  fill="rgba(239,68,68,0.92)"
+                />
+              </svg>
             </div>
-          );
-        })}
+          </div>
+
+          <div className="mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide">
+            {caption}
+          </div>
+        </div>
       </div>
     );
   };
@@ -1580,7 +1620,7 @@ const App: React.FC = () => {
                 {currentSnippet ? (
                   renderSnippet(currentSnippet)
                 ) : (
-                  <BlocksLoading langCode={appState.language} />
+                  <JumpStarLoading caption="Content coming soon" />
                 )}
             </h1>
 
@@ -1660,6 +1700,7 @@ const App: React.FC = () => {
                       try { canonicalUrl = link.canonicalUrl || canonicalizeUrl(link.url); } catch {}
                       const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
                       // Priority: local cache > publicUrl > signedUrl > default icon
+                      // If we have a custom logo URL but no local cache, use the URL directly (even if download failed)
                       const effectiveIcon = localLogo || link.customLogoUrl || link.customLogoSignedUrl || link.icon;
                       const effectiveTitle = link.customTitle || link.title;
                       return (
@@ -1670,8 +1711,29 @@ const App: React.FC = () => {
                         rel="noopener noreferrer"
                         className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors h-[64px] w-full"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0">
-                          {effectiveIcon ? <img src={effectiveIcon} alt="" className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity" /> : <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />}
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0 relative">
+                          {effectiveIcon ? (
+                            <>
+                              <img 
+                                src={effectiveIcon} 
+                                alt="" 
+                                className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity"
+                                onError={(e) => {
+                                  // If image fails to load (e.g., 400 error from Public URL), hide it and show fallback
+                                  e.currentTarget.style.display = 'none';
+                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                  if (fallback) fallback.style.display = 'block';
+                                }}
+                              />
+                              {/* Fallback icon (hidden by default, shown when image fails) */}
+                              <div 
+                                className="w-3.5 h-3.5 rounded-full absolute" 
+                                style={{backgroundColor: link.color, display: 'none'}}
+                              />
+                            </>
+                          ) : (
+                            <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />
+                          )}
                         </div>
                         <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap" style={{maxWidth: 'calc(100% - 52px)'}}>
                           {effectiveTitle}
