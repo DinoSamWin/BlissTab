@@ -7,6 +7,8 @@
  * - Data URL locally for instant render/offline-ish behavior
  */
 
+import { getSupabaseClient } from './supabaseService';
+
 export interface LocalLogoCacheEntry {
   dataUrl: string;
   hash: string;
@@ -78,7 +80,6 @@ export async function downloadAndCacheLogo(
     if (storagePath) {
       try {
         // Use the existing Supabase client from supabaseService to avoid creating multiple instances
-        const { getSupabaseClient } = await import('./supabaseService');
         const client = getSupabaseClient();
         
         if (client) {
