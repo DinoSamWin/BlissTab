@@ -1,4 +1,4 @@
-# Default Perspective Style Rule (Optimized)
+# Default Perspective Style Rule (Optimized)`
 
 ## Purpose
 Define the **default one-sentence style** for generated perspectives in StartlyTab, ensuring long-term usability, emotional resonance, and stylistic diversity.
@@ -133,3 +133,4 @@ This file contains the rules for perspective generation. The actual implementati
 3. Test the changes
 
 **Note:** The code only enforces length limits (60 characters max). All other rules come from this file.
+`

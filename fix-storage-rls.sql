@@ -24,3 +24,4 @@ WITH CHECK (bucket_id = 'gateway-logos');
 -- 如果上面的策略不工作，可以尝试禁用 RLS（仅用于测试）：
 -- ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
 
+

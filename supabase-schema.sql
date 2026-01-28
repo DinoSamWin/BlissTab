@@ -360,4 +360,3 @@ USING (bucket_id = 'gateway-logos');
 -- Run this if you already have user_gateway_overrides table:
 -- ALTER TABLE user_gateway_overrides 
 -- ADD COLUMN IF NOT EXISTS custom_logo_signed_url TEXT;
-
