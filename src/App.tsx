@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
 import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
 import { generateSnippet } from './services/geminiService';
-import { initGoogleAuth, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
+import { initGoogleAuth, renderGoogleButton, openGoogleSignIn, signOutUser, isExtension } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory } from './services/perspectiveService';
-import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount } from './services/usageLimitsService';
+import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount, canAddGateway } from './services/usageLimitsService';
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import { canonicalizeUrl } from './services/urlCanonicalService';
@@ -14,12 +15,14 @@ import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabase
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
+import IntegrationGateways from './components/IntegrationGateways';
+import { useExtensionSync } from './hooks/useExtensionSync';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(() => {
     const saved = localStorage.getItem('focus_tab_state');
     const systemTheme: Theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    
+
     // Check for saved user in localStorage (from authService)
     let savedUser: User | null = null;
     try {
@@ -30,13 +33,13 @@ const App: React.FC = () => {
     } catch (e) {
       console.error('[App] Failed to parse saved user', e);
     }
-    
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.version === APP_VERSION) {
-            // Use saved user from authService if available, otherwise null
-            return { ...parsed, user: savedUser };
+          // Use saved user from authService if available, otherwise null
+          return { ...parsed, user: savedUser };
         }
       } catch (e) { console.error("Restore failed", e); }
     }
@@ -56,7 +59,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [revealKey, setRevealKey] = useState(0); 
+  const [revealKey, setRevealKey] = useState(0);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isPreferenceModalOpen, setIsPreferenceModalOpen] = useState(false);
   const [showInlineGuidance, setShowInlineGuidance] = useState(false);
@@ -64,9 +67,9 @@ const App: React.FC = () => {
   const [shouldShakeHelper, setShouldShakeHelper] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
-  
+
   const isAuthenticated = !!appState.user;
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedEngine, setSelectedEngine] = useState<string>(() => {
@@ -79,18 +82,21 @@ const App: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const perspectiveTitleRef = useRef<HTMLHeadingElement>(null);
   const [isSingleLine, setIsSingleLine] = useState<boolean>(false);
-  
+
   const lastPromptIdRef = useRef<string | null>(null);
   const snippetRequestIdRef = useRef<number>(0);
   const didInitialSnippetFetchRef = useRef<boolean>(false);
 
   // Store latest appState in ref to avoid dependency issues in storage event listener
   const appStateRef = useRef<AppState>(appState);
-  
+
   // Keep ref in sync with appState
   useEffect(() => {
     appStateRef.current = appState;
+    appStateRef.current = appState;
   }, [appState]);
+
+
 
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
     const id = Date.now().toString();
@@ -99,9 +105,9 @@ const App: React.FC = () => {
   }, []);
 
   const saveState = useCallback(async (state: AppState | ((prev: AppState) => AppState), skipSync = false) => {
-    // Handle functional updates - use setAppState's functional form
+    // Handle functional updates-use setAppState's functional form
     let newState: AppState;
-    
+
     if (typeof state === 'function') {
       // For functional updates, use setAppState to get the latest state
       // This ensures we always work with the most current state
@@ -120,7 +126,7 @@ const App: React.FC = () => {
       localStorage.setItem('focus_tab_state', JSON.stringify({ ...newState, user: null }));
       setAppState(newState);
     }
-    
+
     // Sync to Supabase if user is logged in and not skipping
     if (newState.user && !skipSync) {
       setIsSyncing(true);
@@ -138,6 +144,9 @@ const App: React.FC = () => {
     }
   }, [addToast]);
 
+  // Sync with Chrome Extension Storage
+  useExtensionSync(appState, saveState);
+
   // Function to handle user login and data sync (extracted for reuse)
   const handleUserLogin = useCallback(async (user: User) => {
     console.log('[App] User authenticated:', user.email);
@@ -145,9 +154,9 @@ const App: React.FC = () => {
     resetPerspectiveCount();
     // Clear local preference flag
     setHasLocalPreference(false);
-    
+
     setIsSyncing(true);
-    
+
     try {
       // Fetch subscription state, membership, and settings from backend
       const [subscriptionData, membershipData, settingsData] = await Promise.all([
@@ -155,7 +164,7 @@ const App: React.FC = () => {
         fetchUserMembership(user.id),
         fetchUserSettings(user.id),
       ]);
-      
+
       const userWithAllData = {
         ...user,
         ...subscriptionData,
@@ -168,12 +177,12 @@ const App: React.FC = () => {
         }),
       };
       const subscriptionTier = determineSubscriptionTier(userWithAllData);
-      
+
       // Check for pending local preference to migrate
       const pendingPreference = localStorage.getItem('startly_intention_pending');
       const localPreference = localStorage.getItem('startly_intention_local');
       const preferenceToMigrate = pendingPreference || localPreference;
-      
+
       // Fetch cloud data + user gateway overrides
       const [cloudData, gatewayOverrides] = await Promise.all([
         fetchFromCloud(user.id),
@@ -184,39 +193,39 @@ const App: React.FC = () => {
       for (const o of gatewayOverrides) {
         overridesByCanonical[o.canonical_url] = o;
       }
-      
+
       // Use functional update to get latest state without dependency
       setAppState(prevState => {
         let requests = cloudData?.requests || prevState.requests;
-        
+
         // Migrate local preference to cloud if exists
         if (preferenceToMigrate) {
           const newIntention = {
-            id: `intention_${Date.now()}`,
+            id: `intention_${Date.now()} `,
             prompt: preferenceToMigrate,
             active: true
           };
-          
+
           // Add to requests if not already exists (don't overwrite existing)
           const exists = requests.some(r => r.prompt === preferenceToMigrate);
           if (!exists) {
             requests = [...requests, newIntention];
           }
-          
+
           // Clear local storage
           localStorage.removeItem('startly_intention_pending');
           localStorage.removeItem('startly_intention_local');
         }
-        
+
         if (cloudData) {
           console.log('[App] Cloud data fetched:', {
             links: cloudData.links?.length || 0,
             requests: requests.length
           });
-          // Use cloud data as source of truth - don't merge with local state
+          // Use cloud data as source of truth-don't merge with local state
           const linksWithOverrides = (cloudData.links || []).map((l: any) => {
             let canonicalUrl = l.canonicalUrl || l.url;
-            try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch {}
+            try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch { }
             const ov = overridesByCanonical[canonicalUrl];
             const linkWithOverride = {
               ...l,
@@ -234,7 +243,7 @@ const App: React.FC = () => {
               if (!hasLocalCache) {
                 // Try to download: prefer publicUrl, fallback to signedUrl, or regenerate signedUrl
                 const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
-                
+
                 if (logoUrlToDownload) {
                   // Fix URL if it doesn't have .webp extension (for backward compatibility)
                   let fixedUrl = logoUrlToDownload;
@@ -248,12 +257,12 @@ const App: React.FC = () => {
                       console.log('[App] Fixed logo URL:', { original: logoUrlToDownload, fixed: fixedUrl });
                     }
                   }
-                  
-                  // Download in background - don't await
+
+                  // Download in background-don't await
                   // Pass storagePath to use Supabase download() method instead of direct fetch
                   downloadAndCacheLogo(
-                    canonicalUrl, 
-                    fixedUrl, 
+                    canonicalUrl,
+                    fixedUrl,
                     linkWithOverride.customLogoHash,
                     linkWithOverride.customLogoPath || undefined
                   )
@@ -262,7 +271,7 @@ const App: React.FC = () => {
                         // Trigger re-render to show cached logo
                         setAppState(prev => ({ ...prev }));
                       } else {
-                        // Download failed, but we still have the URL - it should display directly
+                        // Download failed, but we still have the URL-it should display directly
                         console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
                       }
                     })
@@ -271,13 +280,13 @@ const App: React.FC = () => {
                       // Even if download fails, the URL should still work for direct display
                     });
                 } else if (linkWithOverride.customLogoPath) {
-                  // No URL available, but we have path - try to generate signed URL
+                  // No URL available, but we have path-try to generate signed URL
                   getLogoSignedUrl(linkWithOverride.customLogoPath)
                     .then(signedUrl => {
                       if (signedUrl && linkWithOverride.customLogoHash) {
                         downloadAndCacheLogo(
-                          canonicalUrl, 
-                          signedUrl, 
+                          canonicalUrl,
+                          signedUrl,
                           linkWithOverride.customLogoHash,
                           linkWithOverride.customLogoPath || undefined
                         )
@@ -310,34 +319,34 @@ const App: React.FC = () => {
           };
           // Save state asynchronously without blocking (will sync migrated preference)
           saveState(mergedState, true).catch(err => console.error('[App] Failed to save state:', err));
-          
+
           // If preference was migrated, trigger immediate refresh
           if (preferenceToMigrate) {
             setTimeout(() => {
               fetchRandomSnippet(true); // Bypass limit for immediate refresh
             }, 500);
           }
-          
+
           return mergedState;
         } else {
           console.log('[App] No cloud data found, syncing current state');
           // No cloud data, set user and sync current state (with migrated preference)
-          const stateWithUser = { 
-            ...prevState, 
-            user: userWithAllData, 
+          const stateWithUser = {
+            ...prevState,
+            user: userWithAllData,
             subscriptionTier,
             requests: requests // Include migrated preference
           };
           // Sync current state to cloud for first-time users
           syncToCloud(stateWithUser).catch(err => console.error('[App] Failed to sync to cloud:', err));
-          
+
           // If preference was migrated, trigger immediate refresh
           if (preferenceToMigrate) {
             setTimeout(() => {
               fetchRandomSnippet(true); // Bypass limit for immediate refresh
             }, 500);
           }
-          
+
           return stateWithUser;
         }
       });
@@ -352,14 +361,14 @@ const App: React.FC = () => {
       if (user) {
         // Reset perspective count for unauthenticated users
         resetPerspectiveCount();
-        
+
         // Fetch subscription state, membership, and settings from backend
         const [subscriptionData, membershipData, settingsData] = await Promise.all([
           fetchSubscriptionState(user.id),
           fetchUserMembership(user.id),
           fetchUserSettings(user.id),
         ]);
-        
+
         const userWithAllData = {
           ...user,
           ...subscriptionData,
@@ -372,11 +381,11 @@ const App: React.FC = () => {
           }),
         };
         const subscriptionTier = determineSubscriptionTier(userWithAllData);
-        
+
         // First set user, then fetch cloud data
         const currentState = appState;
         setAppState(prev => ({ ...prev, user: userWithAllData, subscriptionTier }));
-        
+
         // Fetch cloud data + user gateway overrides and merge with current state
         const [cloudData, gatewayOverrides] = await Promise.all([
           fetchFromCloud(user.id),
@@ -389,7 +398,7 @@ const App: React.FC = () => {
         if (cloudData) {
           const linksWithOverrides = (cloudData.links || []).map((l: any) => {
             let canonicalUrl = l.canonicalUrl || l.url;
-            try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch {}
+            try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch { }
             const ov = overridesByCanonical[canonicalUrl];
             const linkWithOverride = {
               ...l,
@@ -407,7 +416,7 @@ const App: React.FC = () => {
               if (!hasLocalCache) {
                 // Try to download: prefer publicUrl, fallback to signedUrl, or regenerate signedUrl
                 const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
-                
+
                 if (logoUrlToDownload) {
                   // Fix URL if it doesn't have .webp extension (for backward compatibility)
                   let fixedUrl = logoUrlToDownload;
@@ -421,12 +430,12 @@ const App: React.FC = () => {
                       console.log('[App] Fixed logo URL:', { original: logoUrlToDownload, fixed: fixedUrl });
                     }
                   }
-                  
-                  // Download in background - don't await
+
+                  // Download in background-don't await
                   // Pass storagePath to use Supabase download() method instead of direct fetch
                   downloadAndCacheLogo(
-                    canonicalUrl, 
-                    fixedUrl, 
+                    canonicalUrl,
+                    fixedUrl,
                     linkWithOverride.customLogoHash,
                     linkWithOverride.customLogoPath || undefined
                   )
@@ -435,7 +444,7 @@ const App: React.FC = () => {
                         // Trigger re-render to show cached logo
                         setAppState(prev => ({ ...prev }));
                       } else {
-                        // Download failed, but we still have the URL - it should display directly
+                        // Download failed, but we still have the URL-it should display directly
                         console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
                       }
                     })
@@ -444,13 +453,13 @@ const App: React.FC = () => {
                       // Even if download fails, the URL should still work for direct display
                     });
                 } else if (linkWithOverride.customLogoPath) {
-                  // No URL available, but we have path - try to generate signed URL
+                  // No URL available, but we have path-try to generate signed URL
                   getLogoSignedUrl(linkWithOverride.customLogoPath)
                     .then(signedUrl => {
                       if (signedUrl && linkWithOverride.customLogoHash) {
                         downloadAndCacheLogo(
-                          canonicalUrl, 
-                          signedUrl, 
+                          canonicalUrl,
+                          signedUrl,
                           linkWithOverride.customLogoHash,
                           linkWithOverride.customLogoPath || undefined
                         )
@@ -520,7 +529,7 @@ const App: React.FC = () => {
 
     // Get active requests, including local preference for unauthenticated users
     let activeRequests = appState.requests.filter(r => r.active);
-    
+
     // Check for local preference for unauthenticated users
     if (!appState.user) {
       const localPreference = localStorage.getItem('startly_intention_local');
@@ -536,7 +545,7 @@ const App: React.FC = () => {
 
     if (activeRequests.length === 0) return;
 
-    const eligible = activeRequests.length > 1 && lastPromptIdRef.current 
+    const eligible = activeRequests.length > 1 && lastPromptIdRef.current
       ? activeRequests.filter(r => r.id !== lastPromptIdRef.current)
       : activeRequests;
 
@@ -547,7 +556,7 @@ const App: React.FC = () => {
     setIsGenerating(true);
     // Show loading while generating (prevents stale content flashes)
     setCurrentSnippet(null);
-    
+
     try {
       // Increment perspective count for unauthenticated users (only if not bypassing)
       if (!appState.user && !bypassLimit) {
@@ -557,29 +566,29 @@ const App: React.FC = () => {
           setShowInlineGuidance(true);
         }
       }
-      
+
       // Load recent history to prevent repetition
       const history = loadHistory();
-      
+
       console.log('[App] Generating new perspective...', {
         prompt: randomReq.prompt.substring(0, 30),
         language: appState.language,
         historyCount: history.length,
         timestamp: Date.now()
       });
-      
-      // Generate with history awareness - always call API (no caching)
+
+      // Generate with history awareness-always call API (no caching)
       const result = await generateSnippet(randomReq.prompt, appState.language, history);
 
       // Only apply the latest in-flight request result
       if (requestId !== snippetRequestIdRef.current) return;
-      
+
       console.log('[App] Generated perspective:', result.substring(0, 50));
-      
+
       // Save to history
       const updatedHistory = addToHistory(result, randomReq.id, history);
       saveHistory(updatedHistory);
-      
+
       setCurrentSnippet(result);
       setRevealKey(prev => prev + 1);
     } catch (error) {
@@ -596,68 +605,19 @@ const App: React.FC = () => {
   const renderSnippet = (text: string) => {
     const parts = text.split(/\[h\](.*?)\[\/h\]/g);
     return parts.map((part, i) => (
-      i % 2 === 1 
-        ? <span key={i} className="text-purple-600 dark:text-purple-400">{part}</span> 
+      i % 2 === 1
+        ? <span key={i} className="text-purple-600 dark:text-purple-400">{part}</span>
         : <span key={i}>{part}</span>
     ));
   };
 
-  // Jump loading (inspired by the reference): a soft "jumping star" with squash + shadow
-  const JumpStarLoading: React.FC<{ caption?: string }> = ({ caption = 'Reflecting…' }) => {
+  // Simple, editorial skeleton loader for Perspective text
+  const PerspectiveSkeleton: React.FC = () => {
     return (
-      <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
-        <style>{`
-          @keyframes st-jump {
-            0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-            18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
-            50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
-            80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
-            100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-          }
-          @keyframes st-shadow {
-            0%   { transform: scaleX(1); opacity: 0.22; }
-            50%  { transform: scaleX(0.62); opacity: 0.10; }
-            100% { transform: scaleX(1); opacity: 0.22; }
-          }
-          @keyframes st-glow {
-            0%, 100% { opacity: 0.18; filter: blur(26px); }
-            50% { opacity: 0.28; filter: blur(34px); }
-          }
-        `}</style>
-
-        {/* soft glow behind the star */}
-        <div
-          className="pointer-events-none absolute -inset-x-16 -inset-y-20 rounded-[4rem]"
-          style={{
-            animation: 'st-glow 1.15s ease-in-out infinite',
-            background:
-              'radial-gradient(circle at 50% 45%, rgba(236,72,153,0.14), rgba(168,85,247,0.10), rgba(99,102,241,0.08), rgba(0,0,0,0))',
-          }}
-        />
-
-        <div className="relative flex flex-col items-center justify-center py-10">
-          <div className="relative">
-            {/* shadow */}
-            <div
-              className="absolute left-1/2 -translate-x-1/2 top-[56px] w-[42px] h-[10px] rounded-full bg-black/20 dark:bg-white/10"
-              style={{ animation: 'st-shadow 1.15s ease-in-out infinite' }}
-            />
-
-            {/* star */}
-            <div style={{ animation: 'st-jump 1.15s cubic-bezier(.22,.9,.3,1) infinite', transformOrigin: '50% 70%' }}>
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 2.3l2.6 6.1 6.6.6-5 4.3 1.5 6.4L12 16.9 6.3 19.7l1.5-6.4-5-4.3 6.6-.6L12 2.3z"
-                  fill="rgba(239,68,68,0.92)"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <div className="mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide">
-            {caption}
-          </div>
-        </div>
+      <div className="flex flex-col items-center gap-6 py-4 animate-pulse" role="status" aria-label="Loading perspective">
+        <div className="h-10 md:h-14 lg:h-16 bg-gray-200/60 dark:bg-white/5 rounded-2xl w-3/4" />
+        <div className="h-10 md:h-14 lg:h-16 bg-gray-200/40 dark:bg-white/5 rounded-2xl w-5/6" />
+        <div className="h-10 md:h-14 lg:h-16 bg-gray-200/20 dark:bg-white/5 rounded-2xl w-1/2" />
       </div>
     );
   };
@@ -696,9 +656,9 @@ const App: React.FC = () => {
 
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
-    
+
     const engine = SEARCH_ENGINES.find(e => e.id === selectedEngine) || SEARCH_ENGINES[0];
-    const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
+    const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())} `;
     window.open(searchUrl, '_blank', 'noopener,noreferrer');
     setSearchQuery(''); // 搜索后清空输入框
   };
@@ -729,7 +689,7 @@ const App: React.FC = () => {
     let line = '';
 
     words.forEach(word => {
-      const testLine = line ? `${line} ${word}` : word;
+      const testLine = line ? `${line} ${word} ` : word;
       const { width } = ctx.measureText(testLine);
       if (width > maxWidth) {
         if (line) lines.push(line);
@@ -752,11 +712,11 @@ const App: React.FC = () => {
     color: string
   ) => {
     ctx.save();
-    
+
     // Create hand-drawn effect with slight randomness
     const offset = 2; // Slight offset for hand-drawn feel
-    const points: Array<{x: number, y: number}> = [];
-    
+    const points: Array<{ x: number, y: number }> = [];
+
     // Top edge with slight variation
     for (let i = 0; i <= 10; i++) {
       const t = i / 10;
@@ -767,7 +727,7 @@ const App: React.FC = () => {
         y: baseY + (Math.random() - 0.5) * offset
       });
     }
-    
+
     // Right edge
     for (let i = 0; i <= 5; i++) {
       const t = i / 5;
@@ -778,7 +738,7 @@ const App: React.FC = () => {
         y: baseY + (Math.random() - 0.5) * offset
       });
     }
-    
+
     // Bottom edge (reverse)
     for (let i = 10; i >= 0; i--) {
       const t = i / 10;
@@ -789,7 +749,7 @@ const App: React.FC = () => {
         y: baseY + (Math.random() - 0.5) * offset
       });
     }
-    
+
     // Left edge (reverse)
     for (let i = 5; i >= 0; i--) {
       const t = i / 5;
@@ -800,7 +760,7 @@ const App: React.FC = () => {
         y: baseY + (Math.random() - 0.5) * offset
       });
     }
-    
+
     // Draw filled shape
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
@@ -808,7 +768,7 @@ const App: React.FC = () => {
       ctx.lineTo(points[i].x, points[i].y);
     }
     ctx.closePath();
-    
+
     ctx.fillStyle = color;
     ctx.globalAlpha = 0.25; // Semi-transparent
     ctx.fill();
@@ -821,12 +781,12 @@ const App: React.FC = () => {
     const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
     gradient.addColorStop(0, '#E8E8E8');
     gradient.addColorStop(1, '#D0D0D0');
-    
+
     ctx.beginPath();
     ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
     ctx.fillStyle = gradient;
     ctx.fill();
-    
+
     // Draw letter
     ctx.fillStyle = '#666666';
     ctx.font = `500 ${size * 0.5}px "Inter", sans-serif`;
@@ -839,11 +799,11 @@ const App: React.FC = () => {
 
   // Helper: Parse quote with highlights and measure text
   const parseQuoteWithHighlights = (text: string) => {
-    const parts: Array<{text: string, highlighted: boolean}> = [];
+    const parts: Array<{ text: string, highlighted: boolean }> = [];
     const regex = /\[h\](.*?)\[\/h\]/g;
     let lastIndex = 0;
     let match;
-    
+
     while ((match = regex.exec(text)) !== null) {
       // Add text before highlight
       if (match.index > lastIndex) {
@@ -853,17 +813,17 @@ const App: React.FC = () => {
       parts.push({ text: match[1], highlighted: true });
       lastIndex = regex.lastIndex;
     }
-    
+
     // Add remaining text
     if (lastIndex < text.length) {
       parts.push({ text: text.substring(lastIndex), highlighted: false });
     }
-    
+
     // If no highlights found, treat entire text as non-highlighted
     if (parts.length === 0) {
       parts.push({ text, highlighted: false });
     }
-    
+
     return parts;
   };
 
@@ -876,7 +836,7 @@ const App: React.FC = () => {
     height: number
   ) => {
     const radius = 12;
-    
+
     // Draw rounded rectangle background
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
@@ -889,47 +849,47 @@ const App: React.FC = () => {
     ctx.lineTo(x, y + radius);
     ctx.quadraticCurveTo(x, y, x + radius, y);
     ctx.closePath();
-    
+
     // White background
     ctx.fillStyle = '#FFFFFF';
     ctx.fill();
-    
+
     // Browser chrome (top bar)
     const chromeHeight = 50;
     ctx.fillStyle = '#F5F5F5';
     ctx.fillRect(x, y, width, chromeHeight);
-    
+
     // Window controls
     const controlSize = 12;
     const controlY = y + chromeHeight / 2 - controlSize / 2;
     const controlSpacing = 18;
     const controlStartX = x + 20;
-    
+
     // Red, yellow, green circles
     ctx.beginPath();
     ctx.arc(controlStartX, controlY + controlSize / 2, controlSize / 2, 0, Math.PI * 2);
     ctx.fillStyle = '#FF5F57';
     ctx.fill();
-    
+
     ctx.beginPath();
     ctx.arc(controlStartX + controlSpacing, controlY + controlSize / 2, controlSize / 2, 0, Math.PI * 2);
     ctx.fillStyle = '#FFBD2E';
     ctx.fill();
-    
+
     ctx.beginPath();
     ctx.arc(controlStartX + controlSpacing * 2, controlY + controlSize / 2, controlSize / 2, 0, Math.PI * 2);
     ctx.fillStyle = '#28CA42';
     ctx.fill();
-    
+
     // Tab
     const tabWidth = 120;
     const tabHeight = 35;
     const tabX = x + 60;
     const tabY = y + chromeHeight;
-    
+
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
-    
+
     // Tab content (icon + text)
     ctx.fillStyle = '#FF9500';
     ctx.font = '400 14px "Inter", sans-serif';
@@ -937,24 +897,24 @@ const App: React.FC = () => {
     ctx.fillText('●', tabX + 10, tabY + tabHeight / 2 + 5);
     ctx.fillStyle = '#333333';
     ctx.fillText('StartlyTab', tabX + 25, tabY + tabHeight / 2 + 5);
-    
+
     // Search bar
     const searchY = y + chromeHeight + tabHeight + 40;
     const searchHeight = 50;
     const searchPadding = 40;
-    
+
     ctx.fillStyle = '#F8F8F8';
     ctx.fillRect(x + searchPadding, searchY, width - searchPadding * 2, searchHeight);
-    
+
     // Search icon
     ctx.fillStyle = '#999999';
     ctx.font = '400 16px "Inter", sans-serif';
     ctx.fillText('🔍', x + searchPadding + 15, searchY + searchHeight / 2 + 5);
-    
+
     // Search placeholder
     ctx.fillStyle = '#CCCCCC';
     ctx.fillText('Search', x + searchPadding + 40, searchY + searchHeight / 2 + 5);
-    
+
     // Main quote area (centered)
     const quoteY = searchY + searchHeight + 60;
     ctx.fillStyle = '#111111';
@@ -962,13 +922,13 @@ const App: React.FC = () => {
     ctx.textAlign = 'center';
     ctx.fillText('Rest is not idleness,', width / 2, quoteY);
     ctx.fillText('but a necessary pause.', width / 2, quoteY + 45);
-    
+
     // Action buttons
     const buttonY = quoteY + 100;
     const buttonWidth = 140;
     const buttonHeight = 40;
     const buttonSpacing = 20;
-    
+
     // "NEW PERSPECTIVE" button
     ctx.fillStyle = '#000000';
     ctx.fillRect(width / 2 - buttonWidth - buttonSpacing / 2, buttonY, buttonWidth, buttonHeight);
@@ -976,7 +936,7 @@ const App: React.FC = () => {
     ctx.font = '600 10px "Inter", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('NEW PERSPECTIVE', width / 2 - buttonSpacing / 2, buttonY + buttonHeight / 2 + 3);
-    
+
     // "SHARE QUOTE" button
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = '#E0E0E0';
@@ -984,24 +944,24 @@ const App: React.FC = () => {
     ctx.strokeRect(width / 2 + buttonSpacing / 2, buttonY, buttonWidth, buttonHeight);
     ctx.fillStyle = '#666666';
     ctx.fillText('SHARE QUOTE', width / 2 + buttonWidth / 2 + buttonSpacing / 2, buttonY + buttonHeight / 2 + 3);
-    
+
     // "Intentional Gateways" section
     const gatewaysY = buttonY + buttonHeight + 60;
     ctx.fillStyle = '#111111';
     ctx.font = '400 20px "Instrument Serif", serif';
     ctx.textAlign = 'left';
     ctx.fillText('Intentional Gateways', x + searchPadding, gatewaysY);
-    
+
     ctx.fillStyle = '#999999';
     ctx.font = '400 12px "Inter", sans-serif';
     ctx.fillText('Your personal shortcuts, always ready.', x + searchPadding, gatewaysY + 30);
-    
+
     // Gateway icons
     const iconSize = 32;
     const iconSpacing = 50;
     const iconsStartX = x + searchPadding;
     const iconsY = gatewaysY + 50;
-    
+
     const icons = ['●', '●', '●', '●', '●'];
     icons.forEach((icon, i) => {
       ctx.fillStyle = '#E0E0E0';
@@ -1011,9 +971,9 @@ const App: React.FC = () => {
       ctx.textAlign = 'center';
       ctx.fillText(icon, iconsStartX + i * iconSpacing + iconSize / 2, iconsY + iconSize / 2 + 5);
     });
-    
+
     ctx.textAlign = 'left';
-    
+
     // Subtle shadow
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
@@ -1039,26 +999,26 @@ const App: React.FC = () => {
   const createShareCard = async (quote: string) => {
     // Ensure fonts are loaded before rendering
     await document.fonts.ready;
-    
+
     const width = 1080;
     const horizontalPadding = width * 0.12; // 12% padding
     const maxContentWidth = width - horizontalPadding * 2;
-    
+
     // Parse quote to identify highlighted sections
     const quoteParts = parseQuoteWithHighlights(quote);
     const cleanQuote = quote.replace(/\[h\](.*?)\[\/h\]/g, '$1');
-    
+
     // Setup canvas for measurement
     const measureCanvas = document.createElement('canvas');
     const measureCtx = measureCanvas.getContext('2d');
     if (!measureCtx) return null;
-    
+
     // Measure quote height
     measureCtx.font = '400 72px "Instrument Serif", serif';
     const quoteLineHeight = 100;
     const quoteLines = wrapText(measureCtx, cleanQuote, maxContentWidth);
     const quoteHeight = quoteLines.length * quoteLineHeight + 40; // Extra padding
-    
+
     // Calculate adaptive height
     const topSectionHeight = 160 + quoteHeight; // Top padding + quote
     const userSectionHeight = 120; // Avatar + text
@@ -1066,11 +1026,11 @@ const App: React.FC = () => {
     const homepageMockupHeight = 450;
     const productInfoHeight = 180;
     const bottomPadding = 100;
-    
-    const totalHeight = topSectionHeight + spacingBetweenSections + userSectionHeight + 
-                       spacingBetweenSections + homepageMockupHeight + spacingBetweenSections + 
-                       productInfoHeight + bottomPadding;
-    
+
+    const totalHeight = topSectionHeight + spacingBetweenSections + userSectionHeight +
+      spacingBetweenSections + homepageMockupHeight + spacingBetweenSections +
+      productInfoHeight + bottomPadding;
+
     // Create canvas
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -1078,43 +1038,43 @@ const App: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    // Background - off-white / very light warm gray
+    // Background-off-white / very light warm gray
     ctx.fillStyle = '#FAFAF8';
     ctx.fillRect(0, 0, width, totalHeight);
-    
+
     let currentY = 120; // Start from top
 
-    // ========== 1. TOP SECTION - PERSPECTIVE QUOTE ==========
-    
+    // ========== 1. TOP SECTION-PERSPECTIVE QUOTE ==========
+
     // Large quotation mark accent (top left)
     ctx.fillStyle = '#E8E8E6';
     ctx.font = '400 140px "Instrument Serif", serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('"', horizontalPadding, currentY - 30);
-    
+
     // Quote text with marker highlights
     ctx.font = '400 72px "Instrument Serif", serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    
+
     // Marker colors (warm beige, soft pastel yellow, light lavender)
     const markerColors = ['#F5E6D3', '#FFF8DC', '#E6E6FA'];
     let markerColorIndex = 0;
-    
+
     // Calculate highlight positions by processing quote parts line by line
-    const highlightRects: Array<{x: number, y: number, width: number, height: number, color: string}> = [];
+    const highlightRects: Array<{ x: number, y: number, width: number, height: number, color: string }> = [];
     const quoteStartY = currentY;
-    
+
     // Process each line and find highlighted segments
     quoteLines.forEach((line, lineIndex) => {
       const lineY = quoteStartY + lineIndex * quoteLineHeight;
-      
+
       // Check each quote part to see if it appears in this line
       quoteParts.forEach((part) => {
         if (part.highlighted && part.text.trim()) {
           const partText = part.text.trim();
-          
+
           // Find if this highlighted text appears in current line
           const partIndex = line.indexOf(partText);
           if (partIndex !== -1) {
@@ -1123,7 +1083,7 @@ const App: React.FC = () => {
             const highlightX = horizontalPadding + ctx.measureText(beforeText).width;
             const highlightWidth = ctx.measureText(partText).width;
             const highlightHeight = 72 * 0.85;
-            
+
             highlightRects.push({
               x: highlightX - 8,
               y: lineY - highlightHeight * 0.15,
@@ -1131,34 +1091,34 @@ const App: React.FC = () => {
               height: highlightHeight,
               color: markerColors[markerColorIndex % markerColors.length]
             });
-            
+
             markerColorIndex++;
           }
         }
       });
     });
-    
+
     // Draw highlights first (behind text)
     highlightRects.forEach(rect => {
       drawMarkerHighlight(ctx, rect.x, rect.y, rect.width, rect.height, rect.color);
     });
-    
+
     // Draw text on top
     ctx.fillStyle = '#1A1A1A';
     quoteLines.forEach((line, index) => {
       ctx.fillText(line, horizontalPadding, quoteStartY + (index * quoteLineHeight));
     });
-    
+
     currentY += quoteHeight + 100; // Spacing after quote
 
-    // ========== 2. MIDDLE SECTION - USER IDENTITY ==========
-    
+    // ========== 2. MIDDLE SECTION-USER IDENTITY ==========
+
     const user = appState.user;
     const avatarSize = 64;
     const avatarX = horizontalPadding;
     const avatarY = currentY;
-    
-      if (user) {
+
+    if (user) {
       // Draw avatar
       if (user.picture) {
         // Try to load user picture
@@ -1170,7 +1130,7 @@ const App: React.FC = () => {
             avatarImg.onerror = () => resolve();
             avatarImg.src = user.picture;
           });
-          
+
           if (avatarImg.complete && avatarImg.naturalWidth > 0) {
             // Draw circular avatar
             ctx.save();
@@ -1194,70 +1154,70 @@ const App: React.FC = () => {
         const firstLetter = (user.name || user.email || 'U')[0];
         generateAvatar(ctx, firstLetter, avatarSize, avatarX, avatarY);
       }
-      
+
       // User name or masked email
       const textX = avatarX + avatarSize + 20;
       const textY = avatarY + 8;
-      
+
       ctx.fillStyle = '#2A2A2A';
       ctx.font = '500 20px "Inter", sans-serif';
       ctx.textAlign = 'left';
-      
-      const displayName = user.name || (user.email ? `${user.email.split('@')[0].substring(0, 1)}***@${user.email.split('@')[1]}` : 'User');
+
+      const displayName = user.name || (user.email ? `${user.email.split('@')[0].substring(0, 1)}*** @${user.email.split('@')[1]} ` : 'User');
       ctx.fillText(displayName, textX, textY);
-      
+
       // Secondary line: "Shared via StartlyTab"
       ctx.fillStyle = '#888888';
       ctx.font = '400 14px "Inter", sans-serif';
       ctx.fillText('Shared via StartlyTab', textX, textY + 32);
     } else {
-      // No user - show generic
+      // No user-show generic
       generateAvatar(ctx, 'U', avatarSize, avatarX, avatarY);
       ctx.fillStyle = '#2A2A2A';
       ctx.font = '500 20px "Inter", sans-serif';
       ctx.fillText('Shared via StartlyTab', avatarX + avatarSize + 20, avatarY + 20);
     }
-    
+
     currentY += userSectionHeight + spacingBetweenSections;
 
-    // ========== 3. BOTTOM SECTION - PRODUCT PROMOTION ==========
-    
+    // ========== 3. BOTTOM SECTION-PRODUCT PROMOTION ==========
+
     // Homepage mockup
     const mockupWidth = width * 0.85;
     const mockupHeight = homepageMockupHeight;
     const mockupX = (width - mockupWidth) / 2;
     const mockupY = currentY;
-    
+
     drawHomepageMockup(ctx, mockupX, mockupY, mockupWidth, mockupHeight);
-    
+
     currentY += mockupHeight + spacingBetweenSections;
-    
+
     // Product info (centered)
     ctx.textAlign = 'center';
-    
+
     // Product name: StartlyTab
     ctx.fillStyle = '#1A1A1A';
     ctx.font = '500 36px "Inter", sans-serif';
     ctx.fillText('StartlyTab', width / 2, currentY);
     currentY += 50;
-    
+
     // Slogan: Start your day softly
     ctx.fillStyle = '#666666';
     ctx.font = '400 22px "Inter", sans-serif';
     ctx.fillText('Start your day softly', width / 2, currentY);
     currentY += 50;
-    
+
     // Positioning line
     ctx.fillStyle = '#777777';
     ctx.font = '400 18px "Inter", sans-serif';
     ctx.fillText('A warm browser start page for focused minds.', width / 2, currentY);
     currentY += 50;
-    
+
     // Website URL
     ctx.fillStyle = '#555555';
     ctx.font = '400 18px "Inter", sans-serif';
     ctx.fillText('www.startlytab.com', width / 2, currentY);
-    
+
     ctx.textAlign = 'left'; // Reset
 
     return await new Promise<Blob | null>((resolve) => {
@@ -1275,7 +1235,7 @@ const App: React.FC = () => {
     if (!currentSnippet) return;
     try {
       setIsSharing(true);
-      // Pass quote with highlights preserved - createShareCard will parse them
+      // Pass quote with highlights preserved-createShareCard will parse them
       const blob = await createShareCard(currentSnippet);
       if (!blob) throw new Error('Failed to create image');
       const url = URL.createObjectURL(blob);
@@ -1315,7 +1275,7 @@ const App: React.FC = () => {
     // Check after render and when snippet changes
     const timeoutId = setTimeout(checkSingleLine, 100);
     window.addEventListener('resize', checkSingleLine);
-    
+
     return () => {
       clearTimeout(timeoutId);
       window.removeEventListener('resize', checkSingleLine);
@@ -1325,10 +1285,10 @@ const App: React.FC = () => {
   useEffect(() => {
     console.log('[App] Initializing Google Auth...');
     setIsAuthChecking(true);
-    
+
     initGoogleAuth(async (user) => {
       setIsAuthChecking(false); // Auth check complete
-      
+
       if (user) {
         await handleUserLogin(user);
       } else {
@@ -1349,7 +1309,7 @@ const App: React.FC = () => {
   // Listen for cross-tab storage changes (when user logs in/out in another tab)
   useEffect(() => {
     let isProcessing = false; // Flag to prevent concurrent processing
-    
+
     const handleStorageChange = async (e: StorageEvent) => {
       // Handle changes to focus_tab_user (login/logout)
       if (e.key === 'focus_tab_user') {
@@ -1358,10 +1318,10 @@ const App: React.FC = () => {
           console.log('[App] Storage event already processing, skipping...');
           return;
         }
-        
+
         isProcessing = true;
         console.log('[App] Detected user login/logout in another tab, syncing...');
-        
+
         try {
           // Check if user state changed
           let newUser: User | null = null;
@@ -1374,20 +1334,20 @@ const App: React.FC = () => {
               return;
             }
           }
-          
+
           // Use ref to get latest state without causing re-renders
           const currentState = appStateRef.current;
           const currentUser = currentState.user;
           const currentUserId = currentUser?.id || null;
           const newUserId = newUser?.id || null;
-          
+
           // Only update if user state actually changed
           if (currentUserId !== newUserId) {
             console.log('[App] User state changed:', {
               from: currentUserId ? 'logged in' : 'logged out',
               to: newUserId ? 'logged in' : 'logged out'
             });
-            
+
             if (newUser) {
               // User logged in in another tab
               console.log('[App] User logged in in another tab, updating state...');
@@ -1414,28 +1374,28 @@ const App: React.FC = () => {
           isProcessing = false;
         }
       }
-      
+
       // Handle changes to focus_tab_state (Gateway data changes)
       if (e.key === 'focus_tab_state') {
         // 防止当前标签页触发（storage 事件只在其他标签页触发）
         if (!e.newValue) return;
-        
+
         try {
           const newStateData = JSON.parse(e.newValue);
           const currentState = appStateRef.current;
-          
+
           // 只同步 Gateway 相关的数据（links）
           // 避免覆盖其他状态（如 currentSnippet 等）
-          if (newStateData.links && 
-              JSON.stringify(newStateData.links) !== JSON.stringify(currentState.links)) {
+          if (newStateData.links &&
+            JSON.stringify(newStateData.links) !== JSON.stringify(currentState.links)) {
             console.log('[App] Detected Gateway changes in another tab, syncing...');
-            
+
             setAppState(prevState => ({
               ...prevState,
               links: newStateData.links || prevState.links,
               // 保持其他状态不变
             }));
-            
+
             // 可选：显示提示（为了不打扰用户，这里不显示）
             // addToast('Gateway updated from another tab', 'info');
           }
@@ -1452,7 +1412,7 @@ const App: React.FC = () => {
 
     // Listen for storage events from other tabs
     window.addEventListener('storage', handleStorageChange);
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
@@ -1469,7 +1429,7 @@ const App: React.FC = () => {
       } else {
         setShowInlineGuidance(false);
       }
-      
+
       // Check for local preference
       const localPref = localStorage.getItem('startly_intention_local');
       setHasLocalPreference(!!localPref);
@@ -1478,7 +1438,7 @@ const App: React.FC = () => {
       setHasLocalPreference(false);
     }
   }, [isAuthenticated]);
-  
+
   // Also check when perspective count changes (after increment)
   useEffect(() => {
     if (!isAuthenticated) {
@@ -1491,282 +1451,244 @@ const App: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
-      
+
       {/* 1. LAYERED BACKGROUNDS */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className={`theme-overlay bg-[#FBFBFE] ${appState.theme === 'light' ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-indigo-50/50 rounded-full blur-[160px] animate-breathing-slow" />
-            <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-purple-50/40 rounded-full blur-[140px] animate-breathing-slow" style={{ animationDelay: '-5s' }} />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0)_0%,rgba(251,251,254,1)_100%)]" />
+        <div className={`theme-overlay bg-[#FBFBFE] ${appState.theme === 'light' ? 'opacity-100' : 'opacity-0'} `}>
+          <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-indigo-50/50 rounded-full blur-[160px] animate-breathing-slow" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-purple-50/40 rounded-full blur-[140px] animate-breathing-slow" style={{ animationDelay: '-5s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0)_0%,rgba(251,251,254,1)_100%)]" />
         </div>
-        <div className={`theme-overlay bg-[#0A0A0B] ${appState.theme === 'dark' ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="absolute top-[10%] left-[20%] w-[40%] h-[40%] bg-indigo-950/20 rounded-full blur-[120px] animate-lunar-drift" />
-            <div className="absolute bottom-[20%] right-[15%] w-[35%] h-[35%] bg-purple-950/10 rounded-full blur-[100px] animate-lunar-drift" style={{ animationDelay: '-8s' }} />
+        <div className={`theme-overlay bg-[#0A0A0B] ${appState.theme === 'dark' ? 'opacity-100' : 'opacity-0'} `}>
+          <div className="absolute top-[10%] left-[20%] w-[40%] h-[40%] bg-indigo-950/20 rounded-full blur-[120px] animate-lunar-drift" />
+          <div className="absolute bottom-[20%] right-[15%] w-[35%] h-[35%] bg-purple-950/10 rounded-full blur-[100px] animate-lunar-drift" style={{ animationDelay: '-8s' }} />
         </div>
       </div>
 
-      {/* 2. NAVIGATION BAR - FIXED TO FULL WIDTH SPREAD */}
+      {/* 2. NAVIGATION BAR-FIXED TO FULL WIDTH SPREAD */}
       <nav className="w-full px-8 md:px-12 lg:px-16 py-10 flex justify-between items-center z-20 animate-reveal">
         {/* Left: Branding */}
         <div className="flex items-center gap-4">
-            <img src="/icons/icon-64x64.png" alt="StartlyTab" className="w-11 h-11 object-contain" />
-            <span className="logo-text text-xl text-gray-800 dark:text-gray-200">StartlyTab</span>
-            {isSyncing && <div className="ml-2 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />}
-            
-            {/* Enhanced Search Input */}
-            <div className="ml-6 relative" ref={searchDropdownRef}>
-              <div className="flex items-center bg-white/50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-[999px] overflow-hidden relative h-[50px] min-h-[50px] w-[380px]">
-                {/* Search Engine Selector */}
-                <button
-                  onClick={() => setIsSearchDropdownOpen(!isSearchDropdownOpen)}
-                  className="flex items-center justify-center w-[44px] h-full hover:bg-white/50 dark:hover:bg-white/10 transition-colors relative"
-                  aria-label="Select search engine"
-                >
-                  <img 
-                    src={currentEngine.icon} 
-                    alt={currentEngine.name}
-                    className="w-[18px] h-[18px]"
-                  />
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-[30px] bg-black/5 dark:bg-white/5"></div>
-                </button>
+          <img src="/icons/icon-64x64.png" alt="StartlyTab" className="w-11 h-11 object-contain" />
+          <span className="logo-text text-xl text-gray-800 dark:text-gray-200">StartlyTab</span>
+          {isSyncing && <div className="ml-2 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />}
 
-                {/* Search Input */}
-                <input
-                  ref={searchInputRef}
-                  id="search-input"
-                  type="text"
-                  placeholder="Search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  onCompositionStart={handleCompositionStart}
-                  onCompositionEnd={handleCompositionEnd}
-                  className="flex-1 px-[18px] py-[12px] pr-[60px] bg-transparent text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none"
-                  style={{ 
-                    fontSize: '15px',
-                    lineHeight: '1.5'
-                  }}
+          {/* Enhanced Search Input */}
+          <div className="ml-6 relative" ref={searchDropdownRef}>
+            <div className="flex items-center bg-white/50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-[999px] overflow-hidden relative h-[50px] min-h-[50px] w-[380px]">
+              {/* Search Engine Selector */}
+              <button
+                onClick={() => setIsSearchDropdownOpen(!isSearchDropdownOpen)}
+                className="flex items-center justify-center w-[44px] h-full hover:bg-white/50 dark:hover:bg-white/10 transition-colors relative"
+                aria-label="Select search engine"
+              >
+                <img
+                  src={currentEngine.icon}
+                  alt={currentEngine.name}
+                  className="w-[18px] h-[18px]"
                 />
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-[30px] bg-black/5 dark:bg-white/5"></div>
+              </button>
 
-                {/* Circular Search Button - Embedded */}
-                <button
-                  onClick={handleSearch}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-[34px] h-[34px] rounded-full bg-black flex items-center justify-center hover:bg-[#1A1A1A] active:bg-[#111] transition-colors cursor-pointer"
-                  aria-label="Search"
-                >
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-              </div>
+              {/* Search Input */}
+              <input
+                ref={searchInputRef}
+                id="search-input"
+                type="text"
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
+                className="flex-1 px-[18px] py-[12px] pr-[60px] bg-transparent text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none"
+                style={{
+                  fontSize: '15px',
+                  lineHeight: '1.5'
+                }}
+              />
 
-              {/* Search Engine Dropdown */}
-              {isSearchDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 border border-black/5 dark:border-white/5 rounded-2xl shadow-lg overflow-hidden z-30 min-w-[200px]">
-                  {SEARCH_ENGINES.map((engine) => (
-                    <button
-                      key={engine.id}
-                      onClick={() => {
-                        setSelectedEngine(engine.id);
-                        setIsSearchDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors ${
-                        selectedEngine === engine.id ? 'bg-gray-50 dark:bg-white/5' : ''
-                      }`}
-                    >
-                      <img 
-                        src={engine.icon} 
-                        alt={engine.name}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-sm text-gray-800 dark:text-gray-200">{engine.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              {/* Circular Search Button-Embedded */}
+              <button
+                onClick={handleSearch}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-[34px] h-[34px] rounded-full bg-black flex items-center justify-center hover:bg-[#1A1A1A] active:bg-[#111] transition-colors cursor-pointer"
+                aria-label="Search"
+              >
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
             </div>
+
+            {/* Search Engine Dropdown */}
+            {isSearchDropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 border border-black/5 dark:border-white/5 rounded-2xl shadow-lg overflow-hidden z-30 min-w-[200px]">
+                {SEARCH_ENGINES.map((engine) => (
+                  <button
+                    key={engine.id}
+                    onClick={() => {
+                      setSelectedEngine(engine.id);
+                      setIsSearchDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover: bg-gray-50 dark: hover: bg-white / 5 transition-colors ${selectedEngine === engine.id ? 'bg-gray-50 dark:bg-white/5' : ''
+                      } `}
+                  >
+                    <img
+                      src={engine.icon}
+                      alt={engine.name}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm text-gray-800 dark:text-gray-200">{engine.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        
+
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
-            <button 
-              onClick={() => {
-                const newTheme = appState.theme === 'light' ? 'dark' : 'light';
-                saveState({...appState, theme: newTheme});
-                addToast(`Theme: ${newTheme}`, 'info');
-              }}
-              className="p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
-              aria-label="Toggle Theme"
-            >
-              {appState.theme === 'light' ? 
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg> :
-                <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 9H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-              }
-            </button>
-            <button 
-                onClick={() => setIsSettingsOpen(true)}
-                className="px-6 py-3.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-[0.15em] hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-indigo-500/10"
-            >
-                Studio
-            </button>
+          <button
+            onClick={() => {
+              const newTheme = appState.theme === 'light' ? 'dark' : 'light';
+              saveState({ ...appState, theme: newTheme });
+              addToast(`Theme: ${newTheme} `, 'info');
+            }}
+            className="p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
+            aria-label="Toggle Theme"
+          >
+            {appState.theme === 'light' ?
+              <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg> :
+              <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 9H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            }
+          </button>
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="px-6 py-3.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-[0.15em] hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-indigo-500/10"
+          >
+            Studio
+          </button>
         </div>
       </nav>
 
       {/* 3. HERO SECTION */}
       <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 pt-8 pb-16">
-        <div key={revealKey} className={`animate-reveal max-w-4xl text-center flex flex-col items-center ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
-            {/* Perspective Title with Selective Highlighting and No Typography Changes */}
-            <h1 ref={perspectiveTitleRef} className="serif editorial-title text-5xl md:text-7xl lg:text-8xl font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] px-4 text-black dark:text-white">
-                {currentSnippet ? (
-                  renderSnippet(currentSnippet)
-                ) : (
-                  <JumpStarLoading caption="Content coming soon" />
-                )}
+        <div key={revealKey} className={`animate-reveal transition-all duration-500 ease-out text-center flex flex-col items-center 
+          ${(currentSnippet?.length || 0) > 26 ? 'max-w-[90%] lg:max-w-7xl' : 'max-w-4xl'} 
+          ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
+
+          {/* Text Container: Handles scrolling for long text while keeping buttons visible */}
+          <div className="max-h-[50vh] overflow-y-auto no-scrollbar w-full px-4 md:px-8">
+            <h1
+              ref={perspectiveTitleRef}
+              className={`serif editorial-title font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300
+                ${(currentSnippet?.length || 0) > 26
+                  ? 'text-4xl md:text-6xl lg:text-7xl'
+                  : 'text-5xl md:text-7xl lg:text-8xl'}
+              `}
+            >
+              {currentSnippet ? (
+                renderSnippet(currentSnippet)
+              ) : (
+                <PerspectiveSkeleton />
+              )}
             </h1>
+          </div>
 
-            <div className="mt-10 flex flex-col items-center gap-4">
-                {/* Action buttons - always visible */}
-                <div className="flex items-center gap-4">
-                    <button 
-                        onClick={() => fetchRandomSnippet()}
-                        disabled={isGenerating}
-                        className="px-10 py-5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isGenerating ? 'Reflecting...' : 'New Perspective'}
-                    </button>
-                    <button
-                      onClick={handleShareQuote}
-                      disabled={isSharing || !currentSnippet}
-                      className="px-6 py-4 rounded-full border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-600 dark:text-gray-200 transition-all hover:bg-white/80 dark:hover:bg-white/10 active:scale-95 flex items-center gap-2 disabled:opacity-60"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
-                        <path d="M12 16V4"/>
-                        <path d="M8 8l4-4 4 4"/>
-                      </svg>
-                      <span>Share Quote</span>
-                    </button>
-                </div>
-
-                {/* Inline helper line - shown below buttons when threshold reached or after local save */}
-                {!isAuthenticated && (showInlineGuidance || hasLocalPreference) && (
-                  <div className={`max-w-md w-full text-center animate-reveal mt-2 ${shouldShakeHelper ? 'animate-shake' : ''}`}>
-                    {hasLocalPreference ? (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Saved locally.{' '}
-                        <button
-                          onClick={handleSignIn}
-                          className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                        >
-                          Sign in with Google
-                        </button>
-                        {' '}to unlock unlimited perspectives and sync across devices.
-                      </p>
-                    ) : (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Still looking for the right tone?{' '}
-                        <button
-                          onClick={() => setIsPreferenceModalOpen(true)}
-                          className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                        >
-                          Tell us what you like
-                        </button>
-                        {' '}to get better matches.
-                      </p>
-                    )}
-                  </div>
-                )}
+          <div className="mt-10 flex flex-col items-center gap-4">
+            {/* Action buttons-always visible */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => fetchRandomSnippet()}
+                disabled={isGenerating}
+                className="px-10 py-5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? 'Reflecting...' : 'New Perspective'}
+              </button>
+              <button
+                onClick={handleShareQuote}
+                disabled={isSharing || !currentSnippet}
+                className="px-6 py-4 rounded-full border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-600 dark:text-gray-200 transition-all hover:bg-white/80 dark:hover:bg-white/10 active:scale-95 flex items-center gap-2 disabled:opacity-60"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
+                  <path d="M12 16V4" />
+                  <path d="M8 8l4-4 4 4" />
+                </svg>
+                <span>Share Quote</span>
+              </button>
             </div>
+
+            {/* Inline helper line-shown below buttons when threshold reached or after local save */}
+            {!isAuthenticated && (showInlineGuidance || hasLocalPreference) && (
+              <div className={`max-w-md w-full text-center animate-reveal mt-2 ${shouldShakeHelper ? 'animate-shake' : ''} `}>
+                {hasLocalPreference ? (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Saved locally.{' '}
+                    <button
+                      onClick={handleSignIn}
+                      className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      Sign in with Google
+                    </button>
+                    {' '}to unlock unlimited perspectives and sync across devices.
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Still looking for the right tone?{' '}
+                    <button
+                      onClick={() => setIsPreferenceModalOpen(true)}
+                      className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      Tell us what you like
+                    </button>
+                    {' '}to get better matches.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
-      {/* 4. BOTTOM SECTION */}
-      <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
-        <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
-            
-            {isAuthChecking ? (
-              // Show loading state during auth check to prevent flash
-              <div className="w-full flex flex-col items-center justify-center py-6 opacity-50">
-                <div className="animate-pulse">
-                  <div className="w-12 h-12 border-2 border-gray-300 dark:border-gray-600 rounded-2xl mb-3 mx-auto" />
+      {/* 3.5. INTEGRATION GATEWAYS (Real Data) */}
+      {isAuthenticated ? (
+        <IntegrationGateways
+          links={appState.links}
+          onUpdate={(newLinks) => saveState(prev => ({ ...prev, links: newLinks }))}
+          isAuthenticated={isAuthenticated}
+          onLoginRequired={() => setIsLoginModalOpen(true)}
+          canAddMore={canAddGateway(appState).allowed}
+        />
+      ) : (
+        /* Unauthenticated State: Hero Login Prompt */
+        <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
+          <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
+            <div className="w-full flex flex-col items-center justify-center py-6">
+              <div className="max-w-md w-full flex flex-col items-center text-center">
+                <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2 whitespace-nowrap">Start your day softly — with everything ready</h2>
+                <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
+                  Unlimited shortcuts, always one click away.
+                </p>
+                <div className="flex flex-col items-center gap-4 w-full">
+                  <div id="google-login-btn" className="transition-all hover:scale-[1.02] active:scale-[0.98]"></div>
+
+                  {isExtension && (
+                    <button
+                      onClick={handleSignIn}
+                      className="px-8 py-3 bg-white/50 dark:bg-white/5 border border-black/5 dark:border-white/10 text-gray-600 dark:text-gray-300 rounded-full font-medium transition-all hover:bg-white dark:hover:bg-white/10 text-sm shadow-sm"
+                    >
+                      Try with Demo Account (Extension Only)
+                    </button>
+                  )}
                 </div>
               </div>
-            ) : isAuthenticated ? (
-              <div className="w-full">
-                {appState.links.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4 px-4 md:px-8">
-                    {visibleLinks.map(link => {
-                      let canonicalUrl = link.canonicalUrl || link.url;
-                      try { canonicalUrl = link.canonicalUrl || canonicalizeUrl(link.url); } catch {}
-                      const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
-                      // Priority: local cache > publicUrl > signedUrl > default icon
-                      // If we have a custom logo URL but no local cache, use the URL directly (even if download failed)
-                      const effectiveIcon = localLogo || link.customLogoUrl || link.customLogoSignedUrl || link.icon;
-                      const effectiveTitle = link.customTitle || link.title;
-                      return (
-                      <a 
-                        key={link.id} 
-                        href={link.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="group flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors h-[64px] w-full"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0 relative">
-                          {effectiveIcon ? (
-                            <>
-                              <img 
-                                src={effectiveIcon} 
-                                alt="" 
-                                className="w-6 h-6 object-contain opacity-70 group-hover:opacity-100 transition-opacity"
-                                onError={(e) => {
-                                  // If image fails to load (e.g., 400 error from Public URL), hide it and show fallback
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (fallback) fallback.style.display = 'block';
-                                }}
-                              />
-                              {/* Fallback icon (hidden by default, shown when image fails) */}
-                              <div 
-                                className="w-3.5 h-3.5 rounded-full absolute" 
-                                style={{backgroundColor: link.color, display: 'none'}}
-                              />
-                            </>
-                          ) : (
-                            <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: link.color}} />
-                          )}
-                        </div>
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap" style={{maxWidth: 'calc(100% - 52px)'}}>
-                          {effectiveTitle}
-                        </span>
-                      </a>
-                      );
-                    })}
-                    {remainingLinks > 0 && (
-                      <div className="flex items-center justify-center px-3 py-3 rounded-xl border border-dashed border-black/10 dark:border-white/10 text-xs font-semibold text-gray-500 dark:text-gray-300 h-[64px] w-full">
-                        +{remainingLinks} More
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="py-10 flex flex-col items-center justify-center text-center opacity-60">
-                    <div className="w-12 h-12 border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-2xl mb-3" />
-                    <span className="text-[11px] font-bold uppercase tracking-widest">Connect your first link in Studio</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="w-full flex flex-col items-center justify-center py-6">
-                  <div className="max-w-md w-full flex flex-col items-center text-center">
-                      <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2 whitespace-nowrap">Start your day softly — with everything ready</h2>
-                      <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
-                          Unlimited shortcuts, always one click away.
-                  </p>
-                  <div id="google-login-btn" className="transition-all hover:scale-[1.02] active:scale-[0.98]"></div>
-                  </div>
-              </div>
-            )}
-        </div>
-      </section>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 4. BOTTOM SECTION REMOVED (Replaced by IntegrationGateways) */}
 
       {/* 5. TOASTS */}
       <div className="fixed bottom-12 right-12 flex flex-col gap-3 z-[100]">
@@ -1777,18 +1699,18 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      <Settings 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
+      <Settings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
         state={appState}
         updateState={saveState}
         addToast={addToast}
         onSignIn={handleSignIn}
-        onSignOut={() => { 
-          signOutUser(); 
-          const newState = {...appState, user: null, subscriptionTier: undefined};
-          saveState(newState); 
-          addToast('Signed out'); 
+        onSignOut={() => {
+          signOutUser();
+          const newState = { ...appState, user: null, subscriptionTier: undefined };
+          saveState(newState);
+          addToast('Signed out');
         }}
       />
 

@@ -1,35 +1,69 @@
-# Project Governance Protocols
+# Project Governance Protocols (V2.0)
 
-## 1. Release Process (Strict)
+## 1. Release Architecture & Pipeline (Strict)
 
-**Core Principle**: No code reaches production (or `main` branch) without user verification.
+**Core Principle**: **"Preview First, Publish Later."** 
+No code is committed, pushed, or finalized without User Verification.
 
-### Workflow
-1.  **Development**: Developer (AI) implements changes.
-2.  **Local Test**: User runs `npm run dev` to verify changes locally.
-3.  **User Confirmation**: User explicitly confirms "Tests Passed" or "Approved".
-4.  **Push**: Developer executes git push.
+### 🟢 Development Phase (The Sandbox)
+1.  **Draft**: AI writes code.
+2.  **Build Check**: AI runs `npm run build` to verify no TS/Build errors.
+3.  **Local Preview**: AI prompts User to run `npm run dev`.
+4.  **UI/UX Audit** (Self-Check):
+    *   Does it work in Dark Mode?
+    *   Is the typography correct (Serif Headers / Sans Body)?
+    *   Are the animations smooth (cubic-bezier)?
+    *   Are accessibility roles (`aria`) present?
 
-> [!CRITICAL]
-> **NEVER** push to GitHub without explicit "Approved to Push" confirmation from the user.
+### 🔴 Gatekeeper Phase (The Handover)
+*   **STOP POINT**: AI waits for User feedback.
+*   **User Action**: User reviews functionality on localhost.
+*   **Approval**: User types "Approved", "Looks good", or "Publish".
 
-## 2. Directory Structure
+### 🔵 Release Phase (The Commit)
+*   Only **AFTER** Approval:
+    1.  Perform Git Commit.
+    2.  Perform Git Push.
 
-All source code must reside in `src/`.
-*   `src/components/`: Reusable UI components.
-*   `src/services/`: Business logic and API integrations.
-*   `src/types.ts`: Shared TypeScript interfaces.
+---
 
-## 3. UI/UX Standards
+## 2. Directory & Architecture Standards
 
-*   **Styling**: Use Tailwind CSS utility classes.
-*   **Design System**:
-    *   Primary Color: Purple (Tailwind `purple-600` etc.)
-    *   Dark Mode: Support `dark` variant for all UI components.
-*   **Consistency**: Do not introduce new arbitrary colors; use the established palette.
+Root is strictly for Config files (`.md`, `package.json`, `vite.config.ts`, `tailwind.config.js`).
+**All Source Code** must reside in `src/`.
 
-## 4. Impact Analysis
-Before any modification, analyze:
-*   What files are touched?
-*   What pages are affected?
-*   Are there breaking changes?
+### File Hierarchy
+*   `src/components/`: **Visual Components** (Pure UI, minimal logic).
+*   `src/services/`: **Logic Layer** (API calls, computations, no JSX).
+*   `src/types.ts`: **Source of Truth** for TS Interfaces.
+*   `src/hooks/`: (Optional) Custom React Hooks.
+
+**Rule**: Never create components in the root directory.
+
+---
+
+## 3. UI/UX Design System (The "Director's Cut")
+
+As the UI Director, all code must adhere to these tokens:
+
+### 🎨 Color System
+*   **Light Mode**: Backgrounds must be pure white (`bg-white`) or slight clean gray (`bg-zinc-50`).
+*   **Dark Mode**: Backgrounds must be **OLED Black** (`dark:bg-[#0A0A0B]`) or Deep Zinc (`dark:bg-[#111111]`). **NEVER** use generic `dark:bg-gray-800` (it looks cheap).
+*   **Borders**: Ultra-thin, translucent borders (`border-black/5` or `dark:border-white/10`).
+
+### 🔤 Typography
+*   **Headers (H1-H3)**: Use **Serif** (`font-serif`, `Instrument Serif`) for an Editorial/Premium feel.
+*   **Body / UI Controls**: Use **Sans** (`font-sans`, `Inter`) for optimal readability.
+
+### ✨ Motion & Interaction
+*   **Curves**: Use `cubic-bezier` for all transitions (e.g., `ease-[cubic-bezier(0.32,0.72,0,1)]`). Avoid linear ease.
+*   **Response**: All interactive elements must have `:hover` and `:active` states.
+*   **Accessibility**: All modals must fulfill `aria-modal="true"` and manage focus.
+
+---
+
+## 4. Impact Analysis Protocol
+Before executing code changes, the AI must internally ask:
+1.  *Does this break previous interactions?*
+2.  *Did I use hardcoded values instead of Tailwind classes?*
+3.  *Is this file in the correct folder?*

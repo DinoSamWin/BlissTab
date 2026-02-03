@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import App from './App';
 import SubscriptionPage from './components/SubscriptionPage';
+import LoadingDemo from './components/LoadingDemo';
 import { User } from './types';
 import { fetchSubscriptionState, determineSubscriptionTier, updateSubscriptionState } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
@@ -70,7 +71,7 @@ const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     };
 
     checkSubscription();
-    
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         checkSubscription();
@@ -120,22 +121,23 @@ const AppRoutes: React.FC = () => {
         subscriptionExpiresAt: updatedUser.subscriptionExpiresAt || null,
       });
     }
-    
+
     setUser(updatedUser);
   };
 
   return (
     <Routes>
       <Route path="/" element={<App />} />
-      <Route 
-        path="/subscription" 
+      <Route
+        path="/subscription"
         element={
-          <SubscriptionPage 
-            user={user} 
+          <SubscriptionPage
+            user={user}
             onSubscriptionUpdate={handleSubscriptionUpdate}
           />
-        } 
+        }
       />
+      <Route path="/loading-demo" element={<LoadingDemo />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

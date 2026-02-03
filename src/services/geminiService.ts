@@ -13,32 +13,32 @@ const MIN_ACCEPTABLE_LENGTH = 20; // Minimum length after truncation to be accep
  */
 function smartTruncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  
+
   const isChinese = /[\u4e00-\u9fa5]/.test(text);
-  
+
   // Try to find the best truncation point
   // Priority 1: Sentence endings (., !, ?, 。, ！, ？)
-  const sentenceEndings = isChinese 
-    ? /[。！？]/g 
+  const sentenceEndings = isChinese
+    ? /[。！？]/g
     : /[.!?]/g;
-  
+
   let bestMatch: { index: number; length: number } | null = null;
   let match;
-  
+
   while ((match = sentenceEndings.exec(text)) !== null) {
     const endIndex = match.index + 1;
     if (endIndex <= maxLength && endIndex > (bestMatch?.length || 0)) {
       bestMatch = { index: endIndex, length: endIndex };
     }
   }
-  
+
   // Priority 2: Other punctuation (commas, semicolons, etc.)
   // Only use punctuation if we don't have a sentence ending, or if it's longer
   if (!bestMatch) {
     const punctuation = isChinese
       ? /[，；：、]/g
       : /[,;:]/g;
-    
+
     while ((match = punctuation.exec(text)) !== null) {
       const endIndex = match.index + 1;
       if (endIndex <= maxLength) {
@@ -49,7 +49,7 @@ function smartTruncate(text: string, maxLength: number): string {
       }
     }
   }
-  
+
   // Priority 3: Word boundaries (for English) or character boundaries (for Chinese)
   // Only use this if we don't have a good punctuation match
   if (!bestMatch || bestMatch.length < MIN_ACCEPTABLE_LENGTH) {
@@ -60,7 +60,7 @@ function smartTruncate(text: string, maxLength: number): string {
       const searchText = text.substring(searchStart, maxLength);
       const spaceIndex = searchText.lastIndexOf(' ');
       const punctuationIndex = searchText.search(/[，。！？、；：]/);
-      
+
       if (punctuationIndex >= 0) {
         bestMatch = { index: searchStart + punctuationIndex + 1, length: searchStart + punctuationIndex + 1 };
       } else if (spaceIndex >= 0) {
@@ -80,14 +80,14 @@ function smartTruncate(text: string, maxLength: number): string {
           bestMatch = { index: truncated.length, length: truncated.length };
         }
       }
-      
+
       // If word boundary truncation is too short, try to find a better point
       if (!bestMatch || bestMatch.length < MIN_ACCEPTABLE_LENGTH) {
         // Look for a space or punctuation near maxLength
         const searchStart = Math.max(0, maxLength - 15);
         const searchText = text.substring(searchStart, maxLength);
         const spaceIndex = searchText.lastIndexOf(' ');
-        
+
         if (spaceIndex >= 0 && searchStart + spaceIndex >= MIN_ACCEPTABLE_LENGTH) {
           bestMatch = { index: searchStart + spaceIndex, length: searchStart + spaceIndex };
         } else {
@@ -97,17 +97,17 @@ function smartTruncate(text: string, maxLength: number): string {
       }
     }
   }
-  
+
   // Apply truncation
   if (bestMatch) {
     let truncated = text.substring(0, bestMatch.index).trim();
-    
+
     // Clean up the truncated text
     // If we didn't cut at a sentence ending, remove trailing incomplete punctuation
     if (bestMatch.index < text.length) {
       const lastChar = truncated[truncated.length - 1];
       const nextChar = text[bestMatch.index];
-      
+
       // If we cut mid-sentence (not at sentence ending), clean up
       if (!/[.!?。！？]/.test(lastChar)) {
         // Remove trailing commas/semicolons if the sentence seems incomplete
@@ -124,12 +124,12 @@ function smartTruncate(text: string, maxLength: number): string {
         }
       }
     }
-    
+
     // Final validation: ensure we have a meaningful length
     if (truncated.length >= MIN_ACCEPTABLE_LENGTH) {
       return truncated;
     }
-    
+
     // If truncated text is too short, try to extend it slightly if possible
     if (truncated.length < MIN_ACCEPTABLE_LENGTH && bestMatch.index < text.length) {
       const remaining = text.substring(bestMatch.index, Math.min(bestMatch.index + 10, text.length));
@@ -142,7 +142,7 @@ function smartTruncate(text: string, maxLength: number): string {
       }
     }
   }
-  
+
   // Fallback: simple truncation at word/character boundary
   // Try to find a space near maxLength for cleaner cut
   const fallbackText = text.substring(0, maxLength);
@@ -150,7 +150,7 @@ function smartTruncate(text: string, maxLength: number): string {
   if (lastSpace >= MIN_ACCEPTABLE_LENGTH) {
     return fallbackText.substring(0, lastSpace).trim();
   }
-  
+
   return fallbackText.trim();
 }
 
@@ -184,11 +184,11 @@ export async function generateSnippet(
     // Verify API key presence - support multiple ways to read environment variables
     // 1. process.env (injected by Vite define)
     // 2. import.meta.env (Vite standard way)
-    const apiKey = (process.env as any)?.ZHIPUAI_API_KEY 
-      || (process.env as any)?.API_KEY 
+    const apiKey = (process.env as any)?.ZHIPUAI_API_KEY
+      || (process.env as any)?.API_KEY
       || (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY
       || (import.meta.env as any)?.VITE_GEMINI_API_KEY;
-    
+
     if (!apiKey) {
       console.error("StartlyTab: API key not found. Using localized fallback.");
       console.error("StartlyTab: Checked process.env.ZHIPUAI_API_KEY:", (process.env as any)?.ZHIPUAI_API_KEY ? 'SET' : 'NOT SET');
@@ -197,30 +197,30 @@ export async function generateSnippet(
       console.error("StartlyTab: Please set ZHIPUAI_API_KEY or VITE_ZHIPUAI_API_KEY in Vercel environment variables");
       return getRandomFallback(language);
     }
-    
+
     console.log('[ZhipuAI] Generating perspective with API key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET');
 
     // Build diversity instruction based on history
     const diversityInstruction = history.length > 0
-      ? `\n\nIMPORTANT: Avoid repeating or closely mirroring these recent perspectives:\n${history.slice(0, 5).map(h => `- "${h.text}"`).join('\n')}\n\nGenerate a FRESH, DISTINCT perspective. Vary the tone, structure, vocabulary, and angle. Even if the theme is similar, the expression must feel clearly different.`
-      : '';
+      ? `\n\nGenerationHistory:\n${history.slice(0, 5).map(h => `- "${h.text}"`).join('\n')}`
+      : '\n\nGenerationHistory: []';
 
     // Load system prompt from PERSPECTIVE_GENERATION_RULES.md
     // Rules are loaded from the markdown file, only length validation is kept in code
     const systemPrompt = await loadPerspectiveRules(language);
 
-    // Build user prompt with explicit length constraint
-    // Emphasize that the sentence must be COMPLETE and within the limit
-    const lengthConstraint = `\n\nCRITICAL LENGTH REQUIREMENT: 
-- Your response MUST be 30-50 characters (absolute maximum 60 characters)
-- The sentence must be COMPLETE and MEANINGFUL - do not cut off mid-thought
-- Count your characters carefully before responding
-- If you cannot express the idea completely within 60 characters, use a shorter, simpler expression
-- A short complete sentence is better than a long incomplete one`;
-    const userPrompt = `Request: ${prompt}. Response Language: ${language}.${lengthConstraint}${diversityInstruction}`;
+    // Get current time if not provided
+    const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+    // Build user prompt with Input Analysis format
+    const userPrompt = `CurrentTime: ${timeStr}
+UserThemes: ["${prompt}"]
+${diversityInstruction}
+
+Generate a perspective line based on the rules.`;
 
     console.log('[ZhipuAI] Calling API with prompt:', prompt.substring(0, 50) + '...');
-    
+
     // Call ZhipuAI API (OpenAI compatible format)
     // Use stricter max_tokens to prevent over-generation
     const response = await fetch(`${ZHIPUAI_API_BASE}/chat/completions`, {
@@ -255,7 +255,7 @@ export async function generateSnippet(
 
     const data = await response.json();
     let text = data.choices?.[0]?.message?.content?.trim() || '';
-    
+
     if (!text || text.length === 0) {
       console.warn('[ZhipuAI] Empty response from API, using fallback');
       return getRandomFallback(language);
@@ -266,6 +266,8 @@ export async function generateSnippet(
       .replace(/^["']|["']$/g, '') // Remove surrounding quotes
       .replace(/\[h\](.*?)\[\/h\]/g, '$1') // Remove highlight tags if present
       .replace(/#/g, '') // Remove hashtags
+      .replace(/[■□█◆▲▼●○]/g, '') // Remove geometric shapes
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+$/u, '') // Remove trailing emojis
       .trim();
 
     // Check length - if too long, retry generation instead of truncating

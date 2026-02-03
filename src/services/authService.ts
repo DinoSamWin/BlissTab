@@ -5,6 +5,9 @@ import { User } from '../types';
  */
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+// @ts-ignore
+export const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+
 const IS_PLACEHOLDER_ID = !CLIENT_ID || CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID') || CLIENT_ID === '';
 
 // Debug: Log client ID status (remove in production)
@@ -31,7 +34,7 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
   const savedUser = localStorage.getItem('focus_tab_user');
   let hasExistingUser = false;
   let authCheckComplete = false;
-  
+
   if (savedUser) {
     try {
       const user = JSON.parse(savedUser);
@@ -48,11 +51,11 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
   const gsiInterval = setInterval(() => {
     if ((window as any).google?.accounts?.id) {
       clearInterval(gsiInterval);
-      
+
       console.log('[Auth] Google SDK loaded, initializing...');
       console.log('[Auth] Using Client ID:', IS_PLACEHOLDER_ID ? 'MOCK_ID (placeholder)' : CLIENT_ID);
       console.log('[Auth] Has existing user:', hasExistingUser);
-      
+
       const handleCredentialResponse = (response: any) => {
         try {
           console.log('[Auth] Received credential response');
@@ -80,9 +83,9 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
       };
 
       // Detect Safari browser
-      const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) || 
-                              /^((?!chrome|android).)*safari/i.test(navigator.vendor);
-      
+      const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
+        /^((?!chrome|android).)*safari/i.test(navigator.vendor);
+
       try {
         const initConfig: any = {
           client_id: IS_PLACEHOLDER_ID ? 'MOCK_ID' : CLIENT_ID,
@@ -93,24 +96,24 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
           // We set it to false if the environment is restricted.
           use_fedcm_for_prompt: false
         };
-        
+
         // Safari-specific configuration
         if (isSafariBrowser) {
           console.log('[Auth] Safari detected, using Safari-optimized configuration');
           // Safari has issues with popup mode, so we rely on button click instead of One Tap
           // The button will use redirect mode automatically in Safari
         }
-        
+
         (window as any).google.accounts.id.initialize(initConfig);
         console.log('[Auth] Google SDK initialized successfully');
-        
+
         // If no existing user, notify that auth check is complete (no user found)
         if (!hasExistingUser && !authCheckComplete) {
           console.log('[Auth] No existing user found, auth check complete');
           onUser(null);
           authCheckComplete = true;
         }
-        
+
         // Only show One Tap if user is NOT already logged in AND not Safari
         // Safari has issues with popup/One Tap, so we skip it and rely on button click
         if (!IS_PLACEHOLDER_ID && !hasExistingUser && !isSafariBrowser) {
@@ -148,11 +151,11 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
  */
 function isSafari(): boolean {
   if (typeof window === 'undefined') return false;
-  
+
   const userAgent = window.navigator.userAgent.toLowerCase();
   const isSafariUA = /safari/.test(userAgent) && !/chrome/.test(userAgent) && !/chromium/.test(userAgent);
   const isSafariVendor = /^((?!chrome|android).)*safari/i.test(window.navigator.userAgent);
-  
+
   return isSafariUA || isSafariVendor || /^((?!chrome|android).)*safari/i.test(window.navigator.vendor);
 }
 
@@ -162,34 +165,34 @@ function isSafari(): boolean {
  */
 export function renderGoogleButton(containerId: string, theme: 'light' | 'dark' = 'light') {
   if (typeof window === 'undefined') return;
-  
+
   console.log('[Auth] renderGoogleButton called for:', containerId);
   console.log('[Auth] Google SDK available:', !!(window as any).google?.accounts?.id);
   console.log('[Auth] Client ID available:', !IS_PLACEHOLDER_ID);
   console.log('[Auth] Browser is Safari:', isSafari());
-  
+
   if ((window as any).google?.accounts?.id) {
     const container = document.getElementById(containerId);
     if (container) {
       try {
         console.log('[Auth] Rendering Google button...');
-        
+
         // Safari-specific configuration: use redirect mode instead of popup
         const buttonConfig: any = {
-          theme: theme === 'dark' ? 'filled_black' : 'outline', 
+          theme: theme === 'dark' ? 'filled_black' : 'outline',
           size: 'large',
           shape: 'pill',
           text: 'signin_with',
           width: 280
         };
-        
+
         // For Safari, configure to use redirect mode
         if (isSafari()) {
           console.log('[Auth] Safari detected, using redirect-friendly configuration');
           // Note: Google Identity Services handles this automatically,
           // but we can add additional configuration if needed
         }
-        
+
         (window as any).google.accounts.id.renderButton(
           container,
           buttonConfig
@@ -221,13 +224,13 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
 
   if (IS_PLACEHOLDER_ID) {
-    console.info("StartlyTab: Simulating login (No Client ID provided).");
+    console.info("StartlyTab: Simulating login (No Client ID provided or Extension Mode).");
     setTimeout(() => {
       const mockUser: User = {
         id: 'mock-' + Math.random().toString(36).substr(2, 9),
-        email: 'workspace.pro@example.com',
-        name: 'Design Professional',
-        picture: `https://ui-avatars.com/api/?name=Design+Professional&background=6366f1&color=fff`
+        email: 'dean.pro@startlytab.com', // Fixed email for consistency
+        name: 'Dean Extension',
+        picture: `` // Empty picture to trigger letter avatar
       };
       localStorage.setItem('focus_tab_user', JSON.stringify(mockUser));
       if (onUser) onUser(mockUser);

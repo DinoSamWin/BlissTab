@@ -12,6 +12,7 @@
   html {
     background-color: var(--bg-light);
   }
+
   html.dark {
     background-color: var(--bg-dark);
   }
@@ -19,7 +20,7 @@
   body {
     @apply font-sans text-[#1A1A1A] m-0 overflow-x-hidden transition-colors duration-300;
   }
-  
+
   body.dark {
     color: #F0F0F0;
   }
@@ -29,12 +30,13 @@
   .serif {
     font-family: 'Instrument Serif', serif;
   }
-  
+
   .soft-card {
     background: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.3);
   }
+
   .dark .soft-card {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -45,57 +47,164 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+
   .dark .editorial-title {
     background: linear-gradient(180deg, #FFFFFF 0%, #A3A3A3 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   .logo-text {
-      font-family: 'Zain', sans-serif;
-      font-weight: 700;
-      letter-spacing: 0.02em;
+    font-family: 'Zain', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.02em;
   }
 }
 
 /* Animations */
 @keyframes breathing {
-    0%, 100% { transform: scale(1); opacity: 0.4; }
-    50% { transform: scale(1.05); opacity: 0.6; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.6;
+  }
 }
+
 @keyframes lunarDrift {
-    0%, 100% { opacity: 0.3; transform: translate(0, 0); }
-    50% { opacity: 0.5; transform: translate(20px, -10px); }
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translate(0, 0);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: translate(20px, -10px);
+  }
 }
+
 @keyframes reveal {
-    0% { opacity: 0; transform: translateY(20px); filter: blur(10px); }
-    100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+    filter: blur(10px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
+
 @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
 }
+
 @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-    20%, 40%, 60%, 80% { transform: translateX(4px); }
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-4px);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(4px);
+  }
 }
 
 .animate-breathing-slow {
-    animation: breathing 15s ease-in-out infinite;
+  animation: breathing 15s ease-in-out infinite;
 }
+
 .animate-lunar-drift {
-    animation: lunarDrift 30s ease-in-out infinite;
+  animation: lunarDrift 30s ease-in-out infinite;
 }
+
 .animate-reveal {
-    animation: reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
 .animate-float {
-    animation: float 6s ease-in-out infinite;
+  animation: float 6s ease-in-out infinite;
 }
+
 .animate-shake {
-    animation: shake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  animation: shake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes enter-card {
+  0% {
+    opacity: 0;
+    transform: translateY(15px) scale(0.9);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-enter-card {
+  animation: enter-card 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+
+
+@keyframes wiggle {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-1deg);
+  }
+
+  75% {
+    transform: rotate(1deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-shake-infinite {
+  animation: wiggle 0.25s linear infinite;
 }

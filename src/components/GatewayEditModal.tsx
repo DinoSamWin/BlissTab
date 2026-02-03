@@ -7,18 +7,23 @@ interface GatewayEditModalProps {
   isOpen: boolean;
   link: QuickLink | null;
   onClose: () => void;
-  onSave: (params: { customTitle: string | null; logoFile: File | null; reset: boolean }) => void;
+  onSave: (params: { url: string; customTitle: string | null; logoFile: File | null; reset: boolean; category: string }) => void;
+  categories: string[];
 }
 
-const GatewayEditModal: React.FC<GatewayEditModalProps> = ({ isOpen, link, onClose, onSave }) => {
+const GatewayEditModal: React.FC<GatewayEditModalProps> = ({ isOpen, link, onClose, onSave, categories }) => {
+  const [url, setUrl] = useState('');
   const [customTitle, setCustomTitle] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [reset, setReset] = useState(false);
+  const [category, setCategory] = useState('');
 
   useEffect(() => {
     if (!isOpen || !link) return;
+    setUrl(link.url || '');
     setCustomTitle(link.customTitle || '');
+    setCategory(link.category || 'Shortcuts');
     setLogoFile(null);
     setLogoPreview(null);
     setReset(false);
@@ -69,16 +74,31 @@ const GatewayEditModal: React.FC<GatewayEditModalProps> = ({ isOpen, link, onClo
   if (!isOpen || !link) return null;
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-reveal">
+    <div className="fixed inset-0 z-[100050] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-reveal">
       <div className="bg-white dark:bg-[#0F0F0F] w-full max-w-lg rounded-[3rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden border border-black/5 dark:border-white/10">
         <div className="p-8">
           <div className="flex items-start justify-between gap-6">
             <div>
               <h3 className="serif text-2xl text-gray-900 dark:text-gray-100">Edit Gateway</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Customize name and logo. Leave empty to use default.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Customize details. Leave empty to use default.</p>
             </div>
             <button
-              onClick={onClose}
+              onClick={() => {
+                const hasChanges =
+                  url !== link.url ||
+                  customTitle !== (link.customTitle || '') ||
+                  logoFile !== null ||
+                  reset ||
+                  category !== (link.category || 'Shortcuts');
+
+                if (hasChanges) {
+                  if (window.confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+                    onClose();
+                  }
+                } else {
+                  onClose();
+                }
+              }}
               className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
               aria-label="Close"
             >
@@ -87,6 +107,30 @@ const GatewayEditModal: React.FC<GatewayEditModalProps> = ({ isOpen, link, onClo
           </div>
 
           <div className="mt-7 space-y-6">
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">URL</label>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="mt-2 w-full bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-800 dark:text-gray-100"
+              />
+            </div>
+
+            {/* Category Select */}
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Group</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="mt-2 w-full bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-800 dark:text-gray-100 appearance-none"
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-center justify-center overflow-hidden">
                 {previewSrc ? (
@@ -149,10 +193,10 @@ const GatewayEditModal: React.FC<GatewayEditModalProps> = ({ isOpen, link, onClo
               Cancel
             </button>
             <button
-              onClick={() => onSave({ customTitle: customTitle.trim() ? customTitle.trim() : null, logoFile, reset })}
+              onClick={() => onSave({ url, customTitle: customTitle.trim() ? customTitle.trim() : null, logoFile, reset, category })}
               className="px-6 py-3 rounded-full text-[11px] font-bold uppercase tracking-widest bg-black dark:bg-white text-white dark:text-black hover:opacity-90 transition-all"
             >
-              Save
+              Save Changes
             </button>
           </div>
         </div>

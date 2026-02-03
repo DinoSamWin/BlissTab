@@ -5,6 +5,7 @@ export interface QuickLink {
   title: string;
   icon: string | null;
   color: string;
+  category?: string; // Grouping category (e.g. "Work", "Personal")
 
   /**
    * Canonical URL used for deduping metadata / overrides across sessions.
