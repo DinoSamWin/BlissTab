@@ -597,13 +597,19 @@ export default function IntegrationGateways({ links: propLinks, onUpdate, isAuth
                         transform: isHovered && elasticY > 0 ? `scale(${1 + (elasticY * 0.0005)})` : 'scale(1)'
                     }}
                     role="button"
-                    onClick={() => setIsExpanded(true)}
                 >
                     <div className="overflow-hidden h-[200px] px-6 py-6 md:px-8 md:py-8 relative rounded-[2rem]">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4"
                             style={{ transform: `translateY(${-elasticY}px)` }}>
                             {shortcutsLinks.slice(0, 18).map(link => (
-                                <div key={link.id} className="flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 h-[64px] w-full">
+                                <div
+                                    key={link.id}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(link.url, '_blank');
+                                    }}
+                                    className="flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 h-[64px] w-full cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                                >
                                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0">
                                         {(link.customLogoUrl || link.customLogoSignedUrl || link.icon) ? (
                                             <img src={link.customLogoUrl || link.customLogoSignedUrl || link.icon || ''} className="w-6 h-6 object-contain" />
@@ -621,7 +627,13 @@ export default function IntegrationGateways({ links: propLinks, onUpdate, isAuth
                             transition-all duration-500 delay-100
                             ${isHovered && elasticY < 10 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
                         `}>
-                                <div className="bg-gray-900/90 dark:bg-white/90 backdrop-blur text-white dark:text-gray-900 text-[10px] font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 whitespace-nowrap border border-white/10 dark:border-black/5">
+                                <div
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsExpanded(true);
+                                    }}
+                                    className="bg-gray-900/90 dark:bg-white/90 backdrop-blur text-white dark:text-gray-900 text-[10px] font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 whitespace-nowrap border border-white/10 dark:border-black/5 pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                                >
                                     <span>Expand</span>
                                 </div>
                             </div>
