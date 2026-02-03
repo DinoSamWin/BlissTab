@@ -550,14 +550,20 @@ const App: React.FC = () => {
       : activeRequests;
 
     const randomReq = eligible[Math.floor(Math.random() * eligible.length)];
-    lastPromptIdRef.current = randomReq.id;
 
     const requestId = ++snippetRequestIdRef.current;
-    setIsGenerating(true);
-    // Show loading while generating (prevents stale content flashes)
-    setCurrentSnippet(null);
+
 
     try {
+      setIsGenerating(true);
+      // Show loading while generating (prevents stale content flashes)
+      setCurrentSnippet(null);
+
+      if (!randomReq) {
+        throw new Error('No eligible perspective prompts found');
+      }
+      lastPromptIdRef.current = randomReq.id;
+
       // Increment perspective count for unauthenticated users (only if not bypassing)
       if (!appState.user && !bypassLimit) {
         const newCount = incrementPerspectiveCount();
