@@ -1,309 +1,348 @@
 import { LOCALIZED_FALLBACKS } from "../constants";
-import { PerspectiveHistory } from "../types";
+import { PerspectiveHistory, PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem } from "../types";
 import { isTooSimilar } from "./perspectiveService";
-import { loadPerspectiveRules } from "./perspectiveRulesLoader";
+import { routePerspective } from "./perspectiveRouter";
+import { getSkeleton, getCustomThemeSkeleton } from "./perspectiveSkeletons";
 
-const MAX_QUOTE_LENGTH = 60; // Hard limit: ~3 lines for Chinese, ~2 lines for English
 const MAX_RETRIES = 3;
-const MIN_ACCEPTABLE_LENGTH = 20; // Minimum length after truncation to be acceptable
+const BATCH_SIZE = 50;
+const REFILL_THRESHOLD = 5;
 
-/**
- * Smart truncation that preserves sentence completeness
- * Tries to truncate at natural break points: sentence endings > punctuation > word boundaries
- */
-function smartTruncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
+// --- Pool Management ---
 
-  const isChinese = /[\u4e00-\u9fa5]/.test(text);
-
-  // Try to find the best truncation point
-  // Priority 1: Sentence endings (., !, ?, 。, ！, ？)
-  const sentenceEndings = isChinese
-    ? /[。！？]/g
-    : /[.!?]/g;
-
-  let bestMatch: { index: number; length: number } | null = null;
-  let match;
-
-  while ((match = sentenceEndings.exec(text)) !== null) {
-    const endIndex = match.index + 1;
-    if (endIndex <= maxLength && endIndex > (bestMatch?.length || 0)) {
-      bestMatch = { index: endIndex, length: endIndex };
-    }
-  }
-
-  // Priority 2: Other punctuation (commas, semicolons, etc.)
-  // Only use punctuation if we don't have a sentence ending, or if it's longer
-  if (!bestMatch) {
-    const punctuation = isChinese
-      ? /[，；：、]/g
-      : /[,;:]/g;
-
-    while ((match = punctuation.exec(text)) !== null) {
-      const endIndex = match.index + 1;
-      if (endIndex <= maxLength) {
-        // Prefer longer truncations, but accept shorter ones if they're at least MIN_ACCEPTABLE_LENGTH
-        if (!bestMatch || (endIndex > bestMatch.length && endIndex >= MIN_ACCEPTABLE_LENGTH)) {
-          bestMatch = { index: endIndex, length: endIndex };
-        }
-      }
-    }
-  }
-
-  // Priority 3: Word boundaries (for English) or character boundaries (for Chinese)
-  // Only use this if we don't have a good punctuation match
-  if (!bestMatch || bestMatch.length < MIN_ACCEPTABLE_LENGTH) {
-    if (isChinese) {
-      // For Chinese, try to find a good character boundary
-      // Look for spaces or punctuation near the max length
-      const searchStart = Math.max(0, maxLength - 10);
-      const searchText = text.substring(searchStart, maxLength);
-      const spaceIndex = searchText.lastIndexOf(' ');
-      const punctuationIndex = searchText.search(/[，。！？、；：]/);
-
-      if (punctuationIndex >= 0) {
-        bestMatch = { index: searchStart + punctuationIndex + 1, length: searchStart + punctuationIndex + 1 };
-      } else if (spaceIndex >= 0) {
-        bestMatch = { index: searchStart + spaceIndex + 1, length: searchStart + spaceIndex + 1 };
-      } else {
-        // Fallback to maxLength
-        bestMatch = { index: maxLength, length: maxLength };
-      }
-    } else {
-      // For English, truncate at word boundary
-      const words = text.substring(0, maxLength).split(' ');
-      // Remove the last incomplete word
-      if (words.length > 1) {
-        words.pop();
-        const truncated = words.join(' ');
-        if (truncated.length >= MIN_ACCEPTABLE_LENGTH) {
-          bestMatch = { index: truncated.length, length: truncated.length };
-        }
-      }
-
-      // If word boundary truncation is too short, try to find a better point
-      if (!bestMatch || bestMatch.length < MIN_ACCEPTABLE_LENGTH) {
-        // Look for a space or punctuation near maxLength
-        const searchStart = Math.max(0, maxLength - 15);
-        const searchText = text.substring(searchStart, maxLength);
-        const spaceIndex = searchText.lastIndexOf(' ');
-
-        if (spaceIndex >= 0 && searchStart + spaceIndex >= MIN_ACCEPTABLE_LENGTH) {
-          bestMatch = { index: searchStart + spaceIndex, length: searchStart + spaceIndex };
-        } else {
-          // Last resort: use maxLength
-          bestMatch = { index: maxLength, length: maxLength };
-        }
-      }
-    }
-  }
-
-  // Apply truncation
-  if (bestMatch) {
-    let truncated = text.substring(0, bestMatch.index).trim();
-
-    // Clean up the truncated text
-    // If we didn't cut at a sentence ending, remove trailing incomplete punctuation
-    if (bestMatch.index < text.length) {
-      const lastChar = truncated[truncated.length - 1];
-      const nextChar = text[bestMatch.index];
-
-      // If we cut mid-sentence (not at sentence ending), clean up
-      if (!/[.!?。！？]/.test(lastChar)) {
-        // Remove trailing commas/semicolons if the sentence seems incomplete
-        if (/[,;，；]/.test(lastChar)) {
-          truncated = truncated.slice(0, -1).trim();
-        }
-        // If next character would continue the sentence, ensure we have a complete thought
-        if (/[a-z\u4e00-\u9fa5]/.test(nextChar) && truncated.length < maxLength * 0.7) {
-          // Try to find a better break point earlier
-          const earlierBreak = truncated.lastIndexOf(' ');
-          if (earlierBreak >= MIN_ACCEPTABLE_LENGTH) {
-            truncated = truncated.substring(0, earlierBreak).trim();
-          }
-        }
-      }
-    }
-
-    // Final validation: ensure we have a meaningful length
-    if (truncated.length >= MIN_ACCEPTABLE_LENGTH) {
-      return truncated;
-    }
-
-    // If truncated text is too short, try to extend it slightly if possible
-    if (truncated.length < MIN_ACCEPTABLE_LENGTH && bestMatch.index < text.length) {
-      const remaining = text.substring(bestMatch.index, Math.min(bestMatch.index + 10, text.length));
-      const words = remaining.split(/\s+/);
-      if (words.length > 0 && words[0]) {
-        const extended = truncated + ' ' + words[0];
-        if (extended.length <= maxLength && extended.length >= MIN_ACCEPTABLE_LENGTH) {
-          return extended.trim();
-        }
-      }
-    }
-  }
-
-  // Fallback: simple truncation at word/character boundary
-  // Try to find a space near maxLength for cleaner cut
-  const fallbackText = text.substring(0, maxLength);
-  const lastSpace = fallbackText.lastIndexOf(' ');
-  if (lastSpace >= MIN_ACCEPTABLE_LENGTH) {
-    return fallbackText.substring(0, lastSpace).trim();
-  }
-
-  return fallbackText.trim();
+function getPoolKey(plan: PerspectivePlan, ctx: PerspectiveRouterContext): string {
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  // If we have custom themes, the pool is specific to those themes
+  const themeHash = (ctx.custom_themes || []).sort().join('_') || 'default';
+  // Key depends on Intent (Time Slot) + Themes + Date
+  return `v3_pool_${dateStr}_${plan.intent}_${themeHash}`;
 }
 
-// 智谱AI API 配置
-// 支持多种环境变量读取方式：process.env (通过 Vite define 注入) 和 import.meta.env (Vite 标准方式)
-const ZHIPUAI_API_BASE = (process.env as any)?.ZHIPUAI_API_BASE || (import.meta.env as any)?.VITE_ZHIPUAI_API_BASE || 'https://open.bigmodel.cn/api/paas/v4';
-const ZHIPUAI_MODEL = (process.env as any)?.ZHIPUAI_MODEL || (import.meta.env as any)?.VITE_ZHIPUAI_MODEL || 'glm-4-flash';
-
-// 调试：在模块加载时检查环境变量（仅在浏览器环境）
-if (typeof window !== 'undefined') {
-  console.log('[ZhipuAI] ===== Environment Check =====');
-  console.log('[ZhipuAI] process.env.ZHIPUAI_API_KEY:', (process.env as any)?.ZHIPUAI_API_KEY ? 'SET' : 'NOT SET');
-  console.log('[ZhipuAI] process.env.API_KEY:', (process.env as any)?.API_KEY ? 'SET' : 'NOT SET');
-  console.log('[ZhipuAI] import.meta.env.VITE_ZHIPUAI_API_KEY:', (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY ? 'SET' : 'NOT SET');
-  console.log('[ZhipuAI] ZHIPUAI_API_BASE:', ZHIPUAI_API_BASE);
-  console.log('[ZhipuAI] ZHIPUAI_MODEL:', ZHIPUAI_MODEL);
-  console.log('[ZhipuAI] =================================');
-}
-
-/**
- * Generates a single line snippet using ZhipuAI with anti-repetition logic.
- * Uses OpenAI-compatible API format for ZhipuAI models.
- */
-export async function generateSnippet(
-  prompt: string,
-  language: string = "English",
-  history: PerspectiveHistory[] = [],
-  retryCount: number = 0
-): Promise<string> {
+function getPool(key: string): PerspectivePoolItem[] {
   try {
-    // Verify API key presence - support multiple ways to read environment variables
-    // 1. process.env (injected by Vite define)
-    // 2. import.meta.env (Vite standard way)
-    const apiKey = (process.env as any)?.ZHIPUAI_API_KEY
-      || (process.env as any)?.API_KEY
-      || (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY
-      || (import.meta.env as any)?.VITE_GEMINI_API_KEY;
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    return [];
+  }
+}
 
-    if (!apiKey) {
-      console.error("StartlyTab: API key not found. Using localized fallback.");
-      console.error("StartlyTab: Checked process.env.ZHIPUAI_API_KEY:", (process.env as any)?.ZHIPUAI_API_KEY ? 'SET' : 'NOT SET');
-      console.error("StartlyTab: Checked process.env.API_KEY:", (process.env as any)?.API_KEY ? 'SET' : 'NOT SET');
-      console.error("StartlyTab: Checked import.meta.env.VITE_ZHIPUAI_API_KEY:", (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY ? 'SET' : 'NOT SET');
-      console.error("StartlyTab: Please set ZHIPUAI_API_KEY or VITE_ZHIPUAI_API_KEY in Vercel environment variables");
-      return getRandomFallback(language);
+function savePool(key: string, pool: PerspectivePoolItem[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(pool));
+  } catch (e) {
+    console.warn('Failed to save perspective pool:', e);
+  }
+}
+
+// --- Main Generation Service ---
+
+export async function generateSnippet(
+  context: PerspectiveRouterContext,
+  retryCount: number = 0,
+  onChunk?: (text: string) => void
+): Promise<{ text: string, plan: PerspectivePlan }> {
+  try {
+    // 1. Initial Routing (to determine intent/key)
+    let plan = routePerspective(context);
+    const poolKey = getPoolKey(plan, context);
+    const pool = getPool(poolKey);
+
+    // 2. Second Routing (Attempt to use Pool)
+    // routePerspective will splice the pool if it finds a match
+    const refinedPlan = routePerspective(context, pool);
+
+    if (refinedPlan.cached_item) {
+      console.log('[StartlyTab] Zero-Latency Hit! Using cached perspective.', refinedPlan.cached_item);
+
+      // Save the updated pool (item removed)
+      savePool(poolKey, pool);
+
+      // Check if refill needed
+      if (pool.length < REFILL_THRESHOLD) {
+        console.log('[StartlyTab] Pool low, triggering silent refill...');
+        // Background refill - do not await
+        fetchAndRefillPool(context, refinedPlan, poolKey).catch(console.error);
+      }
+
+      return { text: refinedPlan.cached_item.text, plan: refinedPlan };
     }
 
-    console.log('[ZhipuAI] Generating perspective with API key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET');
+    // 3. Cold Start / Empty Pool - Fetch Batch
+    console.log('[StartlyTab] Pool empty/miss. Fetching fresh batch...');
+    // Use refinedPlan derived key, though poolKey usually matches
+    const result = await fetchAndRefillPool(context, refinedPlan, getPoolKey(refinedPlan, context), onChunk);
+    return result;
 
-    // Build diversity instruction based on history
-    const diversityInstruction = history.length > 0
-      ? `\n\nGenerationHistory:\n${history.slice(0, 5).map(h => `- "${h.text}"`).join('\n')}`
-      : '\n\nGenerationHistory: []';
+  } catch (error) {
+    console.error("[GeminiService] Generation failed:", error);
+    return { text: getRandomFallback(context.language), plan: routePerspective(context) };
+  }
+}
 
-    // Load system prompt from PERSPECTIVE_GENERATION_RULES.md
-    // Rules are loaded from the markdown file, only length validation is kept in code
-    const systemPrompt = await loadPerspectiveRules(language);
+async function fetchAndRefillPool(
+  ctx: PerspectiveRouterContext,
+  plan: PerspectivePlan,
+  poolKey: string,
+  onImmediateChunk?: (text: string) => void
+): Promise<{ text: string, plan: PerspectivePlan }> {
 
-    // Get current time if not provided
-    const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  // API Configuration
+  const deepseekKey = (process.env as any)?.DEEPSEEK_API_KEY || (import.meta.env as any)?.VITE_DEEPSEEK_API_KEY;
+  const siliconKey = (process.env as any)?.SILICONFLOW_API_KEY || (import.meta.env as any)?.VITE_SILICONFLOW_API_KEY;
+  const apiKey = deepseekKey || siliconKey;
 
-    // Build user prompt with Input Analysis format
-    const userPrompt = `CurrentTime: ${timeStr}
-UserThemes: ["${prompt}"]
-${diversityInstruction}
+  // @ts-ignore
+  const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
 
-Generate a perspective line based on the rules.`;
+  let apiBase = (process.env as any)?.DEEPSEEK_API_BASE || (import.meta.env as any)?.VITE_DEEPSEEK_API_BASE || 'https://api.deepseek.com';
+  let model = (process.env as any)?.DEEPSEEK_MODEL || (import.meta.env as any)?.VITE_DEEPSEEK_MODEL || 'deepseek-chat';
 
-    console.log('[ZhipuAI] Calling API with prompt:', prompt.substring(0, 50) + '...');
+  // Override for SiliconFlow
+  if (siliconKey && !deepseekKey) {
+    apiBase = (process.env as any)?.SILICONFLOW_API_BASE || (import.meta.env as any)?.VITE_SILICONFLOW_API_BASE || 'https://api.siliconflow.cn/v1';
+    // Force DeepSeek-V3 for fast generation (R1 is too slow for New Tab)
+    // Ignore .env if it points to R1 to ensure latency requirements
+    const envModel = (process.env as any)?.SILICONFLOW_MODEL || (import.meta.env as any)?.VITE_SILICONFLOW_MODEL;
+    if (envModel && (envModel.includes('R1') || envModel.includes('Reasoning'))) {
+      console.warn('[GeminiService] Detected R1 Reasoning model. Switching to V3 for latency perfermance.');
+      model = 'deepseek-ai/DeepSeek-V3';
+    } else {
+      model = envModel || 'deepseek-ai/DeepSeek-V3';
+    }
+  }
 
-    // Call ZhipuAI API (OpenAI compatible format)
-    // Use stricter max_tokens to prevent over-generation
-    const response = await fetch(`${ZHIPUAI_API_BASE}/chat/completions`, {
+  // In web development (localhost), use proxy to avoid CORS
+  // @ts-ignore
+  if (!isExtension && typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    if (siliconKey && !deepseekKey) {
+      apiBase = '/api/siliconflow';
+    } else {
+      apiBase = '/api/deepseek';
+    }
+  }
+
+  if (!apiKey) {
+    console.error("StartlyTab: No active API key found.");
+    return { text: getRandomFallback(ctx.language), plan };
+  }
+
+  const systemPrompt = buildSystemPrompt(plan);
+  const userPrompt = buildUserPrompt(ctx, plan);
+
+  try {
+    console.log('[GeminiService] URL:', `${apiBase}/chat/completions`);
+    console.log('[GeminiService] API Key:', apiKey.substring(0, 10) + '...');
+    console.log('[GeminiService] Model:', model);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.error('[GeminiService] Request Timed Out (30s)');
+      controller.abort();
+    }, 30000); // Increased to 30s to be safe, but V3 should be <2s
+
+    const response = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: ZHIPUAI_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: userPrompt
-          }
-        ],
-        temperature: 0.85 + (retryCount * 0.05), // Increase temperature on retries for more diversity
-        top_p: 0.95,
-        max_tokens: 50, // Reduced from 60 to encourage shorter, complete sentences
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+        temperature: 1.1, // High temp for batch diversity
+        stream: true
       }),
+      signal: controller.signal
     });
+
+    // Do NOT clear timeout here yet - wait until stream finishes or first item found
+    // clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[ZhipuAI] API error:", response.status, errorText);
-      return getRandomFallback(language);
+      const errText = await response.text();
+      console.error(`[GeminiService] API Error ${response.status}:`, errText);
+      throw new Error(`API Error: ${response.status}`);
     }
+    if (!response.body) throw new Error('No response body');
 
-    const data = await response.json();
-    let text = data.choices?.[0]?.message?.content?.trim() || '';
-
-    if (!text || text.length === 0) {
-      console.warn('[ZhipuAI] Empty response from API, using fallback');
-      return getRandomFallback(language);
-    }
-
-    // Remove any markdown, quotes, or unwanted formatting
-    text = text
-      .replace(/^["']|["']$/g, '') // Remove surrounding quotes
-      .replace(/\[h\](.*?)\[\/h\]/g, '$1') // Remove highlight tags if present
-      .replace(/#/g, '') // Remove hashtags
-      .replace(/[■□█◆▲▼●○]/g, '') // Remove geometric shapes
-      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+$/u, '') // Remove trailing emojis
-      .trim();
-
-    // Check length - if too long, retry generation instead of truncating
-    // This ensures we get a complete, meaningful sentence within the limit
-    if (text.length > MAX_QUOTE_LENGTH && retryCount < MAX_RETRIES) {
-      console.log(`[ZhipuAI] Generated text (${text.length} chars) exceeds limit (${MAX_QUOTE_LENGTH}), retrying for shorter complete sentence...`);
-      return generateSnippet(prompt, language, history, retryCount + 1);
-    }
-
-    // Only use smart truncation as last resort (if we've exhausted retries)
-    if (text.length > MAX_QUOTE_LENGTH) {
-      console.warn(`[ZhipuAI] Text still too long after ${MAX_RETRIES} retries, applying smart truncation...`);
-      text = smartTruncate(text, MAX_QUOTE_LENGTH);
-    }
-
-    console.log('[ZhipuAI] Generated perspective:', text.substring(0, 50) + '...');
-
-    // Check if generated text is too similar to history
-    if (isTooSimilar(text, history) && retryCount < MAX_RETRIES) {
-      console.log(`[ZhipuAI] Perspective too similar, retrying (attempt ${retryCount + 1})...`);
-      return generateSnippet(prompt, language, history, retryCount + 1);
-    }
-
-    console.log('[ZhipuAI] Successfully generated unique perspective');
-    return text;
-  } catch (error: any) {
-    // Log detailed error information while ensuring the UI doesn't break
-    console.error("[ZhipuAI] Generation failed:", error);
-    console.error("[ZhipuAI] Error details:", {
-      message: error?.message,
-      status: error?.status,
-      statusText: error?.statusText,
-      apiKeySet: !!((process.env as any)?.ZHIPUAI_API_KEY || (process.env as any)?.API_KEY || (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY)
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let firstItemFound = false;
+    let returnResolver: (value: { text: string, plan: PerspectivePlan }) => void;
+    const returnPromise = new Promise<{ text: string, plan: PerspectivePlan }>((resolve) => {
+      returnResolver = resolve;
     });
-    return getRandomFallback(language);
+
+    // Loop to process stream
+    (async () => {
+      const newItems: PerspectivePoolItem[] = [];
+      let sseBuffer = '';
+      let contentAccumulator = ''; // Reconstructed JSON string from LLM
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          sseBuffer += chunk;
+
+          // Process SSE lines
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop() || ''; // Keep incomplete line
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed === '' || trimmed === 'data: [DONE]') continue;
+
+            if (trimmed.startsWith('data: ')) {
+              try {
+                const json = JSON.parse(trimmed.substring(6));
+                const delta = json.choices?.[0]?.delta?.content;
+
+                if (delta) {
+                  contentAccumulator += delta;
+
+                  // Incremental JSON Parser Logic on Content
+                  let startIndex = contentAccumulator.indexOf('{');
+                  while (startIndex !== -1) {
+                    const endIndex = findClosingBrace(contentAccumulator, startIndex);
+                    if (endIndex !== -1) {
+                      const jsonStr = contentAccumulator.substring(startIndex, endIndex + 1);
+                      try {
+                        const item = JSON.parse(jsonStr) as PerspectivePoolItem;
+                        if (item.text && item.style) { // Validate it's our item
+                          newItems.push(item);
+
+                          // If this is the FIRST item and we have a waiter (onImmediateChunk), serve it!
+                          if (!firstItemFound && onImmediateChunk) {
+                            firstItemFound = true;
+                            onImmediateChunk(sanitizeOutput(item.text));
+                            returnResolver({ text: sanitizeOutput(item.text), plan });
+                          } else if (!firstItemFound && !onImmediateChunk) {
+                            // If no streamer, resolve promise immediately
+                            firstItemFound = true;
+                            returnResolver({ text: sanitizeOutput(item.text), plan });
+                          }
+                        }
+                        // Remove processed part from accumulator
+                        contentAccumulator = contentAccumulator.substring(endIndex + 1);
+                        startIndex = contentAccumulator.indexOf('{'); // Look for next
+                      } catch (e) {
+                        // Content parse failed (e.g. valid brace but invalid JSON inside?)
+                        // Skip this opening brace
+                        startIndex = contentAccumulator.indexOf('{', startIndex + 1);
+                      }
+                    } else {
+                      // No closing brace yet
+                      break;
+                    }
+                  }
+                }
+              } catch (e) {
+                // SSE parse error (ignore)
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Stream] Parse error:', e);
+      } finally {
+        // End of stream
+        if (newItems.length > 0) {
+          console.log(`[StartlyTab] Refilled pool with ${newItems.length} items.`);
+          // Save to pool (merge with existing)
+          const currentPool = getPool(poolKey);
+          // Append NEW generic items to pool
+          savePool(poolKey, [...currentPool, ...newItems]);
+        }
+
+        // If we finished and never resolved (e.g. empty response), resolve with fallback
+        if (!firstItemFound) {
+          // @ts-ignore
+          if (returnResolver) returnResolver({ text: getRandomFallback(ctx.language), plan });
+        }
+      }
+    })();
+
+    return returnPromise;
+
+  } catch (e) {
+    console.error("Batch Fetch Failed", e);
+    return { text: getRandomFallback(ctx.language), plan };
   }
+}
+
+// Helper: Find balanced closing brace
+function findClosingBrace(str: string, start: number): number {
+  let depth = 0;
+  for (let i = start; i < str.length; i++) {
+    if (str[i] === '{') depth++;
+    if (str[i] === '}') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+// --- Prompt Engineering V3.5 ---
+
+function buildSystemPrompt(plan: PerspectivePlan): string {
+  return `Role: User's "Inner Voice" & "Environmental Observer".
+Task: Generate a JSON Array of ${BATCH_SIZE} unique lines.
+
+Current Context:
+- Intent: ${plan.intent}
+- Themes: ${plan.selected_theme || 'General'}
+- Language: ${plan.language}
+
+Strict Style Guidelines (Dual-Track):
+1. MACRO_ACTION, REFRAME, PERMISSION, GENTLE_QUESTION (Track A - Interactive)
+   - Guide the user gently. NO Advice ("Try to...", "You should...").
+   - Use "Permission" tone ("It's okay to...").
+
+2. MICRO_STORY, SENSORY, WITTY (Track B - Observational)
+   - Subject must be ENVIRONMENT (Light, Sound, Objects, Atmosphere).
+   - Describe texture, temperature, or silence. NO "You".
+
+Output Format (Strict JSON Array):
+[
+  {"text": "Line 1...", "style": "micro_action", "track": "A"},
+  {"text": "Line 2...", "style": "sensory", "track": "B"}
+]
+
+Constraints:
+- NO Slogans ("Believe in yourself").
+- NO Generic Positivity.
+- NO Emojis.
+- Keep lines under ${plan.max_length_chars} chars.`;
+}
+
+function buildUserPrompt(ctx: PerspectiveRouterContext, plan: PerspectivePlan): string {
+  const weather = ctx.weather || 'Unknown';
+  const battery = ctx.battery_level ? `${ctx.battery_level}%` : 'Unknown';
+
+  return `Generate ${BATCH_SIZE} lines.
+Context Anchors:
+- Time: ${ctx.local_time} (${plan.intent})
+- Weather: ${weather} (If Rain/Cloudy -> cozy/melancholic)
+- Battery: ${battery} (If low -> anxiety/energy; If high -> potential)
+- Sessions: ${ctx.session_count_today}
+
+Distribution:
+- 40% Track A (Validation/Action)
+- 40% Track B (Sensory/Atmosphere)
+- 20% Witty/Random
+
+Ensure high variety in sentence structure.`;
+}
+
+function sanitizeOutput(text: string): string {
+  return text
+    .replace(/^["'「](.*?)["'」]$/g, '$1')
+    .replace(/\[h\](.*?)\[\/h\]/g, '$1')
+    .replace(/#/g, '')
+    .trim();
 }
 
 function getRandomFallback(language: string): string {

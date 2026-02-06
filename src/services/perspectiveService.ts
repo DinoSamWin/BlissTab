@@ -22,15 +22,15 @@ function normalizeText(text: string): string {
 function calculateSimilarity(text1: string, text2: string): number {
   const normalized1 = normalizeText(text1);
   const normalized2 = normalizeText(text2);
-  
+
   if (normalized1 === normalized2) return 1.0;
-  
+
   const words1 = new Set(normalized1.split(/\s+/));
   const words2 = new Set(normalized2.split(/\s+/));
-  
+
   const intersection = new Set([...words1].filter(w => words2.has(w)));
   const union = new Set([...words1, ...words2]);
-  
+
   return intersection.size / union.size;
 }
 
@@ -43,7 +43,7 @@ export function isTooSimilar(
   threshold: number = SIMILARITY_THRESHOLD
 ): boolean {
   if (!history || history.length === 0) return false;
-  
+
   return history.some(entry => {
     const similarity = calculateSimilarity(text, entry.text);
     return similarity >= threshold;
@@ -62,16 +62,22 @@ export function filterRecentHistory(
 }
 
 /**
- * Adds a new perspective to history
+ * Adds a new perspective to history with optional metadata
  */
 export function addToHistory(
   text: string,
   promptId: string,
-  history: PerspectiveHistory[] = []
+  history: PerspectiveHistory[] = [],
+  metadata?: { intent?: string; style?: string; theme?: string }
 ): PerspectiveHistory[] {
   const filtered = filterRecentHistory(history);
   return [
-    { text, timestamp: Date.now(), promptId },
+    {
+      text,
+      timestamp: Date.now(),
+      promptId,
+      ...metadata
+    },
     ...filtered
   ].slice(0, 50); // Keep max 50 entries
 }
@@ -102,3 +108,44 @@ export function saveHistory(history: PerspectiveHistory[]): void {
   }
 }
 
+/**
+ * Calculates how many days in the last 7 days the user opened between 23:00 - 06:00
+ */
+export function getLateNightStreak(history: PerspectiveHistory[]): number {
+  const last7Days = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const lateNightDates = new Set<string>();
+
+  history.forEach(entry => {
+    if (entry.timestamp < last7Days) return;
+
+    const date = new Date(entry.timestamp);
+    const hours = date.getHours();
+
+    // Late night defined as 23:00 - 06:00
+    if (hours >= 23 || hours < 6) {
+      lateNightDates.add(date.toDateString());
+    }
+  });
+
+  return lateNightDates.size;
+}
+
+/**
+ * Calculates minutes since the last generated perspective
+ */
+export function getMinutesSinceLast(history: PerspectiveHistory[]): number {
+  if (history.length === 0) return 999;
+  const last = history[0].timestamp;
+  return Math.floor((Date.now() - last) / (1000 * 60));
+}
+
+/**
+ * Calculates how many perspectives were generated today
+ */
+export function getSessionCountToday(history: PerspectiveHistory[]): number {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const startTs = startOfDay.getTime();
+
+  return history.filter(h => h.timestamp >= startTs).length;
+}

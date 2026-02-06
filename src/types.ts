@@ -72,8 +72,45 @@ export interface ToastMessage {
   type: ToastType;
 }
 
+
 export interface PerspectiveHistory {
   text: string;
   timestamp: number; // Unix timestamp in milliseconds
   promptId: string;
+  intent?: string;
+  style?: string;
+  theme?: string;
+}
+
+export interface PerspectiveRouterContext {
+  local_time: string; // HH:MM
+  weekday: number; // 0-6
+  is_weekend: boolean;
+  session_count_today: number;
+  minutes_since_last: number;
+  late_night_streak: number;
+  work_mode_disabled?: boolean;
+  custom_themes?: string[];
+  theme_only?: boolean;
+  recent_history: PerspectiveHistory[];
+  language: string;
+  // V3.5 Environment Context
+  weather?: string;
+  battery_level?: number;
+}
+
+export interface PerspectivePoolItem {
+  text: string;
+  style: string;
+  track: 'A' | 'B';
+}
+
+export interface PerspectivePlan {
+  intent: string;
+  style: string;
+  topic_source: 'custom' | 'context';
+  selected_theme?: string;
+  language: string;
+  max_length_chars: number;
+  allow_one_comma: boolean;
 }

@@ -28,14 +28,32 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: '0.0.0.0',
+      proxy: {
+        '/api/siliconflow': {
+          target: 'https://api.siliconflow.cn/v1',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/siliconflow/, ''),
+        },
+        '/api/deepseek': {
+          target: 'https://api.deepseek.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/deepseek/, ''),
+        },
+      },
     },
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(apiKey),
-      'process.env.GEMINI_API_KEY': JSON.stringify(geminiKey),
-      'process.env.ZHIPUAI_API_KEY': JSON.stringify(zhipuaiKey),
-      'process.env.ZHIPUAI_API_BASE': JSON.stringify(env.ZHIPUAI_API_BASE || env.VITE_ZHIPUAI_API_BASE || 'https://open.bigmodel.cn/api/paas/v4'),
-      'process.env.ZHIPUAI_MODEL': JSON.stringify(env.ZHIPUAI_MODEL || env.VITE_ZHIPUAI_MODEL || 'glm-4-flash'),
+      'process.env.API_KEY': JSON.stringify(''),
+      'process.env.GEMINI_API_KEY': JSON.stringify(''),
+      'process.env.ZHIPUAI_API_KEY': JSON.stringify(''),
+      'process.env.ZHIPUAI_API_BASE': JSON.stringify(''),
+      'process.env.ZHIPUAI_MODEL': JSON.stringify(''),
+      'process.env.SILICONFLOW_API_BASE': JSON.stringify(''),
+      'process.env.SILICONFLOW_MODEL': JSON.stringify(''),
+      // New DeepSeek Config
+      'process.env.DEEPSEEK_API_KEY': JSON.stringify(env.DEEPSEEK_API_KEY || env.VITE_DEEPSEEK_API_KEY || ''),
+      'process.env.DEEPSEEK_API_BASE': JSON.stringify(env.DEEPSEEK_API_BASE || env.VITE_DEEPSEEK_API_BASE || 'https://api.deepseek.com'),
+      'process.env.DEEPSEEK_MODEL': JSON.stringify(env.DEEPSEEK_MODEL || env.VITE_DEEPSEEK_MODEL || 'deepseek-chat'),
     },
     resolve: {
       alias: {

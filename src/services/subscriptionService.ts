@@ -11,7 +11,7 @@ let supabaseClient: SupabaseClient | null = null;
  */
 function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
-  
+
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('[Subscription] Supabase not configured. Using default free tier.');
     return null;
@@ -41,7 +41,7 @@ interface SubscriptionData {
  */
 export async function fetchSubscriptionState(userId: string): Promise<Partial<User>> {
   const client = getSupabaseClient();
-  
+
   // Fallback: return default free tier if Supabase not configured
   if (!client) {
     console.log('[Subscription] Supabase not configured, defaulting to free tier');
@@ -83,7 +83,7 @@ export async function fetchSubscriptionState(userId: string): Promise<Partial<Us
         subscriptionStatus: (data.subscription_status as SubscriptionStatus) || 'active',
         subscriptionExpiresAt: data.subscription_expires_at || null,
       };
-      
+
       console.log('[Subscription] Fetched subscription state:', subscriptionData);
       return subscriptionData;
     }
@@ -188,7 +188,7 @@ export function determineSubscriptionTier(user: User | null): SubscriptionTier {
   // If redeem is disabled, user loses membership benefits even if they redeemed before
   const redeemEnabled = user.redeemEnabled ?? true; // Default to enabled
   const memberViaRedeem = user.memberViaRedeem === true && redeemEnabled;
-  
+
   // Check if user has active subscription
   const isSubscribed = user.isSubscribed === true;
   const status = user.subscriptionStatus || 'active';
@@ -221,7 +221,7 @@ export function determineSubscriptionTier(user: User | null): SubscriptionTier {
  */
 export function isSubscriptionActive(user: User | null): boolean {
   if (!user || !user.isSubscribed) return false;
-  
+
   const status = user.subscriptionStatus || 'active';
   if (status !== 'active') return false;
 

@@ -1,12 +1,11 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
 import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
 import { generateSnippet } from './services/geminiService';
-import { initGoogleAuth, renderGoogleButton, openGoogleSignIn, signOutUser, isExtension } from './services/authService';
+import { initGoogleAuth, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
-import { loadHistory, saveHistory, addToHistory } from './services/perspectiveService';
-import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount, canAddGateway } from './services/usageLimitsService';
+import { loadHistory, saveHistory, addToHistory, getSessionCountToday, getMinutesSinceLast, getLateNightStreak } from './services/perspectiveService';
+import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount } from './services/usageLimitsService';
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import { canonicalizeUrl } from './services/urlCanonicalService';
@@ -16,7 +15,6 @@ import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
 import IntegrationGateways from './components/IntegrationGateways';
-import { useExtensionSync } from './hooks/useExtensionSync';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(() => {
@@ -93,10 +91,7 @@ const App: React.FC = () => {
   // Keep ref in sync with appState
   useEffect(() => {
     appStateRef.current = appState;
-    appStateRef.current = appState;
   }, [appState]);
-
-
 
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
     const id = Date.now().toString();
@@ -105,7 +100,7 @@ const App: React.FC = () => {
   }, []);
 
   const saveState = useCallback(async (state: AppState | ((prev: AppState) => AppState), skipSync = false) => {
-    // Handle functional updates-use setAppState's functional form
+    // Handle functional updates - use setAppState's functional form
     let newState: AppState;
 
     if (typeof state === 'function') {
@@ -143,9 +138,6 @@ const App: React.FC = () => {
       }
     }
   }, [addToast]);
-
-  // Sync with Chrome Extension Storage
-  useExtensionSync(appState, saveState);
 
   // Function to handle user login and data sync (extracted for reuse)
   const handleUserLogin = useCallback(async (user: User) => {
@@ -201,7 +193,7 @@ const App: React.FC = () => {
         // Migrate local preference to cloud if exists
         if (preferenceToMigrate) {
           const newIntention = {
-            id: `intention_${Date.now()} `,
+            id: `intention_${Date.now()}`,
             prompt: preferenceToMigrate,
             active: true
           };
@@ -222,7 +214,7 @@ const App: React.FC = () => {
             links: cloudData.links?.length || 0,
             requests: requests.length
           });
-          // Use cloud data as source of truth-don't merge with local state
+          // Use cloud data as source of truth - don't merge with local state
           const linksWithOverrides = (cloudData.links || []).map((l: any) => {
             let canonicalUrl = l.canonicalUrl || l.url;
             try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch { }
@@ -258,7 +250,7 @@ const App: React.FC = () => {
                     }
                   }
 
-                  // Download in background-don't await
+                  // Download in background - don't await
                   // Pass storagePath to use Supabase download() method instead of direct fetch
                   downloadAndCacheLogo(
                     canonicalUrl,
@@ -271,7 +263,7 @@ const App: React.FC = () => {
                         // Trigger re-render to show cached logo
                         setAppState(prev => ({ ...prev }));
                       } else {
-                        // Download failed, but we still have the URL-it should display directly
+                        // Download failed, but we still have the URL - it should display directly
                         console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
                       }
                     })
@@ -280,7 +272,7 @@ const App: React.FC = () => {
                       // Even if download fails, the URL should still work for direct display
                     });
                 } else if (linkWithOverride.customLogoPath) {
-                  // No URL available, but we have path-try to generate signed URL
+                  // No URL available, but we have path - try to generate signed URL
                   getLogoSignedUrl(linkWithOverride.customLogoPath)
                     .then(signedUrl => {
                       if (signedUrl && linkWithOverride.customLogoHash) {
@@ -431,7 +423,7 @@ const App: React.FC = () => {
                     }
                   }
 
-                  // Download in background-don't await
+                  // Download in background - don't await
                   // Pass storagePath to use Supabase download() method instead of direct fetch
                   downloadAndCacheLogo(
                     canonicalUrl,
@@ -444,7 +436,7 @@ const App: React.FC = () => {
                         // Trigger re-render to show cached logo
                         setAppState(prev => ({ ...prev }));
                       } else {
-                        // Download failed, but we still have the URL-it should display directly
+                        // Download failed, but we still have the URL - it should display directly
                         console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
                       }
                     })
@@ -453,7 +445,7 @@ const App: React.FC = () => {
                       // Even if download fails, the URL should still work for direct display
                     });
                 } else if (linkWithOverride.customLogoPath) {
-                  // No URL available, but we have path-try to generate signed URL
+                  // No URL available, but we have path - try to generate signed URL
                   getLogoSignedUrl(linkWithOverride.customLogoPath)
                     .then(signedUrl => {
                       if (signedUrl && linkWithOverride.customLogoHash) {
@@ -503,10 +495,17 @@ const App: React.FC = () => {
   };
 
   const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false) => {
+    console.log('[App] fetchRandomSnippet called. isGenerating:', isGenerating, 'bypassLimit:', bypassLimit);
+    if (isGenerating) {
+      console.warn('[App] Request rejected: isGenerating is TRUE');
+      return;
+    }
+
     // Check usage limits before generating (unless bypassing for immediate refresh after preference save)
     if (!bypassLimit) {
       const limitCheck = canGeneratePerspective(appState);
       if (!limitCheck.allowed) {
+        console.warn('[App] Request rejected: Limit reached', limitCheck.reason);
         if (limitCheck.reason === 'context_needed') {
           // Show inline guidance instead of blocking
           setShowInlineGuidance(true);
@@ -550,20 +549,14 @@ const App: React.FC = () => {
       : activeRequests;
 
     const randomReq = eligible[Math.floor(Math.random() * eligible.length)];
+    lastPromptIdRef.current = randomReq.id;
 
     const requestId = ++snippetRequestIdRef.current;
-
+    setIsGenerating(true);
+    // Show loading while generating (prevents stale content flashes)
+    setCurrentSnippet(null);
 
     try {
-      setIsGenerating(true);
-      // Show loading while generating (prevents stale content flashes)
-      setCurrentSnippet(null);
-
-      if (!randomReq) {
-        throw new Error('No eligible perspective prompts found');
-      }
-      lastPromptIdRef.current = randomReq.id;
-
       // Increment perspective count for unauthenticated users (only if not bypassing)
       if (!appState.user && !bypassLimit) {
         const newCount = incrementPerspectiveCount();
@@ -583,16 +576,52 @@ const App: React.FC = () => {
         timestamp: Date.now()
       });
 
-      // Generate with history awareness-always call API (no caching)
-      const result = await generateSnippet(randomReq.prompt, appState.language, history);
+      // Fetch Battery Level (Best Effort)
+      let batteryLevel: number | undefined;
+      // @ts-ignore
+      if (typeof navigator.getBattery === 'function') {
+        try {
+          // @ts-ignore
+          const battery = await navigator.getBattery();
+          batteryLevel = Math.round(battery.level * 100);
+        } catch (e) {
+          console.warn('[App] Battery access failed', e);
+        }
+      }
+
+      // Calculate Router Context
+      const now = new Date();
+      const context: any = {
+        local_time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), // HH:MM
+        weekday: now.getDay(),
+        is_weekend: now.getDay() === 0 || now.getDay() === 6,
+        session_count_today: getSessionCountToday(history),
+        minutes_since_last: getMinutesSinceLast(history),
+        late_night_streak: getLateNightStreak(history),
+        work_mode_disabled: false, // Could be linked to settings later
+        custom_themes: appState.requests.filter(r => r.active).map(r => r.prompt),
+        language: appState.language,
+        recent_history: history,
+        // V3.5 Context
+        weather: 'Unknown',
+        battery_level: batteryLevel
+      };
+
+      // Generate with context - V3.5
+      // @ts-ignore
+      const { text: result, plan } = await generateSnippet(context);
 
       // Only apply the latest in-flight request result
       if (requestId !== snippetRequestIdRef.current) return;
 
       console.log('[App] Generated perspective:', result.substring(0, 50));
 
-      // Save to history
-      const updatedHistory = addToHistory(result, randomReq.id, history);
+      // Save to history (include plan metadata if available)
+      const updatedHistory = addToHistory(result, randomReq.id, history, {
+        intent: plan?.intent,
+        style: plan?.style,
+        theme: plan?.selected_theme
+      });
       saveHistory(updatedHistory);
 
       setCurrentSnippet(result);
@@ -617,13 +646,62 @@ const App: React.FC = () => {
     ));
   };
 
-  // Simple, editorial skeleton loader for Perspective text
-  const PerspectiveSkeleton: React.FC = () => {
+  // Jump loading (inspired by the reference): a soft "jumping star" with squash + shadow
+  const JumpStarLoading: React.FC<{ caption?: string }> = ({ caption = 'Reflecting…' }) => {
     return (
-      <div className="flex flex-col items-center gap-6 py-4 animate-pulse" role="status" aria-label="Loading perspective">
-        <div className="h-10 md:h-14 lg:h-16 bg-gray-200/60 dark:bg-white/5 rounded-2xl w-3/4" />
-        <div className="h-10 md:h-14 lg:h-16 bg-gray-200/40 dark:bg-white/5 rounded-2xl w-5/6" />
-        <div className="h-10 md:h-14 lg:h-16 bg-gray-200/20 dark:bg-white/5 rounded-2xl w-1/2" />
+      <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
+        <style>{`
+          @keyframes st-jump {
+            0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+            18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
+            50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
+            80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
+            100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+          }
+          @keyframes st-shadow {
+            0%   { transform: scaleX(1); opacity: 0.22; }
+            50%  { transform: scaleX(0.62); opacity: 0.10; }
+            100% { transform: scaleX(1); opacity: 0.22; }
+          }
+          @keyframes st-glow {
+            0%, 100% { opacity: 0.18; filter: blur(26px); }
+            50% { opacity: 0.28; filter: blur(34px); }
+          }
+        `}</style>
+
+        {/* soft glow behind the star */}
+        <div
+          className="pointer-events-none absolute -inset-x-16 -inset-y-20 rounded-[4rem]"
+          style={{
+            animation: 'st-glow 1.15s ease-in-out infinite',
+            background:
+              'radial-gradient(circle at 50% 45%, rgba(236,72,153,0.14), rgba(168,85,247,0.10), rgba(99,102,241,0.08), rgba(0,0,0,0))',
+          }}
+        />
+
+        <div className="relative flex flex-col items-center justify-center py-10">
+          <div className="relative">
+            {/* shadow */}
+            <div
+              className="absolute left-1/2 -translate-x-1/2 top-[56px] w-[42px] h-[10px] rounded-full bg-black/20 dark:bg-white/10"
+              style={{ animation: 'st-shadow 1.15s ease-in-out infinite' }}
+            />
+
+            {/* star */}
+            <div style={{ animation: 'st-jump 1.15s cubic-bezier(.22,.9,.3,1) infinite', transformOrigin: '50% 70%' }}>
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M12 2.3l2.6 6.1 6.6.6-5 4.3 1.5 6.4L12 16.9 6.3 19.7l1.5-6.4-5-4.3 6.6-.6L12 2.3z"
+                  fill="rgba(239,68,68,0.92)"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <div className="mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide">
+            {caption}
+          </div>
+        </div>
       </div>
     );
   };
@@ -664,7 +742,7 @@ const App: React.FC = () => {
     if (!searchQuery.trim()) return;
 
     const engine = SEARCH_ENGINES.find(e => e.id === selectedEngine) || SEARCH_ENGINES[0];
-    const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())} `;
+    const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
     window.open(searchUrl, '_blank', 'noopener,noreferrer');
     setSearchQuery(''); // 搜索后清空输入框
   };
@@ -695,7 +773,7 @@ const App: React.FC = () => {
     let line = '';
 
     words.forEach(word => {
-      const testLine = line ? `${line} ${word} ` : word;
+      const testLine = line ? `${line} ${word}` : word;
       const { width } = ctx.measureText(testLine);
       if (width > maxWidth) {
         if (line) lines.push(line);
@@ -1044,13 +1122,13 @@ const App: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    // Background-off-white / very light warm gray
+    // Background - off-white / very light warm gray
     ctx.fillStyle = '#FAFAF8';
     ctx.fillRect(0, 0, width, totalHeight);
 
     let currentY = 120; // Start from top
 
-    // ========== 1. TOP SECTION-PERSPECTIVE QUOTE ==========
+    // ========== 1. TOP SECTION - PERSPECTIVE QUOTE ==========
 
     // Large quotation mark accent (top left)
     ctx.fillStyle = '#E8E8E6';
@@ -1117,7 +1195,7 @@ const App: React.FC = () => {
 
     currentY += quoteHeight + 100; // Spacing after quote
 
-    // ========== 2. MIDDLE SECTION-USER IDENTITY ==========
+    // ========== 2. MIDDLE SECTION - USER IDENTITY ==========
 
     const user = appState.user;
     const avatarSize = 64;
@@ -1169,7 +1247,7 @@ const App: React.FC = () => {
       ctx.font = '500 20px "Inter", sans-serif';
       ctx.textAlign = 'left';
 
-      const displayName = user.name || (user.email ? `${user.email.split('@')[0].substring(0, 1)}*** @${user.email.split('@')[1]} ` : 'User');
+      const displayName = user.name || (user.email ? `${user.email.split('@')[0].substring(0, 1)}***@${user.email.split('@')[1]}` : 'User');
       ctx.fillText(displayName, textX, textY);
 
       // Secondary line: "Shared via StartlyTab"
@@ -1177,7 +1255,7 @@ const App: React.FC = () => {
       ctx.font = '400 14px "Inter", sans-serif';
       ctx.fillText('Shared via StartlyTab', textX, textY + 32);
     } else {
-      // No user-show generic
+      // No user - show generic
       generateAvatar(ctx, 'U', avatarSize, avatarX, avatarY);
       ctx.fillStyle = '#2A2A2A';
       ctx.font = '500 20px "Inter", sans-serif';
@@ -1186,7 +1264,7 @@ const App: React.FC = () => {
 
     currentY += userSectionHeight + spacingBetweenSections;
 
-    // ========== 3. BOTTOM SECTION-PRODUCT PROMOTION ==========
+    // ========== 3. BOTTOM SECTION - PRODUCT PROMOTION ==========
 
     // Homepage mockup
     const mockupWidth = width * 0.85;
@@ -1241,7 +1319,7 @@ const App: React.FC = () => {
     if (!currentSnippet) return;
     try {
       setIsSharing(true);
-      // Pass quote with highlights preserved-createShareCard will parse them
+      // Pass quote with highlights preserved - createShareCard will parse them
       const blob = await createShareCard(currentSnippet);
       if (!blob) throw new Error('Failed to create image');
       const url = URL.createObjectURL(blob);
@@ -1460,18 +1538,18 @@ const App: React.FC = () => {
 
       {/* 1. LAYERED BACKGROUNDS */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className={`theme-overlay bg-[#FBFBFE] ${appState.theme === 'light' ? 'opacity-100' : 'opacity-0'} `}>
+        <div className={`theme-overlay bg-[#FBFBFE] ${appState.theme === 'light' ? 'opacity-100' : 'opacity-0'}`}>
           <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-indigo-50/50 rounded-full blur-[160px] animate-breathing-slow" />
           <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-purple-50/40 rounded-full blur-[140px] animate-breathing-slow" style={{ animationDelay: '-5s' }} />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0)_0%,rgba(251,251,254,1)_100%)]" />
         </div>
-        <div className={`theme-overlay bg-[#0A0A0B] ${appState.theme === 'dark' ? 'opacity-100' : 'opacity-0'} `}>
+        <div className={`theme-overlay bg-[#0A0A0B] ${appState.theme === 'dark' ? 'opacity-100' : 'opacity-0'}`}>
           <div className="absolute top-[10%] left-[20%] w-[40%] h-[40%] bg-indigo-950/20 rounded-full blur-[120px] animate-lunar-drift" />
           <div className="absolute bottom-[20%] right-[15%] w-[35%] h-[35%] bg-purple-950/10 rounded-full blur-[100px] animate-lunar-drift" style={{ animationDelay: '-8s' }} />
         </div>
       </div>
 
-      {/* 2. NAVIGATION BAR-FIXED TO FULL WIDTH SPREAD */}
+      {/* 2. NAVIGATION BAR - FIXED TO FULL WIDTH SPREAD */}
       <nav className="w-full px-8 md:px-12 lg:px-16 py-10 flex justify-between items-center z-20 animate-reveal">
         {/* Left: Branding */}
         <div className="flex items-center gap-4">
@@ -1514,7 +1592,7 @@ const App: React.FC = () => {
                 }}
               />
 
-              {/* Circular Search Button-Embedded */}
+              {/* Circular Search Button - Embedded */}
               <button
                 onClick={handleSearch}
                 className="absolute right-2 top-1/2 -translate-y-1/2 w-[34px] h-[34px] rounded-full bg-black flex items-center justify-center hover:bg-[#1A1A1A] active:bg-[#111] transition-colors cursor-pointer"
@@ -1536,8 +1614,8 @@ const App: React.FC = () => {
                       setSelectedEngine(engine.id);
                       setIsSearchDropdownOpen(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 hover: bg-gray-50 dark: hover: bg-white / 5 transition-colors ${selectedEngine === engine.id ? 'bg-gray-50 dark:bg-white/5' : ''
-                      } `}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors ${selectedEngine === engine.id ? 'bg-gray-50 dark:bg-white/5' : ''
+                      }`}
                   >
                     <img
                       src={engine.icon}
@@ -1558,7 +1636,7 @@ const App: React.FC = () => {
             onClick={() => {
               const newTheme = appState.theme === 'light' ? 'dark' : 'light';
               saveState({ ...appState, theme: newTheme });
-              addToast(`Theme: ${newTheme} `, 'info');
+              addToast(`Theme: ${newTheme}`, 'info');
             }}
             className="p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
             aria-label="Toggle Theme"
@@ -1596,13 +1674,13 @@ const App: React.FC = () => {
               {currentSnippet ? (
                 renderSnippet(currentSnippet)
               ) : (
-                <PerspectiveSkeleton />
+                <JumpStarLoading caption="Content coming soon" />
               )}
             </h1>
           </div>
 
           <div className="mt-10 flex flex-col items-center gap-4">
-            {/* Action buttons-always visible */}
+            {/* Action buttons - always visible */}
             <div className="flex items-center gap-4">
               <button
                 onClick={() => fetchRandomSnippet()}
@@ -1625,9 +1703,9 @@ const App: React.FC = () => {
               </button>
             </div>
 
-            {/* Inline helper line-shown below buttons when threshold reached or after local save */}
+            {/* Inline helper line - shown below buttons when threshold reached or after local save */}
             {!isAuthenticated && (showInlineGuidance || hasLocalPreference) && (
-              <div className={`max-w-md w-full text-center animate-reveal mt-2 ${shouldShakeHelper ? 'animate-shake' : ''} `}>
+              <div className={`max-w-md w-full text-center animate-reveal mt-2 ${shouldShakeHelper ? 'animate-shake' : ''}`}>
                 {hasLocalPreference ? (
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Saved locally.{' '}
@@ -1662,9 +1740,6 @@ const App: React.FC = () => {
         <IntegrationGateways
           links={appState.links}
           onUpdate={(newLinks) => saveState(prev => ({ ...prev, links: newLinks }))}
-          isAuthenticated={isAuthenticated}
-          onLoginRequired={() => setIsLoginModalOpen(true)}
-          canAddMore={canAddGateway(appState).allowed}
         />
       ) : (
         /* Unauthenticated State: Hero Login Prompt */
@@ -1676,18 +1751,7 @@ const App: React.FC = () => {
                 <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
                   Unlimited shortcuts, always one click away.
                 </p>
-                <div className="flex flex-col items-center gap-4 w-full">
-                  <div id="google-login-btn" className="transition-all hover:scale-[1.02] active:scale-[0.98]"></div>
-
-                  {isExtension && (
-                    <button
-                      onClick={handleSignIn}
-                      className="px-8 py-3 bg-white/50 dark:bg-white/5 border border-black/5 dark:border-white/10 text-gray-600 dark:text-gray-300 rounded-full font-medium transition-all hover:bg-white dark:hover:bg-white/10 text-sm shadow-sm"
-                    >
-                      Try with Demo Account (Extension Only)
-                    </button>
-                  )}
-                </div>
+                <div id="google-login-btn" className="transition-all hover:scale-[1.02] active:scale-[0.98]"></div>
               </div>
             </div>
           </div>

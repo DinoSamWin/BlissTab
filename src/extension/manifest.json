@@ -8,8 +8,23 @@
         "tabs",
         "activeTab",
         "favicon",
-        "contextMenus"
+        "contextMenus",
+        "identity"
     ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://accounts.google.com https://sudmwgwvlsdkpoxrnsji.supabase.co https://open.bigmodel.cn https://api.siliconflow.cn https://api.deepseek.com https://cloud.umami.is;"
+    },
+    "oauth2": {
+        "client_id": "65772780936-q2m0q2jgj7b5r4vb9rn5ohm2vcvsshb7.apps.googleusercontent.com",
+        "scopes": [
+            "openid",
+            "email",
+            "profile"
+        ]
+    },
     "chrome_url_overrides": {
         "newtab": "index.html"
     },

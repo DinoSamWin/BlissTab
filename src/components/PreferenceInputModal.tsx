@@ -37,7 +37,7 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
       }, 100);
     }
   }, [isOpen, isAuthenticated, theme]);
-  
+
   // Listen for successful login to close modal
   useEffect(() => {
     if (isAuthenticated && isOpen) {
@@ -73,7 +73,7 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
             <br />
             Examples: a little gloomy, high-energy, poetic, light humor.
           </p>
-          
+
           <div className="mb-6">
             <textarea
               value={preference}
@@ -92,13 +92,13 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
             {!isAuthenticated && (
               <>
                 {/* Google Sign-In Button (same as homepage) */}
-                <div 
-                  id="preference-modal-google-btn" 
+                <div
+                  id="preference-modal-google-btn"
                   className="w-full flex justify-center transition-all hover:scale-[1.02] active:scale-[0.98]"
                 />
               </>
             )}
-            
+
             {isAuthenticated && (
               <button
                 onClick={handleSaveLocal}
@@ -108,7 +108,7 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
                 {isSaving ? 'Saving...' : 'Save'}
               </button>
             )}
-            
+
             <button
               onClick={onClose}
               className="w-full py-4 text-gray-500 dark:text-gray-400 text-sm font-medium hover:text-gray-700 dark:hover:text-gray-200 transition-colors"

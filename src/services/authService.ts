@@ -5,9 +5,6 @@ import { User } from '../types';
  */
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
-// @ts-ignore
-export const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
-
 const IS_PLACEHOLDER_ID = !CLIENT_ID || CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID') || CLIENT_ID === '';
 
 // Debug: Log client ID status (remove in production)
@@ -224,13 +221,13 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
 
   if (IS_PLACEHOLDER_ID) {
-    console.info("StartlyTab: Simulating login (No Client ID provided or Extension Mode).");
+    console.info("StartlyTab: Simulating login (No Client ID provided).");
     setTimeout(() => {
       const mockUser: User = {
         id: 'mock-' + Math.random().toString(36).substr(2, 9),
-        email: 'dean.pro@startlytab.com', // Fixed email for consistency
-        name: 'Dean Extension',
-        picture: `` // Empty picture to trigger letter avatar
+        email: 'workspace.pro@example.com',
+        name: 'Design Professional',
+        picture: `https://ui-avatars.com/api/?name=Design+Professional&background=6366f1&color=fff`
       };
       localStorage.setItem('focus_tab_user', JSON.stringify(mockUser));
       if (onUser) onUser(mockUser);

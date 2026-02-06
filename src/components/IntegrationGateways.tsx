@@ -28,15 +28,11 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { QuickLink } from '../types';
 import GatewayEditModal from './GatewayEditModal';
-import GatewayCreateModal from './GatewayCreateModal';
 
 // --- Types ---
 interface Props {
     links: QuickLink[];
     onUpdate: (links: QuickLink[]) => void;
-    isAuthenticated: boolean;
-    onLoginRequired: () => void;
-    canAddMore: boolean;
 }
 
 // --- Droppable Group Container ---
@@ -181,7 +177,172 @@ function NewGroupDropZone({ activeId }: { activeId: UniqueIdentifier | null }) {
 }
 
 
+// --- Gateway Create Modal (Enhanced with Logo Upload & Category Select) ---
+interface GatewayCreateModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (data: { url: string; title: string; logoFile: File | null; category: string }) => void;
+    initialCategory: string;
+    categories: string[];
+}
 
+function GatewayCreateModal({ isOpen, onClose, onSave, initialCategory, categories }: GatewayCreateModalProps) {
+    const [url, setUrl] = useState('');
+    const [title, setTitle] = useState('');
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+    const [isNewGroup, setIsNewGroup] = useState(false);
+    const [newGroupName, setNewGroupName] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setUrl('');
+            setTitle('');
+            setLogoFile(null);
+            setSelectedCategory(initialCategory);
+            setIsNewGroup(false);
+            setNewGroupName('');
+        }
+    }, [isOpen, initialCategory]);
+
+    const handleSave = () => {
+        const finalCategory = isNewGroup ? newGroupName.trim() : selectedCategory;
+        if (!finalCategory) return;
+        onSave({ url, title, logoFile, category: finalCategory });
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100010] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#0F0F0F] w-full max-w-lg rounded-[2rem] shadow-2xl border border-black/5 dark:border-white/10 overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
+                <div className="p-8">
+                    <div className="flex items-start justify-between gap-6 mb-6">
+                        <div>
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Add New Gateway</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Configure your new shortcut or tool.
+                            </p>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* URL Input */}
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">URL</label>
+                            <input
+                                autoFocus
+                                type="text"
+                                placeholder="https://..."
+                                value={url}
+                                onChange={(e) => setUrl(e.target.value)}
+                                className="mt-2 w-full bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-800 dark:text-gray-100 placeholder-gray-400"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && url) handleSave();
+                                }}
+                            />
+                        </div>
+
+                        {/* Category Select */}
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Group</label>
+                            <div className="mt-2 space-y-3">
+                                {!isNewGroup ? (
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={selectedCategory}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="w-full bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-800 dark:text-gray-100 appearance-none"
+                                        >
+                                            {categories.map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            onClick={() => setIsNewGroup(true)}
+                                            className="whitespace-nowrap px-4 bg-gray-100 dark:bg-white/5 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-white/10"
+                                        >
+                                            + New
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Enter new group name..."
+                                            value={newGroupName}
+                                            onChange={(e) => setNewGroupName(e.target.value)}
+                                            className="w-full bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-800 dark:text-gray-100"
+                                        />
+                                        <button
+                                            onClick={() => setIsNewGroup(false)}
+                                            className="whitespace-nowrap px-4 bg-gray-100 dark:bg-white/5 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-white/10"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Title Input */}
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Title (Optional)</label>
+                            <input
+                                type="text"
+                                placeholder="Check News..."
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                className="mt-2 w-full bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-800 dark:text-gray-100 placeholder-gray-400"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && url) handleSave();
+                                }}
+                            />
+                        </div>
+
+                        {/* Logo Upload */}
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Custom Logo (Optional)</label>
+                            <div className="mt-2 flex items-center gap-3">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                                    className="flex-1 text-xs text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-full file:border-0 file:bg-gray-100 file:px-4 file:py-2 file:text-[11px] file:font-bold file:uppercase file:tracking-widest file:text-gray-700 dark:file:bg-white/10 dark:file:text-gray-200"
+                                />
+                                {logoFile && (
+                                    <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[100px]">{logoFile.name}</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-8 flex justify-end gap-3">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            disabled={!url}
+                            onClick={handleSave}
+                            className={`px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${!url ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500' : 'bg-black dark:bg-white text-white dark:text-black hover:scale-105'}`}
+                        >
+                            Add Gateway
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // --- Delete Confirmation Modal ---
 interface DeleteConfirmModalProps {
@@ -207,24 +368,8 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm }: DeleteConfirmModalPr
 }
 
 // --- Main Component ---
-export default function IntegrationGateways({ links: propLinks, onUpdate, isAuthenticated, onLoginRequired, canAddMore }: Props) {
+export default function IntegrationGateways({ links: propLinks, onUpdate }: Props) {
     const [isExpanded, setIsExpanded] = useState(false);
-
-    const handleOpenCreateModal = (category: string) => {
-        if (!isAuthenticated) {
-            onLoginRequired();
-            return;
-        }
-        if (!canAddMore) {
-            // If they are logged in but reached the limit, we can either alert or open the modal 
-            // and handle it there. To be consistent with the popup, let's alert/toast via App.
-            // But for simple UX, we'll just let the App handle the 'canAddMore' flag.
-            alert("You've reached your gateway limit. Please upgrade to Pro for more.");
-            return;
-        }
-        setCreateModal({ isOpen: true, category });
-    };
-
     const [isHovered, setIsHovered] = useState(false);
     const [elasticY, setElasticY] = useState(0);
 
@@ -597,19 +742,13 @@ export default function IntegrationGateways({ links: propLinks, onUpdate, isAuth
                         transform: isHovered && elasticY > 0 ? `scale(${1 + (elasticY * 0.0005)})` : 'scale(1)'
                     }}
                     role="button"
+                    onClick={() => setIsExpanded(true)}
                 >
                     <div className="overflow-hidden h-[200px] px-6 py-6 md:px-8 md:py-8 relative rounded-[2rem]">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4"
                             style={{ transform: `translateY(${-elasticY}px)` }}>
                             {shortcutsLinks.slice(0, 18).map(link => (
-                                <div
-                                    key={link.id}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        window.open(link.url, '_blank');
-                                    }}
-                                    className="flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 h-[64px] w-full cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                                >
+                                <div key={link.id} className="flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 h-[64px] w-full">
                                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0">
                                         {(link.customLogoUrl || link.customLogoSignedUrl || link.icon) ? (
                                             <img src={link.customLogoUrl || link.customLogoSignedUrl || link.icon || ''} className="w-6 h-6 object-contain" />
@@ -627,13 +766,7 @@ export default function IntegrationGateways({ links: propLinks, onUpdate, isAuth
                             transition-all duration-500 delay-100
                             ${isHovered && elasticY < 10 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
                         `}>
-                                <div
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setIsExpanded(true);
-                                    }}
-                                    className="bg-gray-900/90 dark:bg-white/90 backdrop-blur text-white dark:text-gray-900 text-[10px] font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 whitespace-nowrap border border-white/10 dark:border-black/5 pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 transition-all"
-                                >
+                                <div className="bg-gray-900/90 dark:bg-white/90 backdrop-blur text-white dark:text-gray-900 text-[10px] font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 whitespace-nowrap border border-white/10 dark:border-black/5">
                                     <span>Expand</span>
                                 </div>
                             </div>
@@ -669,7 +802,7 @@ export default function IntegrationGateways({ links: propLinks, onUpdate, isAuth
                                 <span>New Group</span>
                             </button>
                             <button
-                                onClick={() => handleOpenCreateModal('快捷指令')}
+                                onClick={() => setCreateModal({ isOpen: true, category: '快捷指令' })}
                                 className="bg-white/50 dark:bg-white/5 text-orange-600 dark:text-orange-400 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 hover:shadow-lg transition-all flex items-center gap-2 border border-orange-200/50 dark:border-orange-500/20"
                             >
                                 <Plus className="w-4 h-4" />
@@ -817,7 +950,7 @@ export default function IntegrationGateways({ links: propLinks, onUpdate, isAuth
                                                         {/* Regular Add Button (Per Group) - Now shown for ALL groups including Default */}
                                                         {/* Style differentiated from header buttons: Dashed, simple icon */}
                                                         <button
-                                                            onClick={() => handleOpenCreateModal(category === 'Shortcuts' ? '快捷指令' : category)}
+                                                            onClick={() => setCreateModal({ isOpen: true, category: category === 'Shortcuts' ? '快捷指令' : category })}
                                                             className={`
                                                                 flex items-center justify-center p-3
                                                                 bg-white/50 dark:bg-white/5 border-2 border-dashed border-gray-300 dark:border-white/10

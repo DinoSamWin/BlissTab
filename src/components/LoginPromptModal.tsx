@@ -26,7 +26,7 @@ const LoginPromptModal: React.FC<LoginPromptModalProps> = ({ isOpen, onClose, on
           <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-8">
             Sign in to keep generating daily perspectives without limits.
           </p>
-          
+
           <div className="flex flex-col gap-4">
             <button
               onClick={handleSignIn}
@@ -40,7 +40,7 @@ const LoginPromptModal: React.FC<LoginPromptModalProps> = ({ isOpen, onClose, on
               </svg>
               <span>Sign in with Google</span>
             </button>
-            
+
             <button
               onClick={onClose}
               className="w-full py-4 text-gray-500 dark:text-gray-400 text-sm font-medium hover:text-gray-700 dark:hover:text-gray-200 transition-colors"

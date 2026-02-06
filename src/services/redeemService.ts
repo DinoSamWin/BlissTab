@@ -11,7 +11,7 @@ let supabaseClient: SupabaseClient | null = null;
  */
 function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
-  
+
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('[Redeem] Supabase not configured.');
     return null;
@@ -29,7 +29,7 @@ function getSupabaseClient(): SupabaseClient | null {
 /**
  * Redeem code error types
  */
-export type RedeemErrorCode = 
+export type RedeemErrorCode =
   | 'INVALID_CODE'
   | 'DISABLED_CODE'
   | 'ALREADY_REDEEMED'
@@ -53,7 +53,7 @@ export interface RedeemResponse {
  */
 export async function redeemCode(user: User, code: string): Promise<RedeemResponse> {
   const client = getSupabaseClient();
-  
+
   if (!client) {
     return {
       ok: false,
@@ -131,7 +131,7 @@ export async function redeemCode(user: User, code: string): Promise<RedeemRespon
     // Atomic transaction: Update redeem_codes and user_membership
     // Note: Supabase doesn't support true transactions via client, so we use a function
     // For production, use Supabase Edge Functions or RPC functions for atomicity
-    
+
     const now = new Date().toISOString();
 
     // Update redeem_codes
@@ -179,7 +179,7 @@ export async function redeemCode(user: User, code: string): Promise<RedeemRespon
     // Upsert user_membership - try INSERT first, then UPDATE if exists
     // This ensures RLS policies work correctly
     let membershipError = null;
-    
+
     // First, try to check if membership exists
     const { data: existingMembership } = await client
       .from('user_membership')
@@ -243,7 +243,7 @@ export async function redeemCode(user: User, code: string): Promise<RedeemRespon
         details: membershipError.details,
         hint: membershipError.hint
       });
-      
+
       // Try to rollback redeem_codes update (best effort)
       await client
         .from('redeem_codes')
@@ -287,7 +287,7 @@ export async function fetchUserMembership(userId: string): Promise<{
   membershipSince: string | null;
 } | null> {
   const client = getSupabaseClient();
-  
+
   if (!client) {
     return null;
   }
@@ -329,7 +329,7 @@ export async function fetchUserSettings(userId: string): Promise<{
   redeemEnabled: boolean;
 } | null> {
   const client = getSupabaseClient();
-  
+
   // Fallback to localStorage if Supabase is not configured (for local testing)
   if (!client) {
     console.warn('[Redeem] Supabase not configured, checking localStorage fallback');
@@ -417,7 +417,7 @@ export async function toggleRedeemFeature(
   redeemEnabled: boolean
 ): Promise<boolean> {
   const client = getSupabaseClient();
-  
+
   // Fallback to localStorage if Supabase is not configured (for local testing)
   if (!client) {
     console.warn('[Redeem] Supabase not configured, using localStorage fallback');

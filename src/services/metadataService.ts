@@ -12,6 +12,8 @@ interface CachedMetadata extends SiteMetadata {
 import { canonicalizeUrl, extractHostname } from './urlCanonicalService';
 import { upsertGatewayMetadataIfMissing } from './supabaseService';
 
+declare const chrome: any;
+
 // 缓存键名和配置
 const CACHE_STORAGE_KEY = 'focus_tab_metadata_cache';
 const CACHE_EXPIRY_DAYS = 30; // 缓存有效期 30 天
@@ -25,13 +27,13 @@ function loadCacheFromStorage(): Map<string, SiteMetadata> {
     if (saved) {
       const data = JSON.parse(saved);
       const now = Date.now();
-      
+
       for (const [key, value] of Object.entries(data)) {
         const metadata = value as CachedMetadata;
         if (metadata.cachedAt) {
           const age = now - metadata.cachedAt;
           const maxAge = CACHE_STALE_DAYS * 24 * 60 * 60 * 1000;
-          
+
           // 只加载未完全失效的缓存（超过 60 天才删除）
           if (age < maxAge) {
             // 移除 cachedAt 字段，只保留元数据
@@ -56,14 +58,14 @@ function saveCacheToStorage(cache: Map<string, SiteMetadata>) {
   try {
     const data: Record<string, CachedMetadata> = {};
     const now = Date.now();
-    
+
     for (const [key, value] of cache.entries()) {
       data[key] = {
         ...value,
         cachedAt: now
       };
     }
-    
+
     localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(data));
   } catch (error) {
     console.error('[Metadata] Failed to save cache to storage:', error);
@@ -83,7 +85,7 @@ function saveCacheToStorageDebounced(cache: Map<string, SiteMetadata>) {
   if (saveCacheTimeout) {
     clearTimeout(saveCacheTimeout);
   }
-  
+
   saveCacheTimeout = setTimeout(() => {
     saveCacheToStorage(cache);
     saveCacheTimeout = null;
@@ -134,7 +136,7 @@ function formatDomainAsTitle(domain: string): string {
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) => 
+    new Promise<T>((_, reject) =>
       setTimeout(() => reject(new Error('Timeout')), timeoutMs)
     )
   ]);
@@ -156,7 +158,7 @@ function verifyImageLoads(url: string, timeout: number = 1500): Promise<boolean>
       img.onerror = null;
       resolve(false);
     }, timeout);
-    
+
     img.onload = () => {
       clearTimeout(timer);
       resolve(true);
@@ -172,34 +174,34 @@ function verifyImageLoads(url: string, timeout: number = 1500): Promise<boolean>
 async function fetchFavicon(domain: string): Promise<string> {
   // 方案1：直接使用 Google Favicon API（最快，无需验证）
   const googleFavicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-  
+
   // 方案2：DuckDuckGo（备用）
   const duckduckgoFavicon = `https://icons.duckduckgo.com/ip3/${domain}.ico`;
-  
+
   // 方案3：直接访问域名 favicon
   const directFavicon = `https://${domain}/favicon.ico`;
-  
+
   // 并行竞速：同时尝试多个服务，谁快用谁
   const attempts = [
     { url: googleFavicon, priority: 1 },
     { url: duckduckgoFavicon, priority: 2 },
     { url: directFavicon, priority: 3 }
   ];
-  
+
   // 并行验证，取第一个成功的
   const results = await Promise.allSettled(
-    attempts.map(({ url }) => 
+    attempts.map(({ url }) =>
       verifyImageLoads(url, 1500).then(loaded => loaded ? url : Promise.reject())
     )
   );
-  
+
   // 找到第一个成功的
   for (const result of results) {
     if (result.status === 'fulfilled') {
       return result.value;
     }
   }
-  
+
   // 如果都失败，尝试一级域名
   const rootDomain = extractRootDomain(domain);
   if (rootDomain) {
@@ -207,20 +209,49 @@ async function fetchFavicon(domain: string): Promise<string> {
     const rootLoaded = await verifyImageLoads(rootFavicon, 1000);
     if (rootLoaded) return rootFavicon;
   }
-  
+
   // 最终回退：使用 Google 服务（通常可用）
   return googleFavicon;
 }
 
-async function fetchSiteName(url: string, domain: string): Promise<string> {
-  // 策略：快速尝试多个 CORS 代理（并行，2秒超时）
+
+// 提取相对路径
+function resolveUrl(baseUrl: string, relativeUrl: string): string {
+  try {
+    return new URL(relativeUrl, baseUrl).toString();
+  } catch {
+    return relativeUrl;
+  }
+}
+
+async function fetchPageMetadata(url: string): Promise<{ title?: string; icon?: string }> {
+  // 1. 尝试直接请求 (如果是扩展程序环境且有权限)
+  // Check if we are in an extension environment
+  const isExtension = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
+
+  if (isExtension) {
+    try {
+      // 扩展程序可以直接发请求，绕过 CORS代理
+      const response = await withTimeout(fetch(url, { method: 'GET' }), 3000);
+      if (response.ok) {
+        const htmlContent = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        return extractMetadataFromDoc(doc, url);
+      }
+    } catch (e) {
+      console.log('Direct fetch failed, falling back to proxy:', e);
+    }
+  }
+
+  // 2. 策略：快速尝试多个 CORS 代理（并行，2秒超时）
   const proxies = [
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     `https://corsproxy.io/?${encodeURIComponent(url)}`,
   ];
-  
+
   try {
-    const proxyPromises = proxies.map(proxyUrl => 
+    const proxyPromises = proxies.map(proxyUrl =>
       withTimeout(
         fetch(proxyUrl)
           .then(r => r.json())
@@ -236,46 +267,68 @@ async function fetchSiteName(url: string, domain: string): Promise<string> {
             } else {
               throw new Error('No content found');
             }
-            
+
             const parser = new DOMParser();
             const doc = parser.parseFromString(htmlContent, 'text/html');
-            
+            const result: { title?: string; icon?: string } = {};
+
+            // --- 1. Extract Title ---
             // 优先级1: og:site_name
             const ogSiteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content');
-            if (ogSiteName) return ogSiteName;
-            
-            // 优先级2: application-name
-            const appName = doc.querySelector('meta[name="application-name"]')?.getAttribute('content');
-            if (appName) return appName;
-            
-            // 优先级3: title tag
-            const title = doc.querySelector('title')?.textContent;
-            if (title) {
-              const cleanTitle = title
-                .replace(/\s*[-|]\s*.+$/, '')
-                .trim();
-              if (cleanTitle) return cleanTitle;
+            if (ogSiteName) {
+              result.title = ogSiteName;
+            } else {
+              // 优先级2: application-name
+              const appName = doc.querySelector('meta[name="application-name"]')?.getAttribute('content');
+              if (appName) {
+                result.title = appName;
+              } else {
+                // 优先级3: title tag
+                const title = doc.querySelector('title')?.textContent;
+                if (title) {
+                  result.title = title.replace(/\s*[-|]\s*.+$/, '').trim();
+                }
+              }
             }
-            
-            throw new Error('No content found');
+
+            // --- 2. Extract Icon ---
+            // Look for link rel="icon", "shortcut icon", "apple-touch-icon"
+            const iconSelectors = [
+              'link[rel="apple-touch-icon"]',
+              'link[rel="icon"]',
+              'link[rel="shortcut icon"]'
+            ];
+
+            for (const selector of iconSelectors) {
+              const el = doc.querySelector(selector);
+              const href = el?.getAttribute('href');
+              if (href) {
+                result.icon = resolveUrl(url, href);
+                break; // Found the best one (selectors are ordered by priority)
+              }
+            }
+
+            if (!result.title && !result.icon) {
+              throw new Error('No metadata found');
+            }
+            return result;
           }),
-        2000 // 2秒超时
+        2500 // 稍微增加超时时间到2.5s，因为解析变通常了
       )
     );
-    
+
     // 并行尝试，取第一个成功的
     const results = await Promise.allSettled(proxyPromises);
     for (const result of results) {
-      if (result.status === 'fulfilled') {
+      if (result.status === 'fulfilled' && result.value) {
         return result.value;
       }
     }
   } catch (error) {
-    console.log('Failed to fetch site name:', error);
+    console.log('Failed to fetch page metadata:', error);
   }
-  
-  // 快速失败：使用域名作为后备（不等待）
-  return formatDomainAsTitle(domain);
+
+  return {};
 }
 
 export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | null> {
@@ -283,19 +336,19 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
     // Canonicalize URL (used for cache + cloud dedupe)
     const canonicalUrl = canonicalizeUrl(url);
     const domain = extractHostname(canonicalUrl);
-    
+
     if (!domain) {
       throw new Error('Invalid URL');
     }
-    
+
     const cacheKey = canonicalUrl;
-    
+
     // 检查缓存
     const cached = metadataCache.get(cacheKey);
     if (cached) {
       // 从 localStorage 获取缓存时间信息
       const cachedAt = getCacheTime(cacheKey);
-      
+
       if (cachedAt) {
         if (isCacheExpired(cachedAt)) {
           // 缓存完全失效，删除并重新获取
@@ -304,26 +357,10 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
         } else if (isCacheStale(cachedAt)) {
           // 缓存过期但未完全失效，先返回旧数据，后台更新
           console.log(`[Metadata] Cache stale for ${domain}, using cached data, refreshing in background`);
-          
-          // 后台异步获取新数据（不阻塞返回）
-          Promise.all([
-            fetchFavicon(domain).catch(() => cached.icon),
-            fetchSiteName(canonicalUrl, domain).catch(() => cached.title)
-          ]).then(([icon, title]) => {
-            const freshMetadata: SiteMetadata = {
-              url: canonicalUrl,
-              title,
-              icon
-            };
-            
-            // 更新缓存
-            metadataCache.set(cacheKey, freshMetadata);
-            saveCacheToStorageDebounced(metadataCache);
-            console.log(`[Metadata] Background refresh completed for ${domain}`);
-          }).catch(err => {
-            console.log(`[Metadata] Background refresh failed for ${domain}, keeping cached data:`, err);
-          });
-          
+
+          // 后台异步刷新
+          refreshMetadataInBackground(canonicalUrl, domain, cacheKey, cached);
+
           // 立即返回缓存的旧数据（不等待）
           return { ...cached, url: canonicalUrl };
         } else {
@@ -335,41 +372,23 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
         return { ...cached, url: canonicalUrl };
       }
     }
-    
+
     // 没有缓存，获取新数据
     const quickResult: SiteMetadata = {
       url: canonicalUrl,
       title: formatDomainAsTitle(domain), // 立即使用域名
       icon: `https://www.google.com/s2/favicons?domain=${domain}&sz=128` // 立即使用 Google CDN
     };
-    
-    // 后台异步获取完整数据（不阻塞返回）
-    Promise.all([
-      fetchFavicon(domain).catch(() => quickResult.icon),
-      fetchSiteName(canonicalUrl, domain).catch(() => quickResult.title)
-    ]).then(([icon, title]) => {
-      const fullMetadata: SiteMetadata = {
-        url: canonicalUrl,
-        title,
-        icon
-      };
-      
-      // 更新缓存
-      metadataCache.set(cacheKey, fullMetadata);
-      saveCacheToStorageDebounced(metadataCache);
 
-      // Best-effort: de-duped cloud metadata store (skip if already exists)
-      upsertGatewayMetadataIfMissing({ url: canonicalUrl, title, iconUrl: icon }).catch(() => {});
-    }).catch(err => {
-      console.log('Background metadata fetch failed:', err);
-    });
-    
+    // 后台异步获取完整数据（不阻塞返回）
+    refreshMetadataInBackground(canonicalUrl, domain, cacheKey, quickResult);
+
     // 立即返回快速结果
     return quickResult;
-    
+
   } catch (e) {
     console.error("Metadata fetch error:", e);
-    
+
     // Fallback: Return basic metadata
     try {
       const canonicalUrl = canonicalizeUrl(url);
@@ -384,3 +403,94 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
     }
   }
 }
+
+// Helper to extract metadata from parsed DOM
+function extractMetadataFromDoc(doc: Document, baseUrl: string): { title?: string; icon?: string } {
+  const result: { title?: string; icon?: string } = {};
+
+  // --- 1. Extract Title ---
+  // 优先级1: og:site_name
+  const ogSiteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content');
+  if (ogSiteName) {
+    result.title = ogSiteName;
+  } else {
+    // 优先级2: application-name
+    const appName = doc.querySelector('meta[name="application-name"]')?.getAttribute('content');
+    if (appName) {
+      result.title = appName;
+    } else {
+      // 优先级3: title tag
+      const title = doc.querySelector('title')?.textContent;
+      if (title) {
+        result.title = title.replace(/\s*[-|]\s*.+$/, '').trim();
+      }
+    }
+  }
+
+  // --- 2. Extract Icon ---
+  // Look for link rel="icon", "shortcut icon", "apple-touch-icon"
+  const iconSelectors = [
+    'link[rel="apple-touch-icon"]',
+    'link[rel="icon"]',
+    'link[rel="shortcut icon"]'
+  ];
+
+  for (const selector of iconSelectors) {
+    const el = doc.querySelector(selector);
+    const href = el?.getAttribute('href');
+    if (href) {
+      result.icon = resolveUrl(baseUrl, href);
+      break; // Found the best one (selectors are ordered by priority)
+    }
+  }
+
+  return result;
+}
+
+// 抽取后台更新逻辑
+function refreshMetadataInBackground(canonicalUrl: string, domain: string, cacheKey: string, currentData: SiteMetadata) {
+  Promise.all([
+    fetchFavicon(domain),             // 1. Google/DDG API
+    fetchPageMetadata(canonicalUrl)   // 2. HTML parsing (Proxy)
+  ]).then(async ([apiFavicon, pageMeta]) => {
+
+    let finalTitle = pageMeta.title || currentData.title;
+    if (finalTitle === formatDomainAsTitle(domain) && pageMeta.title) {
+      finalTitle = pageMeta.title; // 优先使用 HTML 解析到的标题
+    }
+
+    let finalIcon = apiFavicon; // 默认使用 API 的结果 (通常比较稳)
+
+    // 如果 HTML 解析到了 Icon，优先验证并使用它 (因为这通常是该网站特定的，更准确)
+    if (pageMeta.icon) {
+      const isHtmlIconValid = await verifyImageLoads(pageMeta.icon, 1500);
+      if (isHtmlIconValid) {
+        finalIcon = pageMeta.icon;
+      }
+    }
+
+    // 如果 API 失败了 (verifyImageLoads 内部其实已经尽量保证可用性了，但 fetchFavicon 返回的一般是 URL)，
+    // 这里再次确保 finalIcon 有值。如果 fetchFavicon 都失效了，可能得保留 currentData.icon
+    if (!finalIcon && currentData.icon) {
+      finalIcon = currentData.icon;
+    }
+
+    const fullMetadata: SiteMetadata = {
+      url: canonicalUrl,
+      title: finalTitle,
+      icon: finalIcon
+    };
+
+    // 更新缓存
+    metadataCache.set(cacheKey, fullMetadata);
+    saveCacheToStorageDebounced(metadataCache);
+
+    // Best-effort: de-duped cloud metadata store
+    upsertGatewayMetadataIfMissing({ url: canonicalUrl, title: finalTitle, iconUrl: finalIcon }).catch(() => { });
+    console.log(`[Metadata] Background refresh completed for ${domain}`);
+
+  }).catch(err => {
+    console.log(`[Metadata] Background refresh failed for ${domain}:`, err);
+  });
+}
+

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StartlyTab - Debug Info</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #666;
+      font-size: 18px;
+      margin-top: 0;
+      margin-bottom: 15px;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    .status.ok {
+      background: #10b981;
+      color: white;
+    }
+    .status.error {
+      background: #ef4444;
+      color: white;
+    }
+    .status.warning {
+      background: #f59e0b;
+      color: white;
+    }
+    .info-item {
+      margin: 10px 0;
+      padding: 10px;
+      background: #f9fafb;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .label {
+      font-weight: 600;
+      color: #666;
+      margin-right: 8px;
+    }
+    button {
+      background: #111;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #333;
+    }
+    .loading {
+      color: #999;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <h1>StartlyTab Debug Information</h1>
+  
+  <div class="card">
+    <h2>Environment Variables <span id="envStatus" class="status loading">Checking...</span></h2>
+    <div id="envInfo" class="loading">Loading environment variables...</div>
+  </div>
+
+  <div class="card">
+    <h2>Google OAuth Status <span id="googleStatus" class="status loading">Checking...</span></h2>
+    <div id="googleInfo" class="loading">Loading Google OAuth status...</div>
+  </div>
+
+  <div class="card">
+    <h2>Supabase Status <span id="supabaseStatus" class="status loading">Checking...</span></h2>
+    <div id="supabaseInfo" class="loading">Loading Supabase status...</div>
+  </div>
+
+  <div class="card">
+    <h2>Current Environment</h2>
+    <div id="envDetails" class="loading">Loading environment details...</div>
+  </div>
+
+  <div class="card">
+    <h2>Instructions</h2>
+    <p>This diagnostic page checks your configuration. For more detailed logs, open the browser console (F12) on the main page.</p>
+    <p><strong>Note:</strong> Environment variables are only available in the built application, not in this static HTML file.</p>
+    <p>To check environment variables, visit the main page and open the browser console (F12).</p>
+  </div>
+
+  <button onclick="location.reload()">Refresh</button>
+  <button onclick="window.location.href='/'">Go to Main Page</button>
+
+  <script>
+    function checkEnvironment() {
+      const envInfo = document.getElementById('envInfo');
+      const envStatus = document.getElementById('envStatus');
+      
+      // Since this is a static HTML file, we can't access import.meta.env directly
+      // Instead, we'll check if we can access it through the window object
+      // or provide instructions
+      
+      let html = '';
+      let hasError = false;
+      
+      // Try to get from window object (if set by main app)
+      const clientId = window.__ENV__?.VITE_GOOGLE_CLIENT_ID || window.VITE_GOOGLE_CLIENT_ID;
+      const supabaseUrl = window.__ENV__?.VITE_SUPABASE_URL || window.VITE_SUPABASE_URL;
+      const supabaseKey = window.__ENV__?.VITE_SUPABASE_ANON_KEY || window.VITE_SUPABASE_ANON_KEY;
+      
+      if (clientId) {
+        html += `<div class="info-item"><span class="label">VITE_GOOGLE_CLIENT_ID:</span> ${clientId.substring(0, 30)}...</div>`;
+      } else {
+        html += `<div class="info-item" style="background: #fee2e2;"><span class="label">VITE_GOOGLE_CLIENT_ID:</span> <strong style="color: #dc2626;">NOT SET (Check main page console)</strong></div>`;
+        hasError = true;
+      }
+      
+      if (supabaseUrl) {
+        html += `<div class="info-item"><span class="label">VITE_SUPABASE_URL:</span> ${supabaseUrl}</div>`;
+      } else {
+        html += `<div class="info-item" style="background: #fee2e2;"><span class="label">VITE_SUPABASE_URL:</span> <strong style="color: #dc2626;">NOT SET (Check main page console)</strong></div>`;
+        hasError = true;
+      }
+      
+      if (supabaseKey) {
+        html += `<div class="info-item"><span class="label">VITE_SUPABASE_ANON_KEY:</span> ${supabaseKey.substring(0, 30)}...</div>`;
+      } else {
+        html += `<div class="info-item" style="background: #fee2e2;"><span class="label">VITE_SUPABASE_ANON_KEY:</span> <strong style="color: #dc2626;">NOT SET (Check main page console)</strong></div>`;
+        hasError = true;
+      }
+      
+      html += `<div class="info-item" style="background: #dbeafe; margin-top: 15px;"><strong>💡 Tip:</strong> Environment variables are injected at build time. To see actual values, check the browser console on the main page (look for [Auth] logs).</div>`;
+      
+      envInfo.innerHTML = html;
+      envStatus.textContent = hasError ? 'Check Console' : 'OK';
+      envStatus.className = 'status ' + (hasError ? 'warning' : 'ok');
+    }
+
+    function checkGoogleOAuth() {
+      const googleInfo = document.getElementById('googleInfo');
+      const googleStatus = document.getElementById('googleStatus');
+      
+      const clientId = window.__ENV__?.VITE_GOOGLE_CLIENT_ID || window.VITE_GOOGLE_CLIENT_ID;
+      let html = '';
+      let status = 'warning';
+      
+      html += `<div class="info-item"><span class="label">Client ID Available:</span> ${clientId ? 'Yes' : 'No (Check main page console)'}</div>`;
+      html += `<div class="info-item"><span class="label">Google SDK:</span> ${window.google?.accounts?.id ? 'Loaded ✓' : 'Not loaded yet'}</div>`;
+      html += `<div class="info-item"><span class="label">Current Origin:</span> ${window.location.origin}</div>`;
+      
+      if (!clientId) {
+        html += `<div class="info-item" style="background: #fee2e2;"><strong style="color: #dc2626;">Error: Client ID not found in this page</strong></div>`;
+        html += `<div class="info-item" style="background: #dbeafe; margin-top: 10px;"><strong>Solution:</strong> Go to the main page and check the browser console (F12) for [Auth] logs to see if Client ID is loaded.</div>`;
+        status = 'error';
+      } else if (!window.google?.accounts?.id) {
+        html += `<div class="info-item" style="background: #fef3c7;"><strong style="color: #d97706;">Warning: Google SDK not loaded yet</strong></div>`;
+        status = 'warning';
+      } else {
+        html += `<div class="info-item" style="background: #d1fae5;"><strong style="color: #059669;">Google OAuth ready</strong></div>`;
+        status = 'ok';
+      }
+      
+      googleInfo.innerHTML = html;
+      googleStatus.textContent = status === 'ok' ? 'OK' : status === 'error' ? 'Error' : 'Warning';
+      googleStatus.className = 'status ' + status;
+    }
+
+    function checkSupabase() {
+      const supabaseInfo = document.getElementById('supabaseInfo');
+      const supabaseStatus = document.getElementById('supabaseStatus');
+      
+      const url = window.__ENV__?.VITE_SUPABASE_URL || window.VITE_SUPABASE_URL;
+      const key = window.__ENV__?.VITE_SUPABASE_ANON_KEY || window.VITE_SUPABASE_ANON_KEY;
+      
+      let html = '';
+      let status = 'warning';
+      
+      html += `<div class="info-item"><span class="label">URL:</span> ${url || 'NOT SET (Check main page console)'}</div>`;
+      html += `<div class="info-item"><span class="label">Anon Key:</span> ${key ? key.substring(0, 30) + '...' : 'NOT SET (Check main page console)'}</div>`;
+      
+      if (!url || !key) {
+        html += `<div class="info-item" style="background: #fee2e2;"><strong style="color: #dc2626;">Error: Supabase not configured in this page</strong></div>`;
+        html += `<div class="info-item" style="background: #dbeafe; margin-top: 10px;"><strong>Solution:</strong> Check the main page console for actual Supabase configuration.</div>`;
+        status = 'error';
+      } else {
+        html += `<div class="info-item" style="background: #d1fae5;"><strong style="color: #059669;">Supabase configured</strong></div>`;
+        status = 'ok';
+      }
+      
+      supabaseInfo.innerHTML = html;
+      supabaseStatus.textContent = status === 'ok' ? 'OK' : 'Check Console';
+      supabaseStatus.className = 'status ' + status;
+    }
+
+    function checkEnvironmentDetails() {
+      const envDetails = document.getElementById('envDetails');
+      
+      const html = `
+        <div class="info-item"><span class="label">Origin:</span> ${window.location.origin}</div>
+        <div class="info-item"><span class="label">Hostname:</span> ${window.location.hostname}</div>
+        <div class="info-item"><span class="label">Protocol:</span> ${window.location.protocol}</div>
+        <div class="info-item"><span class="label">User Agent:</span> ${navigator.userAgent.substring(0, 80)}...</div>
+        <div class="info-item" style="background: #dbeafe; margin-top: 15px;"><strong>Note:</strong> Environment variables (VITE_*) are only available in the built React app, not in static HTML files. Check the main page console for actual values.</div>
+      `;
+      
+      envDetails.innerHTML = html;
+    }
+
+    // Load Google SDK
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      setTimeout(() => {
+        checkGoogleOAuth();
+      }, 500);
+    };
+    document.head.appendChild(script);
+
+    // Initial checks
+    checkEnvironment();
+    checkSupabase();
+    checkEnvironmentDetails();
+    
+    // Check Google OAuth after SDK loads
+    setTimeout(checkGoogleOAuth, 1000);
+  </script>
+</body>
+</html>
