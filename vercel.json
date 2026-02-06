@@ -10,6 +10,10 @@
       "destination": "https://api.siliconflow.cn/v1/:match*"
     },
     {
+      "source": "/api/deepseek/:match*",
+      "destination": "https://api.deepseek.com/:match*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
