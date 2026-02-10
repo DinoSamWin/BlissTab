@@ -604,7 +604,11 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
             const img = new Image();
             img.src = faviconUrl;
             img.onload = () => {
-                setLinks(prev => prev.map(l => l.id === newLink.id ? { ...l, icon: faviconUrl } : l));
+                setLinks(prev => {
+                    const updatedLinks = prev.map(l => l.id === newLink.id ? { ...l, icon: faviconUrl } : l);
+                    onUpdate(updatedLinks); // Persist to Supabase
+                    return updatedLinks;
+                });
             };
         }
     };
