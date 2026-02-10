@@ -28,10 +28,14 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { QuickLink } from '../types';
 import GatewayEditModal from './GatewayEditModal';
+import { getLocalLogoDataUrl, upsertLocalLogo } from '../services/gatewayLogoCacheService';
+import { uploadGatewayLogo } from '../services/supabaseService';
+import { canonicalizeUrl } from '../services/urlCanonicalService';
 
 // --- Types ---
 interface Props {
     links: QuickLink[];
+    userId?: string;
     onUpdate: (links: QuickLink[]) => void;
 }
 
@@ -367,8 +371,93 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm }: DeleteConfirmModalPr
     )
 }
 
+/**
+ * Helper function to upload a logo file and get all necessary metadata.
+ * Handles: File -> DataURL conversion, hash generation, localStorage caching, Supabase upload.
+ */
+async function uploadLogoAndGetMetadata(
+    logoFile: File,
+    url: string,
+    userId: string | undefined
+): Promise<{
+    customLogoUrl: string | null;
+    customLogoSignedUrl: string | null;
+    customLogoPath: string | null;
+    customLogoHash: string;
+    canonicalUrl: string;
+}> {
+    try {
+        // 1. Canonicalize URL
+        const canonicalUrl = canonicalizeUrl(url);
+
+        // 2. Convert File to DataURL and generate hash
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(logoFile);
+        });
+
+        // 3. Generate hash from dataUrl (simple hash for now)
+        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(dataUrl))
+            .then(buffer => Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('')
+                .substring(0, 16)); // Use first 16 chars
+
+        // 4. Save to localStorage cache
+        upsertLocalLogo(canonicalUrl, {
+            dataUrl,
+            hash,
+            updatedAt: Date.now(),
+        });
+
+        console.log('[IntegrationGateways] Logo saved to local cache:', { canonicalUrl, hash });
+
+        // 5. Upload to Supabase Storage (if userId available)
+        if (userId) {
+            try {
+                const uploadResult = await uploadGatewayLogo({
+                    userId,
+                    canonicalUrl,
+                    file: logoFile,
+                    contentType: logoFile.type || 'image/webp',
+                    hash,
+                });
+
+                if (uploadResult) {
+                    console.log('[IntegrationGateways] Logo uploaded to Supabase:', uploadResult);
+                    return {
+                        customLogoUrl: uploadResult.publicUrl,
+                        customLogoSignedUrl: uploadResult.signedUrl,
+                        customLogoPath: uploadResult.path,
+                        customLogoHash: hash,
+                        canonicalUrl,
+                    };
+                }
+            } catch (uploadError) {
+                console.warn('[IntegrationGateways] Supabase upload failed, using local cache only:', uploadError);
+            }
+        } else {
+            console.warn('[IntegrationGateways] No userId provided, skipping Supabase upload');
+        }
+
+        // Fallback: Return local cache metadata only
+        return {
+            customLogoUrl: null,
+            customLogoSignedUrl: null,
+            customLogoPath: null,
+            customLogoHash: hash,
+            canonicalUrl,
+        };
+    } catch (error) {
+        console.error('[IntegrationGateways] Failed to process logo:', error);
+        throw error;
+    }
+}
+
 // --- Main Component ---
-export default function IntegrationGateways({ links: propLinks, onUpdate }: Props) {
+export default function IntegrationGateways({ links: propLinks, userId, onUpdate }: Props) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [elasticY, setElasticY] = useState(0);
@@ -451,37 +540,51 @@ export default function IntegrationGateways({ links: propLinks, onUpdate }: Prop
     // ... inside IntegrationGateways ...
 
     // Combined Add Gateway Logic
-    const handleAddGateway = (data: { url: string; title: string, logoFile: File | null, category: string }) => {
+    const handleAddGateway = async (data: { url: string; title: string, logoFile: File | null, category: string }) => {
+        // Handle logo upload if file provided
+        let logoMetadata: Partial<QuickLink> = {};
+        if (data.logoFile) {
+            try {
+                const metadata = await uploadLogoAndGetMetadata(data.logoFile, data.url, userId);
+                logoMetadata = {
+                    customLogoUrl: metadata.customLogoUrl,
+                    customLogoSignedUrl: metadata.customLogoSignedUrl,
+                    customLogoPath: metadata.customLogoPath,
+                    customLogoHash: metadata.customLogoHash,
+                    canonicalUrl: metadata.canonicalUrl,
+                };
+                console.log('[IntegrationGateways] Logo metadata prepared for new gateway:', logoMetadata);
+            } catch (error) {
+                console.error('[IntegrationGateways] Failed to upload logo for new gateway:', error);
+                // Continue without logo metadata
+            }
+        }
+
         // Prepare new link
         const newLink: QuickLink = {
             id: crypto.randomUUID(),
             title: data.title || new URL(data.url).hostname,
             url: data.url,
-            icon: null, // Loading...
+            icon: null, // Will be fetched in background
             color: '#cbd5e1',
             category: data.category,
-            customLogoUrl: data.logoFile ? URL.createObjectURL(data.logoFile) : undefined
+            ...logoMetadata, // Spread logo metadata if uploaded
         };
 
-        // ... (fetch favicon logic same as before, simplified here) ...
-        // Fetch icon in background (omitted for brevity, assume existing logic handles it or we re-use it)
-        // Actually I should copy the existing fetch logic if I'm replacing the function.
-        // Let's assume I am REPLACING the handleAddGateway function completely.
-
-        // Re-implementing fetch logic:
-        const categoryLinks = groupedGateways[data.category] || [];
         const newLinks = [...links, newLink];
         setLinks(newLinks);
         onUpdate(newLinks);
         setCreateModal({ isOpen: false, category: '' });
 
-        // Background fetch
-        const faviconUrl = `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(data.url)}`;
-        const img = new Image();
-        img.src = faviconUrl;
-        img.onload = () => {
-            setLinks(prev => prev.map(l => l.id === newLink.id ? { ...l, icon: faviconUrl } : l));
-        };
+        // Background fetch for default icon (if no custom logo)
+        if (!data.logoFile) {
+            const faviconUrl = `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(data.url)}`;
+            const img = new Image();
+            img.src = faviconUrl;
+            img.onload = () => {
+                setLinks(prev => prev.map(l => l.id === newLink.id ? { ...l, icon: faviconUrl } : l));
+            };
+        }
     };
 
     // ... inside DragOver
@@ -590,8 +693,27 @@ export default function IntegrationGateways({ links: propLinks, onUpdate }: Prop
 
 
     // Edit Gateway Logic (Compatible with GatewayEditModal)
-    const handleSaveEdit = (params: { url: string; customTitle: string | null; logoFile: File | null; reset: boolean; category: string }) => {
+    const handleSaveEdit = async (params: { url: string; customTitle: string | null; logoFile: File | null; reset: boolean; category: string }) => {
         if (!editLink) return;
+
+        // Handle logo upload if file provided
+        let logoMetadata: Partial<QuickLink> = {};
+        if (params.logoFile && !params.reset) {
+            try {
+                const metadata = await uploadLogoAndGetMetadata(params.logoFile, params.url, userId);
+                logoMetadata = {
+                    customLogoUrl: metadata.customLogoUrl,
+                    customLogoSignedUrl: metadata.customLogoSignedUrl,
+                    customLogoPath: metadata.customLogoPath,
+                    customLogoHash: metadata.customLogoHash,
+                    canonicalUrl: metadata.canonicalUrl,
+                };
+                console.log('[IntegrationGateways] Logo metadata prepared:', logoMetadata);
+            } catch (error) {
+                console.error('[IntegrationGateways] Failed to upload logo:', error);
+                // Continue without logo metadata
+            }
+        }
 
         const updatedLinks = links.map(l => {
             if (l.id === editLink.id) {
@@ -602,7 +724,10 @@ export default function IntegrationGateways({ links: propLinks, onUpdate }: Prop
                         url: params.url,
                         customTitle: undefined,
                         customLogoUrl: undefined,
+                        customLogoSignedUrl: undefined,
+                        customLogoPath: undefined,
                         customLogoHash: undefined,
+                        canonicalUrl: undefined,
                         category: params.category
                     };
                 }
@@ -610,7 +735,7 @@ export default function IntegrationGateways({ links: propLinks, onUpdate }: Prop
                     ...l,
                     url: params.url,
                     customTitle: params.customTitle || undefined,
-                    customLogoUrl: params.logoFile ? URL.createObjectURL(params.logoFile) : l.customLogoUrl,
+                    ...logoMetadata, // Spread logo metadata if uploaded
                     category: params.category
                 };
             }

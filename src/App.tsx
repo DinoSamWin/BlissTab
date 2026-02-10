@@ -1658,7 +1658,7 @@ const App: React.FC = () => {
       {/* 3. HERO SECTION */}
       <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 pt-8 pb-16">
         <div key={revealKey} className={`animate-reveal transition-all duration-500 ease-out text-center flex flex-col items-center 
-          ${(currentSnippet?.length || 0) > 26 ? 'max-w-[90%] lg:max-w-7xl' : 'max-w-4xl'} 
+          ${(currentSnippet?.length || 0) > 26 ? 'max-w-[92%] lg:max-w-[88rem]' : 'max-w-5xl'} 
           ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
 
           {/* Text Container: Handles scrolling for long text while keeping buttons visible */}
@@ -1667,8 +1667,8 @@ const App: React.FC = () => {
               ref={perspectiveTitleRef}
               className={`serif editorial-title font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300
                 ${(currentSnippet?.length || 0) > 26
-                  ? 'text-4xl md:text-6xl lg:text-7xl'
-                  : 'text-5xl md:text-7xl lg:text-8xl'}
+                  ? 'text-3xl md:text-5xl lg:text-6xl'
+                  : 'text-4xl md:text-6xl lg:text-7xl'}
               `}
             >
               {currentSnippet ? (
@@ -1739,6 +1739,7 @@ const App: React.FC = () => {
       {isAuthenticated ? (
         <IntegrationGateways
           links={appState.links}
+          userId={appState.user?.id}
           onUpdate={(newLinks) => saveState(prev => ({ ...prev, links: newLinks }))}
         />
       ) : (
