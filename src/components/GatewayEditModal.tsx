@@ -134,7 +134,24 @@ const GatewayEditModal: React.FC<GatewayEditModalProps> = ({ isOpen, link, onClo
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-center justify-center overflow-hidden">
                 {previewSrc ? (
-                  <img src={previewSrc} alt="" className="w-9 h-9 object-contain opacity-90" />
+                  <img
+                    src={previewSrc}
+                    alt=""
+                    className="w-9 h-9 object-contain opacity-90"
+                    onError={(e) => {
+                      try {
+                        if (link && link.url) {
+                          const url = new URL(link.url);
+                          const googleFavicon = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
+                          if (e.currentTarget.src !== googleFavicon) {
+                            e.currentTarget.src = googleFavicon;
+                            return;
+                          }
+                        }
+                      } catch { }
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
                 ) : (
                   <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: link.color }} />
                 )}

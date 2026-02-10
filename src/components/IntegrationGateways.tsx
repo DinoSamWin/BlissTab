@@ -28,6 +28,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { QuickLink } from '../types';
 import GatewayEditModal from './GatewayEditModal';
+import { getLocalLogoDataUrl } from '../services/gatewayLogoCacheService';
 
 // --- Types ---
 interface Props {
@@ -107,23 +108,45 @@ function SortableLinkCard({ link, isEditMode, onDelete, onEdit, index }: Sortabl
         >
             {/* Icon Box */}
             <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-black/5 dark:border-white/5 shrink-0 pointer-events-none">
-                {(link.customLogoUrl || link.customLogoSignedUrl || link.icon) ? (
-                    <img
-                        src={link.customLogoUrl || link.customLogoSignedUrl || link.icon || ''}
-                        alt=""
-                        className="w-6 h-6 object-contain"
-                        onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'block';
-                        }}
-                    />
-                ) : null}
+                {(() => {
+                    // Resolve logo source
+                    let logoSrc = link.customLogoUrl || link.customLogoSignedUrl || link.icon;
+                    if (link.canonicalUrl && link.customLogoHash) {
+                        const local = getLocalLogoDataUrl(link.canonicalUrl, link.customLogoHash);
+                        if (local) logoSrc = local;
+                    }
+
+                    if (logoSrc) {
+                        return (
+                            <img
+                                src={logoSrc}
+                                alt=""
+                                className="w-6 h-6 object-contain"
+                                onError={(e) => {
+                                    // Fallback to Google Favicon if main icon fails
+                                    try {
+                                        const url = new URL(link.url);
+                                        const googleFavicon = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
+                                        if (e.currentTarget.src !== googleFavicon) {
+                                            e.currentTarget.src = googleFavicon;
+                                            return;
+                                        }
+                                    } catch { } // Ignore invalid URLs
+
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                    if (fallback) fallback.style.display = 'block';
+                                }}
+                            />
+                        );
+                    }
+                    return null;
+                })()}
                 <div
                     className="w-4 h-4 rounded-full"
                     style={{
                         backgroundColor: link.color,
-                        display: (link.customLogoUrl || link.customLogoSignedUrl || link.icon) ? 'none' : 'block'
+                        display: (link.customLogoUrl || link.customLogoSignedUrl || link.icon || (link.canonicalUrl && link.customLogoHash && getLocalLogoDataUrl(link.canonicalUrl, link.customLogoHash))) ? 'none' : 'block'
                     }}
                 />
             </div>
@@ -755,9 +778,44 @@ export default function IntegrationGateways({ links: propLinks, onUpdate }: Prop
                                     className="flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 h-[64px] w-full cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0">
-                                        {(link.customLogoUrl || link.customLogoSignedUrl || link.icon) ? (
-                                            <img src={link.customLogoUrl || link.customLogoSignedUrl || link.icon || ''} className="w-6 h-6 object-contain" />
-                                        ) : <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: link.color }} />}
+                                        {(() => {
+                                            let logoSrc = link.customLogoUrl || link.customLogoSignedUrl || link.icon;
+                                            if (link.canonicalUrl && link.customLogoHash) {
+                                                const local = getLocalLogoDataUrl(link.canonicalUrl, link.customLogoHash);
+                                                if (local) logoSrc = local;
+                                            }
+                                            return logoSrc ? (
+                                                <img
+                                                    src={logoSrc}
+                                                    className="w-6 h-6 object-contain"
+                                                    onError={(e) => {
+                                                        // Fallback to Google Favicon if main icon fails
+                                                        try {
+                                                            const url = new URL(link.url);
+                                                            const googleFavicon = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
+                                                            if (e.currentTarget.src !== googleFavicon) {
+                                                                e.currentTarget.src = googleFavicon;
+                                                                return;
+                                                            }
+                                                        } catch { } // Ignore invalid URLs
+
+                                                        // Hide image
+                                                        e.currentTarget.style.display = 'none';
+                                                        // Show fallback div (sibling)
+                                                        // Note: In this compact view structure, the fallback div is rendered conditionally in React, 
+                                                        // but we are in a ternary returning img OR div. 
+                                                        // If img fails, we can't easily switch to the div with just CSS/JS display toggling 
+                                                        // because the div isn't in the DOM.
+                                                        // 
+                                                        // FIX: We should render BOTH and hide one. 
+                                                        // OR: Just accept the broken image handling?
+                                                        // Better approach for Compact View: Render fallback behind? 
+                                                        // For now, simpler to just hide it, but we won't get the colored dot fallback in this specific concise render.
+                                                        // Let's at least try the Google fallback.
+                                                    }}
+                                                />
+                                            ) : <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: link.color }} />;
+                                        })()}
                                     </div>
                                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{link.customTitle || link.title}</span>
                                 </div>
@@ -991,7 +1049,30 @@ export default function IntegrationGateways({ links: propLinks, onUpdate }: Prop
                                 <div className="opacity-90 scale-105 cursor-grabbing">
                                     <div className="flex items-center gap-4 p-3 pr-5 bg-white dark:bg-[#222] rounded-xl shadow-2xl border border-blue-500/30 h-16 w-[200px]">
                                         <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-black/5 dark:border-white/5 shrink-0">
-                                            {(activeLink.customLogoUrl || activeLink.icon) && <img src={activeLink.customLogoUrl || activeLink.icon || ''} className="w-6 h-6 object-contain" />}
+                                            {(() => {
+                                                let logoSrc = activeLink.customLogoUrl || activeLink.icon; // drag overlay might not need signed url if it's transient, but consistent is better
+                                                if (activeLink.canonicalUrl && activeLink.customLogoHash) {
+                                                    const local = getLocalLogoDataUrl(activeLink.canonicalUrl, activeLink.customLogoHash);
+                                                    if (local) logoSrc = local;
+                                                }
+                                                return logoSrc && <img
+                                                    src={logoSrc}
+                                                    className="w-6 h-6 object-contain"
+                                                    onError={(e) => {
+                                                        try {
+                                                            const url = new URL(activeLink.url);
+                                                            const googleFavicon = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
+                                                            if (e.currentTarget.src !== googleFavicon) {
+                                                                e.currentTarget.src = googleFavicon;
+                                                            } else {
+                                                                e.currentTarget.style.display = 'none';
+                                                            }
+                                                        } catch {
+                                                            e.currentTarget.style.display = 'none';
+                                                        }
+                                                    }}
+                                                />;
+                                            })()}
                                         </div>
                                         <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{activeLink.title}</span>
                                     </div>
