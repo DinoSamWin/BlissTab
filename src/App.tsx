@@ -1668,7 +1668,7 @@ const App: React.FC = () => {
               className={`serif editorial-title font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300
                 ${(currentSnippet?.length || 0) > 26
                   ? 'text-3xl md:text-5xl lg:text-6xl'
-                  : 'text-4xl md:text-6xl lg:text-8xl'}
+                  : 'text-4xl md:text-6xl lg:text-[6.0625rem]'}
               `}
               style={{ textWrap: 'balance', orphans: 3, widows: 3 }}
             >
