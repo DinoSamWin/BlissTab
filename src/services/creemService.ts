@@ -1,5 +1,7 @@
 import { getSupabaseClient } from './supabaseService';
 
+// Service for handling Creem payment integration
+
 /**
  * Interface for the checkout session response from backend
  */
