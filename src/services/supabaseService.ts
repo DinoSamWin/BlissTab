@@ -450,3 +450,36 @@ export async function fetchFromCloud(userId: string): Promise<Partial<AppState> 
     return null;
   }
 }
+
+/**
+ * Submit user feedback to Supabase
+ */
+export async function submitFeedback(userId: string | undefined, content: string): Promise<void> {
+  const client = getSupabaseClient();
+
+  // Always log for debugging
+  console.log('[Feedback] Submitting feedback:', { userId, contentLength: content.length });
+
+  if (client) {
+    try {
+      const { error } = await client
+        .from('feedback')
+        .insert({
+          user_id: userId || null,
+          content,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('[Feedback] Failed to submit feedback to Supabase:', error);
+      } else {
+        console.log('[Feedback] Feedback submitted successfully to Supabase');
+      }
+    } catch (error) {
+      console.error('[Feedback] Exception submitting feedback:', error);
+    }
+  } else {
+    console.warn('[Feedback] Supabase client not available, skipping cloud save');
+  }
+}
+

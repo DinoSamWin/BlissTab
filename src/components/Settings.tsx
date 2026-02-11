@@ -4,7 +4,7 @@ import { fetchSiteMetadata } from '../services/metadataService';
 import { canonicalizeUrl } from '../services/urlCanonicalService';
 import { getLocalLogoDataUrl, removeLocalLogo, upsertLocalLogo } from '../services/gatewayLogoCacheService';
 import { imageFileToSquareWebp } from '../services/imageProcessingService';
-import { fetchUserGatewayOverrides, upsertUserGatewayOverride, uploadGatewayLogo } from '../services/supabaseService';
+import { fetchUserGatewayOverrides, upsertUserGatewayOverride, uploadGatewayLogo, submitFeedback } from '../services/supabaseService';
 import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG } from '../constants';
 import { canAddGateway, canAddIntention, getSubscriptionTier, SUBSCRIPTION_LIMITS, isSubscribed } from '../services/usageLimitsService';
 import { redeemCode, toggleRedeemFeature, RedeemErrorCode, fetchUserMembership, fetchUserSettings } from '../services/redeemService';
@@ -60,7 +60,7 @@ const PlanBadge = ({ user }: { user: AppState['user'] }) => {
 const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState, addToast, onSignIn, onSignOut }) => {
   const [newUrl, setNewUrl] = useState('');
   const [newPrompt, setNewPrompt] = useState('');
-  const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'language' | 'redeem' | 'account'>('links');
+  const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'language' | 'redeem' | 'account' | 'feedback'>('links');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
@@ -72,6 +72,10 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemStatus, setRedeemStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
+
+  // Feedback state
+  const [feedbackInput, setFeedbackInput] = useState('');
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
 
   // Refresh membership state when switching tabs
   useEffect(() => {
@@ -578,6 +582,24 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     }
   };
 
+  const handleSendFeedback = async () => {
+    if (!feedbackInput.trim()) return;
+
+    setIsSendingFeedback(true);
+
+    // 1. Submit to Supabase (fire and forget from UI perspective, but we await to log)
+    await submitFeedback(state.user?.id, feedbackInput);
+
+    // 2. Open Mailto
+    const subject = encodeURIComponent('FocusTab Feedback');
+    const body = encodeURIComponent(feedbackInput);
+    window.open(`mailto:dinosamw@gmail.com?subject=${subject}&body=${body}`);
+
+    setFeedbackInput('');
+    setIsSendingFeedback(false);
+    addToast('Feedback prepared', 'success');
+  };
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-reveal">
       <div className="bg-white dark:bg-[#0F0F0F] w-full max-w-2xl rounded-[3.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden flex flex-col" style={{ maxHeight: 'min(80vh, 720px)' }}>
@@ -598,7 +620,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
         {/* Tab Navigation - Sticky */}
         <div className="flex px-12 border-b border-black/5 dark:border-white/5 no-scrollbar overflow-x-auto flex-shrink-0 sticky top-0 z-10 bg-white dark:bg-[#0F0F0F]">
-          {['links', 'snippets', 'language', 'redeem', 'account'].map((tab) => (
+          {['links', 'snippets', 'language', 'redeem', 'account', 'feedback'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -1172,11 +1194,50 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
               )}
             </div>
           )}
+
+          {activeTab === 'feedback' && (
+            <div className="space-y-6 animate-reveal">
+              <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">We value your feedback</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Have a suggestion, found a bug, or just want to say hi? We'd love to hear from you.
+                  Your feedback helps us make FocusTab better.
+                </p>
+
+                <textarea
+                  className="w-full h-32 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none mb-4"
+                  placeholder="Tell us what you think..."
+                  value={feedbackInput}
+                  onChange={(e) => setFeedbackInput(e.target.value)}
+                />
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSendFeedback}
+                    disabled={!feedbackInput.trim() || isSendingFeedback}
+                    className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-sm font-bold uppercase tracking-wide hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isSendingFeedback ? 'Processing...' : 'Email Us'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
         <div className="p-12 bg-gray-50/50 dark:bg-black/40 flex justify-between items-center">
-          <button onClick={onClose} className="px-10 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-xl shadow-black/10">Close Studio</button>
+          <div className="flex items-center gap-6">
+            <button onClick={onClose} className="px-10 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-xl shadow-black/10">Close Studio</button>
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
+            >
+              Privacy Policy
+            </a>
+          </div>
           <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">StartlyTab v{state.version}</span>
         </div>
       </div>

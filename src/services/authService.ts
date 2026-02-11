@@ -100,12 +100,18 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
           console.log('[Auth] User explicitly signed out previously, disabling auto_select');
         }
 
-        // Safari-specific configuration
         if (isSafariBrowser) {
           console.log('[Auth] Safari detected, using Safari-optimized configuration');
           // Safari has issues with popup mode, so we rely on button click instead of One Tap
           // The button will use redirect mode automatically in Safari
         }
+
+        console.log('[Auth] initializing Google ID with config:', {
+          auto_select: initConfig.auto_select,
+          hasExistingUser,
+          isExplicitSignOut,
+          isSafariBrowser
+        });
 
         (window as any).google.accounts.id.initialize(initConfig);
         console.log('[Auth] Google SDK initialized successfully');
@@ -267,11 +273,15 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
 
 export function signOutUser() {
   localStorage.removeItem('focus_tab_user');
-  if (typeof window !== 'undefined' && (window as any).google) {
+
+  if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
     try {
       (window as any).google.accounts.id.disableAutoSelect();
+      // Also cancel any pending prompts to prevent ghost logins from other tabs/states
+      (window as any).google.accounts.id.cancel();
+      console.log('[Auth] Disabled auto-select and canceled prompt');
     } catch (e) {
-      // Library might not be initialized
+      console.warn('[Auth] Failed to disable auto-select', e);
     }
   }
 }

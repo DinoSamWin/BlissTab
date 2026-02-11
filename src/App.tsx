@@ -15,6 +15,7 @@ import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
 import IntegrationGateways from './components/IntegrationGateways';
+import DebugInfo from './components/DebugInfo';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(() => {
@@ -25,6 +26,7 @@ const App: React.FC = () => {
     let savedUser: User | null = null;
     try {
       const userStr = localStorage.getItem('focus_tab_user');
+      console.log('[App] Initializing state. Stored user string:', userStr); // Debug log
       if (userStr) {
         savedUser = JSON.parse(userStr);
       }
@@ -1688,6 +1690,7 @@ const App: React.FC = () => {
         theme={appState.theme}
         isAuthenticated={isAuthenticated}
       />
+      <DebugInfo currentUser={appState.user} />
     </div>
   );
 };

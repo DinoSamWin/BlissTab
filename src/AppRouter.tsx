@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import App from './App';
 import SubscriptionPage from './components/SubscriptionPage';
+import PrivacyPolicy from './components/PrivacyPolicy';
 import LoadingDemo from './components/LoadingDemo';
 import { User } from './types';
 import { fetchSubscriptionState, determineSubscriptionTier, updateSubscriptionState } from './services/subscriptionService';
@@ -138,6 +139,7 @@ const AppRoutes: React.FC = () => {
         }
       />
       <Route path="/loading-demo" element={<LoadingDemo />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
