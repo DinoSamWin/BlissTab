@@ -188,7 +188,11 @@ const App: React.FC = () => {
 
       // Use functional update to get latest state without dependency
       setAppState(prevState => {
-        let requests = cloudData?.requests || prevState.requests;
+        // IMPORTANT: Start with a clean base state or the current state if it's already reset
+        // To prevent leaking previous user's data if cloud data is empty, we act carefully.
+        // If cloudData is present, we use it. If not, we fall back to DEFAULTS, not stale prevState.
+
+        let requests = cloudData?.requests || DEFAULT_REQUESTS;
 
         // Migrate local preference to cloud if exists
         if (preferenceToMigrate) {
@@ -214,7 +218,7 @@ const App: React.FC = () => {
             links: cloudData.links?.length || 0,
             requests: requests.length
           });
-          // Use cloud data as source of truth - don't merge with local state
+          // Use cloud data as source of truth
           const linksWithOverrides = (cloudData.links || []).map((l: any) => {
             let canonicalUrl = l.canonicalUrl || l.url;
             try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch { }
@@ -240,39 +244,22 @@ const App: React.FC = () => {
                   // Fix URL if it doesn't have .webp extension (for backward compatibility)
                   let fixedUrl = logoUrlToDownload;
                   if (linkWithOverride.customLogoPath && !logoUrlToDownload.includes('.webp')) {
-                    // If path exists and URL doesn't have extension, try to fix it
                     const pathParts = linkWithOverride.customLogoPath.split('/');
                     const fileName = pathParts[pathParts.length - 1];
                     if (!fileName.includes('.')) {
-                      // Path doesn't have extension, add .webp to URL
                       fixedUrl = logoUrlToDownload.replace(/([^/]+)$/, '$1.webp');
-                      console.log('[App] Fixed logo URL:', { original: logoUrlToDownload, fixed: fixedUrl });
                     }
                   }
 
-                  // Download in background - don't await
-                  // Pass storagePath to use Supabase download() method instead of direct fetch
                   downloadAndCacheLogo(
                     canonicalUrl,
                     fixedUrl,
                     linkWithOverride.customLogoHash,
                     linkWithOverride.customLogoPath || undefined
-                  )
-                    .then(success => {
-                      if (success) {
-                        // Trigger re-render to show cached logo
-                        setAppState(prev => ({ ...prev }));
-                      } else {
-                        // Download failed, but we still have the URL - it should display directly
-                        console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
-                      }
-                    })
-                    .catch(err => {
-                      console.warn('[App] Failed to download logo:', err);
-                      // Even if download fails, the URL should still work for direct display
-                    });
+                  ).then(success => {
+                    if (success) setAppState(prev => ({ ...prev }));
+                  }).catch(console.warn);
                 } else if (linkWithOverride.customLogoPath) {
-                  // No URL available, but we have path - try to generate signed URL
                   getLogoSignedUrl(linkWithOverride.customLogoPath)
                     .then(signedUrl => {
                       if (signedUrl && linkWithOverride.customLogoHash) {
@@ -281,15 +268,11 @@ const App: React.FC = () => {
                           signedUrl,
                           linkWithOverride.customLogoHash,
                           linkWithOverride.customLogoPath || undefined
-                        )
-                          .then(success => {
-                            if (success) {
-                              setAppState(prev => ({ ...prev }));
-                            }
-                          });
+                        ).then(success => {
+                          if (success) setAppState(prev => ({ ...prev }));
+                        });
                       }
-                    })
-                    .catch(err => console.warn('[App] Failed to generate signed URL:', err));
+                    }).catch(console.warn);
                 }
               }
             }
@@ -321,21 +304,24 @@ const App: React.FC = () => {
 
           return mergedState;
         } else {
-          console.log('[App] No cloud data found, syncing current state');
-          // No cloud data, set user and sync current state (with migrated preference)
+          console.log('[App] No cloud data found, using defaults + migrated prefs');
+
+          // No cloud data: Use defaults + migrated data. Do NOT inherit from prevState (which might be stale A user data)
+          // We preserve theme/language from prevState as they might be guest preferences
           const stateWithUser = {
             ...prevState,
+            links: DEFAULT_LINKS,     // Reset to defaults
+            requests: requests,       // Use migrated requests or defaults
             user: userWithAllData,
             subscriptionTier,
-            requests: requests // Include migrated preference
           };
+
           // Sync current state to cloud for first-time users
           syncToCloud(stateWithUser).catch(err => console.error('[App] Failed to sync to cloud:', err));
 
-          // If preference was migrated, trigger immediate refresh
           if (preferenceToMigrate) {
             setTimeout(() => {
-              fetchRandomSnippet(true); // Bypass limit for immediate refresh
+              fetchRandomSnippet(true);
             }, 500);
           }
 
@@ -351,148 +337,39 @@ const App: React.FC = () => {
     setIsSyncing(true);
     openGoogleSignIn(async (user) => {
       if (user) {
-        // Reset perspective count for unauthenticated users
-        resetPerspectiveCount();
-
-        // Fetch subscription state, membership, and settings from backend
-        const [subscriptionData, membershipData, settingsData] = await Promise.all([
-          fetchSubscriptionState(user.id),
-          fetchUserMembership(user.id),
-          fetchUserSettings(user.id),
-        ]);
-
-        const userWithAllData = {
-          ...user,
-          ...subscriptionData,
-          ...(membershipData && {
-            memberViaRedeem: membershipData.memberViaRedeem,
-            membershipSince: membershipData.membershipSince,
-          }),
-          ...(settingsData && {
-            redeemEnabled: settingsData.redeemEnabled,
-          }),
-        };
-        const subscriptionTier = determineSubscriptionTier(userWithAllData);
-
-        // First set user, then fetch cloud data
-        const currentState = appState;
-        setAppState(prev => ({ ...prev, user: userWithAllData, subscriptionTier }));
-
-        // Fetch cloud data + user gateway overrides and merge with current state
-        const [cloudData, gatewayOverrides] = await Promise.all([
-          fetchFromCloud(user.id),
-          fetchUserGatewayOverrides(user.id),
-        ]);
-        const overridesByCanonical: Record<string, typeof gatewayOverrides[number]> = {};
-        for (const o of gatewayOverrides) {
-          overridesByCanonical[o.canonical_url] = o;
-        }
-        if (cloudData) {
-          const linksWithOverrides = (cloudData.links || []).map((l: any) => {
-            let canonicalUrl = l.canonicalUrl || l.url;
-            try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch { }
-            const ov = overridesByCanonical[canonicalUrl];
-            const linkWithOverride = {
-              ...l,
-              canonicalUrl,
-              customTitle: ov?.custom_title ?? l.customTitle ?? null,
-              customLogoPath: ov?.custom_logo_path ?? l.customLogoPath ?? null,
-              customLogoUrl: ov?.custom_logo_url ?? l.customLogoUrl ?? null,
-              customLogoSignedUrl: ov?.custom_logo_signed_url ?? l.customLogoSignedUrl ?? null,
-              customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
-            };
-
-            // Download logo from cloud to local cache if needed (async, non-blocking)
-            if (linkWithOverride.customLogoHash) {
-              const hasLocalCache = getLocalLogoDataUrl(canonicalUrl, linkWithOverride.customLogoHash);
-              if (!hasLocalCache) {
-                // Try to download: prefer publicUrl, fallback to signedUrl, or regenerate signedUrl
-                const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
-
-                if (logoUrlToDownload) {
-                  // Fix URL if it doesn't have .webp extension (for backward compatibility)
-                  let fixedUrl = logoUrlToDownload;
-                  if (linkWithOverride.customLogoPath && !logoUrlToDownload.includes('.webp')) {
-                    // If path exists and URL doesn't have extension, try to fix it
-                    const pathParts = linkWithOverride.customLogoPath.split('/');
-                    const fileName = pathParts[pathParts.length - 1];
-                    if (!fileName.includes('.')) {
-                      // Path doesn't have extension, add .webp to URL
-                      fixedUrl = logoUrlToDownload.replace(/([^/]+)$/, '$1.webp');
-                      console.log('[App] Fixed logo URL:', { original: logoUrlToDownload, fixed: fixedUrl });
-                    }
-                  }
-
-                  // Download in background - don't await
-                  // Pass storagePath to use Supabase download() method instead of direct fetch
-                  downloadAndCacheLogo(
-                    canonicalUrl,
-                    fixedUrl,
-                    linkWithOverride.customLogoHash,
-                    linkWithOverride.customLogoPath || undefined
-                  )
-                    .then(success => {
-                      if (success) {
-                        // Trigger re-render to show cached logo
-                        setAppState(prev => ({ ...prev }));
-                      } else {
-                        // Download failed, but we still have the URL - it should display directly
-                        console.log('[App] Logo download failed, but URL is available for direct display:', fixedUrl);
-                      }
-                    })
-                    .catch(err => {
-                      console.warn('[App] Failed to download logo:', err);
-                      // Even if download fails, the URL should still work for direct display
-                    });
-                } else if (linkWithOverride.customLogoPath) {
-                  // No URL available, but we have path - try to generate signed URL
-                  getLogoSignedUrl(linkWithOverride.customLogoPath)
-                    .then(signedUrl => {
-                      if (signedUrl && linkWithOverride.customLogoHash) {
-                        downloadAndCacheLogo(
-                          canonicalUrl,
-                          signedUrl,
-                          linkWithOverride.customLogoHash,
-                          linkWithOverride.customLogoPath || undefined
-                        )
-                          .then(success => {
-                            if (success) {
-                              setAppState(prev => ({ ...prev }));
-                            }
-                          });
-                      }
-                    })
-                    .catch(err => console.warn('[App] Failed to generate signed URL:', err));
-                }
-              }
-            }
-
-            return linkWithOverride;
-          });
-          // Merge cloud data with current state, preserving user with all data
-          const mergedState = {
-            ...currentState,
-            ...cloudData,
-            user: userWithAllData, // Ensure user with all data is set
-            subscriptionTier, // Set subscription tier
-            // Preserve local state if cloud data is missing fields
-            links: linksWithOverrides.length ? linksWithOverrides : (cloudData.links || currentState.links),
-            requests: cloudData.requests || currentState.requests,
-            language: cloudData.language || currentState.language,
-            theme: cloudData.theme || currentState.theme,
-          };
-          saveState(mergedState, true); // Skip sync on initial load
-          addToast('Data synced from cloud', 'success');
-        } else {
-          // No cloud data, sync current state to cloud
-          const stateWithUser = { ...currentState, user: userWithAllData, subscriptionTier };
-          saveState(stateWithUser, false); // Sync current state to cloud
-          addToast('Logged in successfully', 'success');
-        }
+        await handleUserLogin(user);
+      } else {
+        setIsSyncing(false);
       }
-      setIsSyncing(false);
     });
   };
+
+  const handleSignOut = useCallback(() => {
+    // 1. Clear auth token/session
+    signOutUser();
+
+    // 2. Reset AppState to defaults to prevent data leakage
+    // We keep theme and language as they are device-specific preferences
+    setAppState(prev => {
+      const resetState: AppState = {
+        ...prev,
+        user: null,
+        links: DEFAULT_LINKS,
+        requests: DEFAULT_REQUESTS,
+        subscriptionTier: 'free' as SubscriptionTier, // Reset tier
+        // Keep theme, language, version
+      };
+
+      // 3. Immediately update localStorage with the reset state to ensure
+      // that a refresh loads this clean state, not the old user state.
+      localStorage.setItem('focus_tab_state', JSON.stringify({ ...resetState, user: null }));
+
+      return resetState;
+    });
+
+    setIsSettingsOpen(false);
+    addToast('Signed out successfully', 'info');
+  }, [addToast]);
 
   const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false) => {
     console.log('[App] fetchRandomSnippet called. isGenerating:', isGenerating, 'bypassLimit:', bypassLimit);
@@ -1785,18 +1662,7 @@ const App: React.FC = () => {
         updateState={saveState}
         addToast={addToast}
         onSignIn={handleSignIn}
-        onSignOut={() => {
-          signOutUser();
-          const newState = {
-            ...appState,
-            user: null,
-            subscriptionTier: undefined,
-            links: DEFAULT_LINKS,
-            requests: DEFAULT_REQUESTS
-          };
-          saveState(newState);
-          addToast('Signed out');
-        }}
+        onSignOut={handleSignOut}
       />
 
       <LoginPromptModal
