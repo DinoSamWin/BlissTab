@@ -272,6 +272,19 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
 }
 
 export function signOutUser() {
+  // Get current user email before clearing
+  const currentUserEmail = localStorage.getItem('focus_tab_user');
+  let userEmail: string | null = null;
+
+  try {
+    if (currentUserEmail) {
+      const parsed = JSON.parse(currentUserEmail);
+      userEmail = parsed.email;
+    }
+  } catch (e) {
+    console.warn('[Auth] Failed to parse user email for revoke', e);
+  }
+
   localStorage.removeItem('focus_tab_user');
 
   if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
@@ -279,7 +292,17 @@ export function signOutUser() {
       (window as any).google.accounts.id.disableAutoSelect();
       // Also cancel any pending prompts to prevent ghost logins from other tabs/states
       (window as any).google.accounts.id.cancel();
-      console.log('[Auth] Disabled auto-select and canceled prompt');
+
+      // CRITICAL: Revoke the user's credentials to prevent account reversion
+      // This clears Google's internal cache of the logged-in user
+      if (userEmail) {
+        console.log('[Auth] Revoking credentials for:', userEmail);
+        (window as any).google.accounts.id.revoke(userEmail, (done: any) => {
+          console.log('[Auth] Revoke callback:', done);
+        });
+      }
+
+      console.log('[Auth] Disabled auto-select, canceled prompt, and revoked credentials');
     } catch (e) {
       console.warn('[Auth] Failed to disable auto-select', e);
     }

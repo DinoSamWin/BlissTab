@@ -60,7 +60,7 @@ const PlanBadge = ({ user }: { user: AppState['user'] }) => {
 const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState, addToast, onSignIn, onSignOut }) => {
   const [newUrl, setNewUrl] = useState('');
   const [newPrompt, setNewPrompt] = useState('');
-  const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'language' | 'redeem' | 'account' | 'feedback'>('links');
+  const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'language' | 'redeem' | 'account'>('links');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
@@ -73,9 +73,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemStatus, setRedeemStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
 
-  // Feedback state
-  const [feedbackInput, setFeedbackInput] = useState('');
-  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
   // Refresh membership state when switching tabs
   useEffect(() => {
@@ -597,7 +595,53 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
     setFeedbackInput('');
     setIsSendingFeedback(false);
+    setIsFeedbackModalOpen(false); // Close modal on send
     addToast('Feedback prepared', 'success');
+  };
+
+  const FeedbackModal = () => {
+    if (!isFeedbackModalOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+        <div className="bg-white dark:bg-[#1a1a1a] w-full max-w-lg rounded-3xl shadow-2xl p-8 animate-scale-in border border-gray-100 dark:border-white/5 relative">
+          <button
+            onClick={() => setIsFeedbackModalOpen(false)}
+            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+
+          <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">We value your feedback</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            Have a suggestion, found a bug, or just want to say hi? We'd love to hear from you.
+          </p>
+
+          <textarea
+            className="w-full h-32 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none mb-6"
+            placeholder="Tell us what you think..."
+            value={feedbackInput}
+            onChange={(e) => setFeedbackInput(e.target.value)}
+            autoFocus
+          />
+
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setIsFeedbackModalOpen(false)}
+              className="px-6 py-3 text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-wide hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSendFeedback}
+              disabled={!feedbackInput.trim() || isSendingFeedback}
+              className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-sm font-bold uppercase tracking-wide hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isSendingFeedback ? 'Processing...' : 'Email Us'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -620,7 +664,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
         {/* Tab Navigation - Sticky */}
         <div className="flex px-12 border-b border-black/5 dark:border-white/5 no-scrollbar overflow-x-auto flex-shrink-0 sticky top-0 z-10 bg-white dark:bg-[#0F0F0F]">
-          {['links', 'snippets', 'language', 'redeem', 'account', 'feedback'].map((tab) => (
+          {['links', 'snippets', 'language', 'redeem', 'account'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -1226,21 +1270,50 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         </div>
 
         {/* Footer Actions */}
-        <div className="p-12 bg-gray-50/50 dark:bg-black/40 flex justify-between items-center">
-          <div className="flex items-center gap-6">
-            <button onClick={onClose} className="px-10 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-xl shadow-black/10">Close Studio</button>
-            <a
-              href="/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
-            >
-              Privacy Policy
-            </a>
+        <div className="px-12 py-8 bg-gray-50/50 dark:bg-black/40 border-t border-black/5 dark:border-white/5">
+          <div className="grid grid-cols-3 gap-4 items-center">
+            {/* Privacy Policy */}
+            <div className="flex justify-start">
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors flex items-center gap-2"
+              >
+                Privacy Policy
+              </a>
+            </div>
+
+            {/* Follow Us / Social - Centered */}
+            <div className="flex justify-center">
+              <a
+                href="https://twitter.com/StartlyTab" // Placeholder
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
+              >
+                Follow Us
+              </a>
+            </div>
+
+            {/* Feedback - Right Aligned */}
+            <div className="flex justify-end">
+              <button
+                onClick={() => setIsFeedbackModalOpen(true)}
+                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
+              >
+                Feedback
+              </button>
+            </div>
           </div>
-          <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">StartlyTab v{state.version}</span>
+
+          <div className="text-center mt-6">
+            <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest opacity-50">StartlyTab v{state.version}</span>
+          </div>
         </div>
       </div>
+
+      <FeedbackModal />
 
       <SubscriptionUpsellModal
         isOpen={isSubscriptionModalOpen}
