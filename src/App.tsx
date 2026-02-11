@@ -1444,7 +1444,13 @@ const App: React.FC = () => {
               console.log('[App] User logged out in another tab, updating state...');
               // Use functional update to avoid dependency on appState
               setAppState(prevState => {
-                const newState = { ...prevState, user: null, subscriptionTier: undefined };
+                const newState = {
+                  ...prevState,
+                  user: null,
+                  subscriptionTier: undefined,
+                  links: DEFAULT_LINKS,
+                  requests: DEFAULT_REQUESTS
+                };
                 // Save state asynchronously without blocking
                 saveState(newState, true).catch(err => console.error('[App] Failed to save logout state:', err));
                 return newState;
@@ -1742,6 +1748,7 @@ const App: React.FC = () => {
           links={appState.links}
           userId={appState.user?.id}
           onUpdate={(newLinks) => saveState(prev => ({ ...prev, links: newLinks }))}
+          appState={appState}
         />
       ) : (
         /* Unauthenticated State: Hero Login Prompt */
@@ -1780,7 +1787,13 @@ const App: React.FC = () => {
         onSignIn={handleSignIn}
         onSignOut={() => {
           signOutUser();
-          const newState = { ...appState, user: null, subscriptionTier: undefined };
+          const newState = {
+            ...appState,
+            user: null,
+            subscriptionTier: undefined,
+            links: DEFAULT_LINKS,
+            requests: DEFAULT_REQUESTS
+          };
           saveState(newState);
           addToast('Signed out');
         }}

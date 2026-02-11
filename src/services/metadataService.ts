@@ -10,7 +10,7 @@ interface CachedMetadata extends SiteMetadata {
 }
 
 import { canonicalizeUrl, extractHostname } from './urlCanonicalService';
-import { upsertGatewayMetadataIfMissing } from './supabaseService';
+import { upsertGatewayMetadataIfMissing, fetchGatewayMetadata } from './supabaseService';
 
 declare const chrome: any;
 
@@ -331,7 +331,7 @@ async function fetchPageMetadata(url: string): Promise<{ title?: string; icon?: 
   return {};
 }
 
-export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | null> {
+export async function fetchSiteMetadata(url: string, onBackgroundUpdate?: (metadata: SiteMetadata) => void): Promise<SiteMetadata | null> {
   try {
     // Canonicalize URL (used for cache + cloud dedupe)
     const canonicalUrl = canonicalizeUrl(url);
@@ -359,7 +359,7 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
           console.log(`[Metadata] Cache stale for ${domain}, using cached data, refreshing in background`);
 
           // 后台异步刷新
-          refreshMetadataInBackground(canonicalUrl, domain, cacheKey, cached);
+          refreshMetadataInBackground(canonicalUrl, domain, cacheKey, cached, onBackgroundUpdate);
 
           // 立即返回缓存的旧数据（不等待）
           return { ...cached, url: canonicalUrl };
@@ -381,7 +381,7 @@ export async function fetchSiteMetadata(url: string): Promise<SiteMetadata | nul
     };
 
     // 后台异步获取完整数据（不阻塞返回）
-    refreshMetadataInBackground(canonicalUrl, domain, cacheKey, quickResult);
+    refreshMetadataInBackground(canonicalUrl, domain, cacheKey, quickResult, onBackgroundUpdate);
 
     // 立即返回快速结果
     return quickResult;
@@ -448,15 +448,20 @@ function extractMetadataFromDoc(doc: Document, baseUrl: string): { title?: strin
 }
 
 // 抽取后台更新逻辑
-function refreshMetadataInBackground(canonicalUrl: string, domain: string, cacheKey: string, currentData: SiteMetadata) {
+function refreshMetadataInBackground(canonicalUrl: string, domain: string, cacheKey: string, currentData: SiteMetadata, onUpdate?: (metadata: SiteMetadata) => void) {
   Promise.all([
     fetchFavicon(domain),             // 1. Google/DDG API
-    fetchPageMetadata(canonicalUrl)   // 2. HTML parsing (Proxy)
-  ]).then(async ([apiFavicon, pageMeta]) => {
+    fetchPageMetadata(canonicalUrl),  // 2. HTML parsing (Proxy)
+    fetchGatewayMetadata(canonicalUrl) // 3. Supabase global metadata (fallback)
+  ]).then(async ([apiFavicon, pageMeta, cloudMeta]) => {
 
-    let finalTitle = pageMeta.title || currentData.title;
-    if (finalTitle === formatDomainAsTitle(domain) && pageMeta.title) {
-      finalTitle = pageMeta.title; // 优先使用 HTML 解析到的标题
+    // Priority for title: HTML > Cloud > Current
+    let finalTitle = currentData.title;
+    if (pageMeta.title) {
+      finalTitle = pageMeta.title; // HTML parsing succeeded
+    } else if (cloudMeta?.title) {
+      finalTitle = cloudMeta.title; // Fallback to cloud metadata
+      console.log(`[Metadata] Using cloud metadata for title: ${finalTitle}`);
     }
 
     let finalIcon = apiFavicon; // 默认使用 API 的结果 (通常比较稳)
@@ -466,6 +471,15 @@ function refreshMetadataInBackground(canonicalUrl: string, domain: string, cache
       const isHtmlIconValid = await verifyImageLoads(pageMeta.icon, 1500);
       if (isHtmlIconValid) {
         finalIcon = pageMeta.icon;
+      }
+    }
+
+    // Fallback to cloud metadata icon if HTML parsing failed
+    if (!pageMeta.icon && cloudMeta?.icon) {
+      const isCloudIconValid = await verifyImageLoads(cloudMeta.icon, 1500);
+      if (isCloudIconValid) {
+        finalIcon = cloudMeta.icon;
+        console.log(`[Metadata] Using cloud metadata for icon`);
       }
     }
 
@@ -488,6 +502,11 @@ function refreshMetadataInBackground(canonicalUrl: string, domain: string, cache
     // Best-effort: de-duped cloud metadata store
     upsertGatewayMetadataIfMissing({ url: canonicalUrl, title: finalTitle, iconUrl: finalIcon }).catch(() => { });
     console.log(`[Metadata] Background refresh completed for ${domain}`);
+
+    // Notify caller that background update is complete
+    if (onUpdate) {
+      onUpdate(fullMetadata);
+    }
 
   }).catch(err => {
     console.log(`[Metadata] Background refresh failed for ${domain}:`, err);

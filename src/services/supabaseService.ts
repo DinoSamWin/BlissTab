@@ -12,7 +12,7 @@ let supabaseClient: SupabaseClient | null = null;
  */
 export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
-  
+
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('Supabase not configured. Falling back to localStorage.');
     return null;
@@ -94,6 +94,43 @@ export async function upsertGatewayMetadataIfMissing(input: {
     }
   } catch (e) {
     console.warn('[GatewayMetadata] upsert-if-missing failed:', e);
+  }
+}
+
+/**
+ * Fetch gateway metadata from the global table.
+ * This is used as a fallback when CORS proxy fails.
+ */
+export async function fetchGatewayMetadata(url: string): Promise<{ title?: string; icon?: string } | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  const canonicalUrl = canonicalizeUrl(url);
+  if (!canonicalUrl) return null;
+
+  try {
+    const { data, error } = await client
+      .from('gateway_metadata')
+      .select('site_title, icon_url')
+      .eq('canonical_url', canonicalUrl)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[GatewayMetadata] fetch failed:', error);
+      return null;
+    }
+
+    if (data) {
+      return {
+        title: data.site_title || undefined,
+        icon: data.icon_url || undefined
+      };
+    }
+
+    return null;
+  } catch (e) {
+    console.warn('[GatewayMetadata] fetch exception:', e);
+    return null;
   }
 }
 
@@ -193,9 +230,9 @@ export async function uploadGatewayLogo(params: {
     // Try to get public URL (works if bucket is public)
     const { data: publicData } = client.storage.from('gateway-logos').getPublicUrl(path);
     const publicUrl = publicData?.publicUrl || null;
-    
+
     let signedUrl: string | null = null;
-    
+
     if (publicUrl) {
       console.log('[GatewayLogo] Public URL:', publicUrl);
       // Note: File verification via HEAD request may not work with Supabase Storage public URLs
@@ -207,7 +244,7 @@ export async function uploadGatewayLogo(params: {
         const { data: signedData, error: signedErr } = await client.storage
           .from('gateway-logos')
           .createSignedUrl(path, 31536000); // 1 year expiry
-        
+
         if (signedErr) {
           console.warn('[GatewayLogo] Failed to create signed URL:', signedErr);
         } else if (signedData?.signedUrl) {
@@ -258,7 +295,7 @@ export async function syncToCloud(state: AppState): Promise<void> {
   if (!state.user) return;
 
   const client = getSupabaseClient();
-  
+
   // Fallback to localStorage if Supabase is not configured
   if (!client) {
     const cloudKey = `cloud_sync_${state.user.id}`;
@@ -324,7 +361,7 @@ export async function syncToCloud(state: AppState): Promise<void> {
         theme: savedData.theme,
         savedAt: data[0].updated_at
       });
-      
+
       // Verify the data matches what we sent
       if (savedData.links?.length !== dataToSync.links.length) {
         console.warn('[Sync] Link count mismatch!', {
@@ -355,7 +392,7 @@ export async function syncToCloud(state: AppState): Promise<void> {
  */
 export async function fetchFromCloud(userId: string): Promise<Partial<AppState> | null> {
   const client = getSupabaseClient();
-  
+
   // Fallback to localStorage if Supabase is not configured
   if (!client) {
     const cloudKey = `cloud_sync_${userId}`;
@@ -385,7 +422,7 @@ export async function fetchFromCloud(userId: string): Promise<Partial<AppState> 
       }
       throw error;
     }
-    
+
     if (data && data.data) {
       console.log(`[Sync] Fetched data for user ${userId}`, {
         links: data.data.links?.length || 0,
@@ -396,7 +433,7 @@ export async function fetchFromCloud(userId: string): Promise<Partial<AppState> 
       });
       return data.data;
     }
-    
+
     return null;
   } catch (error) {
     console.error('[Sync] Failed to fetch from cloud:', error);

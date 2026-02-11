@@ -29,7 +29,7 @@ export interface SnippetRequest {
   active: boolean;
 }
 
-export type SubscriptionPlan = 'free' | 'plus' | 'pro';
+export type SubscriptionPlan = 'free' | 'plus' | 'pro' | 'lifetime' | 'career';
 export type SubscriptionStatus = 'active' | 'expired' | 'canceled';
 
 export interface User {

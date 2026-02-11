@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Search, Plus, Edit2, Check, Trash2, GripHorizontal } from 'lucide-react';
+import { X, Search, Plus, Edit2, Check, Trash2, GripHorizontal, Lock } from 'lucide-react';
 import {
     DndContext,
     closestCenter,
@@ -26,17 +26,19 @@ import {
     useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { QuickLink } from '../types';
+import { QuickLink, AppState } from '../types';
 import GatewayEditModal from './GatewayEditModal';
 import { getLocalLogoDataUrl, upsertLocalLogo } from '../services/gatewayLogoCacheService';
 import { uploadGatewayLogo } from '../services/supabaseService';
 import { canonicalizeUrl } from '../services/urlCanonicalService';
+import { canAddGateway, isSubscribed, SUBSCRIPTION_LIMITS } from '../services/usageLimitsService';
 
 // --- Types ---
 interface Props {
     links: QuickLink[];
     userId?: string;
     onUpdate: (links: QuickLink[]) => void;
+    appState: AppState;
 }
 
 // --- Droppable Group Container ---
@@ -198,6 +200,19 @@ function NewGroupDropZone({ activeId }: { activeId: UniqueIdentifier | null }) {
                 <Plus className="w-5 h-5" />
                 Drop here to create a new group
             </p>
+        </div>
+    );
+}
+
+
+// --- Limit Reached Tooltip Component ---
+function LimitReachedTooltip() {
+    return (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="bg-black text-white text-[10px] font-bold py-1.5 px-3 rounded-lg shadow-xl relative text-center">
+                Free plan limit reached.<br />Click to upgrade.
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-black"></div>
+            </div>
         </div>
     );
 }
@@ -479,7 +494,7 @@ async function uploadLogoAndGetMetadata(
 }
 
 // --- Main Component ---
-export default function IntegrationGateways({ links: propLinks, userId, onUpdate }: Props) {
+export default function IntegrationGateways({ links: propLinks, userId, onUpdate, appState }: Props) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [elasticY, setElasticY] = useState(0);
@@ -507,6 +522,10 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     // Modals State
     const [createModal, setCreateModal] = useState<{ isOpen: boolean; category: string }>({ isOpen: false, category: '' });
     const [editLink, setEditLink] = useState<QuickLink | null>(null); // For GatewayEditModal
+    // Subscription Limit Checking
+    const gatewayLimitCheck = canAddGateway(appState);
+    const isLimitReached = !gatewayLimitCheck.allowed && gatewayLimitCheck.reason === 'limit_reached';
+    const isUserSubscribed = isSubscribed(appState);
     const [deleteId, setDeleteId] = useState<string | null>(null); // For Delete Confirmation
 
     const scrollAccumulator = useRef(0);
@@ -998,10 +1017,27 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                 <span>New Group</span>
                             </button>
                             <button
-                                onClick={() => setCreateModal({ isOpen: true, category: '快捷指令' })}
-                                className="bg-white/50 dark:bg-white/5 text-orange-600 dark:text-orange-400 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 hover:shadow-lg transition-all flex items-center gap-2 border border-orange-200/50 dark:border-orange-500/20"
+                                onClick={() => {
+                                    if (isLimitReached) {
+                                        // Show upgrade prompt
+                                        const subscriptionUrl = window.location.origin + '/subscription';
+                                        window.open(subscriptionUrl, '_blank');
+                                    } else {
+                                        setCreateModal({ isOpen: true, category: '快捷指令' });
+                                    }
+                                }}
+                                // disabled={isLimitReached} // Removed to allow hover events for tooltip
+                                className={`
+                                    px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 border group relative
+                                    ${isLimitReached
+                                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60'
+                                        : 'bg-white/50 dark:bg-white/5 text-orange-600 dark:text-orange-400 border-orange-200/50 dark:border-orange-500/20 hover:bg-white dark:hover:bg-white/10 hover:shadow-lg'
+                                    }
+                                `}
+                            // title={isLimitReached ? `Free plan limit: ${SUBSCRIPTION_LIMITS.GATEWAYS.FREE} gateways. Upgrade for unlimited.` : 'Add a new gateway'}
                             >
-                                <Plus className="w-4 h-4" />
+                                {isLimitReached && <LimitReachedTooltip />}
+                                {isLimitReached ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                                 <span>Add Gateway</span>
                             </button>
 
@@ -1146,17 +1182,34 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                                         {/* Regular Add Button (Per Group) - Now shown for ALL groups including Default */}
                                                         {/* Style differentiated from header buttons: Dashed, simple icon */}
                                                         <button
-                                                            onClick={() => setCreateModal({ isOpen: true, category: category === 'Shortcuts' ? '快捷指令' : category })}
+                                                            onClick={() => {
+                                                                if (isLimitReached) {
+                                                                    // Show upgrade prompt
+                                                                    const subscriptionUrl = window.location.origin + '/subscription';
+                                                                    window.open(subscriptionUrl, '_blank');
+                                                                } else {
+                                                                    setCreateModal({ isOpen: true, category: category === 'Shortcuts' ? '快捷指令' : category });
+                                                                }
+                                                            }}
+                                                            // disabled={isLimitReached} // Removed to allow hover events for tooltip
                                                             className={`
                                                                 flex items-center justify-center p-3
-                                                                bg-white/50 dark:bg-white/5 border-2 border-dashed border-gray-300 dark:border-white/10
-                                                                rounded-xl hover:bg-white dark:hover:bg-white/10 hover:border-orange-400 dark:hover:border-orange-500
-                                                                transition-all h-16 w-full group
+                                                                border-2 border-dashed rounded-xl transition-all h-16 w-full relative
                                                                 ${isEditMode ? 'opacity-40 pointer-events-none' : ''}
+                                                                ${isLimitReached
+                                                                    ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-60'
+                                                                    : 'bg-white/50 dark:bg-white/5 border-gray-300 dark:border-white/10 hover:bg-white dark:hover:bg-white/10 hover:border-orange-400 dark:hover:border-orange-500 group'
+                                                                }
                                                             `}
+                                                        // title={isLimitReached ? `Free plan limit: ${SUBSCRIPTION_LIMITS.GATEWAYS.FREE} gateways. Click to upgrade.` : 'Add a new gateway'}
                                                         >
-                                                            <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                <Plus className="w-5 h-5 text-gray-400 group-hover:text-orange-500 transition-colors" />
+                                                            {isLimitReached && <LimitReachedTooltip />}
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${isLimitReached ? 'bg-gray-200 dark:bg-gray-800' : 'bg-gray-100 dark:bg-white/10 group-hover:scale-110'}`}>
+                                                                {isLimitReached ? (
+                                                                    <Lock className="w-5 h-5 text-gray-400 dark:text-gray-600" />
+                                                                ) : (
+                                                                    <Plus className="w-5 h-5 text-gray-400 group-hover:text-orange-500 transition-colors" />
+                                                                )}
                                                             </div>
                                                         </button>
                                                     </div>
