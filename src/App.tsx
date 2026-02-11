@@ -144,8 +144,20 @@ const App: React.FC = () => {
   // Function to handle user login and data sync (extracted for reuse)
   const handleUserLogin = useCallback(async (user: User) => {
     console.log('[App] User authenticated:', user.email);
-    // Clear explicit signout flag since user is logging in properly
+    // Clear explicit signout flag on successful login
     localStorage.removeItem('focus_tab_explicit_signout');
+
+    // CRITICAL: Force Google to forget the "preferred" account by reinitializing
+    // This prevents account reversion when switching between accounts
+    if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+      try {
+        // Disable auto-select to force account picker on next login
+        (window as any).google.accounts.id.disableAutoSelect();
+        console.log('[App] Disabled auto-select to prevent account reversion');
+      } catch (e) {
+        console.warn('[App] Failed to disable auto-select', e);
+      }
+    }
 
     // Reset perspective count on login
     resetPerspectiveCount();
