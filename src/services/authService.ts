@@ -84,15 +84,21 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
         /^((?!chrome|android).)*safari/i.test(navigator.vendor);
 
       try {
+        const isExplicitSignOut = localStorage.getItem('focus_tab_explicit_signout') === 'true';
+
         const initConfig: any = {
           client_id: IS_PLACEHOLDER_ID ? 'MOCK_ID' : CLIENT_ID,
           callback: handleCredentialResponse,
-          // Only auto-select if no existing user (to avoid popup on every refresh)
-          auto_select: !hasExistingUser,
+          // Only auto-select if no existing user AND user didn't explicitly sign out
+          auto_select: !hasExistingUser && !isExplicitSignOut,
           // FedCM is the new standard, but can be finicky in iframes. 
           // We set it to false if the environment is restricted.
           use_fedcm_for_prompt: false
         };
+
+        if (isExplicitSignOut) {
+          console.log('[Auth] User explicitly signed out previously, disabling auto_select');
+        }
 
         // Safari-specific configuration
         if (isSafariBrowser) {

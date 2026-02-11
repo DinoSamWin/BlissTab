@@ -142,6 +142,9 @@ const App: React.FC = () => {
   // Function to handle user login and data sync (extracted for reuse)
   const handleUserLogin = useCallback(async (user: User) => {
     console.log('[App] User authenticated:', user.email);
+    // Clear explicit signout flag since user is logging in properly
+    localStorage.removeItem('focus_tab_explicit_signout');
+
     // Reset perspective count on login
     resetPerspectiveCount();
     // Clear local preference flag
@@ -347,6 +350,9 @@ const App: React.FC = () => {
   const handleSignOut = useCallback(() => {
     // 1. Clear auth token/session
     signOutUser();
+
+    // Set explicit signout flag to prevent auto-login on refresh
+    localStorage.setItem('focus_tab_explicit_signout', 'true');
 
     // 2. Reset AppState to defaults to prevent data leakage
     // We keep theme and language as they are device-specific preferences
