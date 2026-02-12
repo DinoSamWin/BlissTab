@@ -9,8 +9,12 @@ const CREEM_PRODUCT_ID_PRO_YEARLY = Deno.env.get('CREEM_PRODUCT_ID_PRO_YEARLY') 
 const CREEM_PRODUCT_ID_LIFETIME = Deno.env.get('CREEM_PRODUCT_ID_LIFETIME') || '';
 const CREEM_TEST_MODE = Deno.env.get('CREEM_TEST_MODE') === 'true';
 
-// Use test API if in test mode
+// Use test API if in test mode, and select the appropriate API Key
 const CREEM_API_BASE = CREEM_TEST_MODE ? 'https://test-api.creem.io' : 'https://api.creem.io';
+// Dynamically select the API key based on the mode
+const ACTIVE_CREEM_API_KEY = CREEM_TEST_MODE
+    ? (Deno.env.get('CREEM_API_KEY_TEST') || CREEM_API_KEY)
+    : CREEM_API_KEY;
 
 // --- CORS Headers ---
 const corsHeaders = {
@@ -53,7 +57,7 @@ serve(async (req) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': CREEM_API_KEY,
+                    'x-api-key': ACTIVE_CREEM_API_KEY,
                 },
                 body: JSON.stringify({
                     product_id: creemProductId,
@@ -95,7 +99,7 @@ serve(async (req) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': CREEM_API_KEY,
+                    'x-api-key': ACTIVE_CREEM_API_KEY,
                 },
                 body: JSON.stringify({
                     customer_email: email, // You might need customer_id stored in DB instead
