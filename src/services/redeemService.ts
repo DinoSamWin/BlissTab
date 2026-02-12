@@ -1,30 +1,8 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from './supabaseService';
 import { User } from '../types';
 
-const supabaseUrl = (import.meta.env as any).VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta.env as any).VITE_SUPABASE_ANON_KEY;
 
-let supabaseClient: SupabaseClient | null = null;
-
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient(): SupabaseClient | null {
-  if (supabaseClient) return supabaseClient;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('[Redeem] Supabase not configured.');
-    return null;
-  }
-
-  try {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-    return supabaseClient;
-  } catch (e) {
-    console.error('[Redeem] Failed to initialize Supabase:', e);
-    return null;
-  }
-}
 
 /**
  * Redeem code error types
