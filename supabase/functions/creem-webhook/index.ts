@@ -7,6 +7,14 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const CREEM_SIGNING_SECRET = Deno.env.get('CREEM_SIGNING_SECRET') || '';
 
+// Product IDs (re-use from creem-checkout config or assume global)
+const CREEM_PRODUCT_ID_PRO_MONTHLY = Deno.env.get('CREEM_PRODUCT_ID_PRO_MONTHLY') || '';
+const CREEM_PRODUCT_ID_PRO_YEARLY = Deno.env.get('CREEM_PRODUCT_ID_PRO_YEARLY') || '';
+const CREEM_PRODUCT_ID_LIFETIME = Deno.env.get('CREEM_PRODUCT_ID_LIFETIME') || '';
+const CREEM_PRODUCT_ID_PRO_MONTHLY_TEST = Deno.env.get('CREEM_PRODUCT_ID_PRO_MONTHLY_TEST') || '';
+const CREEM_PRODUCT_ID_PRO_YEARLY_TEST = Deno.env.get('CREEM_PRODUCT_ID_PRO_YEARLY_TEST') || '';
+const CREEM_PRODUCT_ID_LIFETIME_TEST = Deno.env.get('CREEM_PRODUCT_ID_LIFETIME_TEST') || '';
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 serve(async (req) => {
@@ -79,10 +87,22 @@ async function handleSubscriptionUpdate(data: any) {
         return;
     }
 
-    // Determine plan based on productId
+    // Determine plan based on productId matches (check both Live and Test IDs)
     let plan = 'free';
-    if (productId === 'pro_monthly_id' || productId === 'pro_yearly_id') plan = 'pro';
-    if (productId === 'lifetime_id') plan = 'lifetime';
+    if (
+        productId === CREEM_PRODUCT_ID_PRO_MONTHLY ||
+        productId === CREEM_PRODUCT_ID_PRO_YEARLY ||
+        productId === CREEM_PRODUCT_ID_PRO_MONTHLY_TEST ||
+        productId === CREEM_PRODUCT_ID_PRO_YEARLY_TEST
+    ) {
+        plan = 'pro';
+    }
+    if (
+        productId === CREEM_PRODUCT_ID_LIFETIME ||
+        productId === CREEM_PRODUCT_ID_LIFETIME_TEST
+    ) {
+        plan = 'lifetime';
+    }
 
     // Update Subscription Table
     const { error } = await supabase
