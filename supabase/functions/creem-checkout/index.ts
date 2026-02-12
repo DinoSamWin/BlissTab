@@ -16,6 +16,17 @@ const ACTIVE_CREEM_API_KEY = CREEM_TEST_MODE
     ? (Deno.env.get('CREEM_API_KEY_TEST') || CREEM_API_KEY)
     : CREEM_API_KEY;
 
+// Dynamically select product IDs based on mode
+const ACTIVE_PRODUCT_ID_PRO_MONTHLY = CREEM_TEST_MODE
+    ? (Deno.env.get('CREEM_PRODUCT_ID_PRO_MONTHLY_TEST') || CREEM_PRODUCT_ID_PRO_MONTHLY)
+    : CREEM_PRODUCT_ID_PRO_MONTHLY;
+const ACTIVE_PRODUCT_ID_PRO_YEARLY = CREEM_TEST_MODE
+    ? (Deno.env.get('CREEM_PRODUCT_ID_PRO_YEARLY_TEST') || CREEM_PRODUCT_ID_PRO_YEARLY)
+    : CREEM_PRODUCT_ID_PRO_YEARLY;
+const ACTIVE_PRODUCT_ID_LIFETIME = CREEM_TEST_MODE
+    ? (Deno.env.get('CREEM_PRODUCT_ID_LIFETIME_TEST') || CREEM_PRODUCT_ID_LIFETIME)
+    : CREEM_PRODUCT_ID_LIFETIME;
+
 // --- CORS Headers ---
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -47,9 +58,9 @@ serve(async (req) => {
 
             // Map internal product IDs to Creem Product IDs
             let creemProductId = productId;
-            if (productId === 'pro_monthly') creemProductId = CREEM_PRODUCT_ID_PRO_MONTHLY;
-            else if (productId === 'pro_yearly') creemProductId = CREEM_PRODUCT_ID_PRO_YEARLY;
-            else if (productId === 'lifetime') creemProductId = CREEM_PRODUCT_ID_LIFETIME;
+            if (productId === 'pro_monthly') creemProductId = ACTIVE_PRODUCT_ID_PRO_MONTHLY;
+            else if (productId === 'pro_yearly') creemProductId = ACTIVE_PRODUCT_ID_PRO_YEARLY;
+            else if (productId === 'lifetime') creemProductId = ACTIVE_PRODUCT_ID_LIFETIME;
 
             // Fallback: if no mapping found, assume the frontend passed the raw ID
             if (!creemProductId) {
