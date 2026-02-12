@@ -170,3 +170,5 @@ export const SEARCH_ENGINES: SearchEngine[] = [
 ];
 
 export const DEFAULT_SEARCH_ENGINE = 'google';
+
+export const FEATUREBASE_URL = 'https://startlytab.featurebase.app'; // Replace with your actual Featurebase URL

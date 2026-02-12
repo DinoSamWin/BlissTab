@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
 import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
 import { generateSnippet } from './services/geminiService';
-import { initGoogleAuth, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
+import { initGoogleAuthStrict, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory, getSessionCountToday, getMinutesSinceLast, getLateNightStreak } from './services/perspectiveService';
 import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount } from './services/usageLimitsService';
@@ -37,6 +37,25 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+
+        // CRITICAL: Validate that saved state belongs to current user
+        // This prevents data leakage when switching accounts (e.g., Account B loading Account A's gateways)
+        if (parsed.user && savedUser && parsed.user.id !== savedUser.id) {
+          console.warn('[App] State user mismatch detected. Saved state user:', parsed.user.email, 'Current user:', savedUser.email);
+          console.warn('[App] Using default state to prevent data leakage');
+
+          // Return clean state with current user, preserving only theme/language preferences
+          return {
+            version: APP_VERSION,
+            links: DEFAULT_LINKS,
+            requests: DEFAULT_REQUESTS,
+            pinnedSnippetId: null,
+            language: parsed.language || 'English',
+            user: savedUser,
+            theme: parsed.theme || systemTheme,
+          };
+        }
+
         if (parsed.version === APP_VERSION) {
           // Use saved user from authService if available, otherwise null
           return { ...parsed, user: savedUser };
@@ -90,12 +109,16 @@ const App: React.FC = () => {
   // Store latest appState in ref to avoid dependency issues in storage event listener
   const appStateRef = useRef<AppState>(appState);
 
+  // Track if cloud sync is safe (prevent overwriting cloud data if fetch failed)
+  const isCloudSyncSafeRef = useRef<boolean>(true);
+
   // Keep ref in sync with appState
   useEffect(() => {
     appStateRef.current = appState;
   }, [appState]);
 
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
+    // ... (keep existing implementation)
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
@@ -124,8 +147,13 @@ const App: React.FC = () => {
       setAppState(newState);
     }
 
-    // Sync to Supabase if user is logged in and not skipping
+    // Sync to Supabase if user is logged in, not skipping, AND sync is safe
     if (newState.user && !skipSync) {
+      if (!isCloudSyncSafeRef.current) {
+        console.warn('[App] Skipping cloud sync because initial fetch failed (safety mode)');
+        return;
+      }
+
       setIsSyncing(true);
       try {
         await syncToCloud(newState);
@@ -164,6 +192,9 @@ const App: React.FC = () => {
     // Clear local preference flag
     setHasLocalPreference(false);
 
+    // Reset safety flag - prevent sync until successful fetch
+    isCloudSyncSafeRef.current = false;
+
     setIsSyncing(true);
 
     try {
@@ -193,7 +224,7 @@ const App: React.FC = () => {
       const preferenceToMigrate = pendingPreference || localPreference;
 
       // Fetch cloud data + user gateway overrides
-      const [cloudData, gatewayOverrides] = await Promise.all([
+      const [cloudResult, gatewayOverrides] = await Promise.all([
         fetchFromCloud(user.id),
         fetchUserGatewayOverrides(user.id),
       ]);
@@ -207,9 +238,28 @@ const App: React.FC = () => {
       setAppState(prevState => {
         // IMPORTANT: Start with a clean base state or the current state if it's already reset
         // To prevent leaking previous user's data if cloud data is empty, we act carefully.
-        // If cloudData is present, we use it. If not, we fall back to DEFAULTS, not stale prevState.
 
-        let requests = cloudData?.requests || DEFAULT_REQUESTS;
+        let requests = DEFAULT_REQUESTS;
+        let cloudData: AppState | null = null;
+
+        if (cloudResult.status === 'success') {
+          cloudData = cloudResult.data as AppState;
+          requests = cloudData.requests || DEFAULT_REQUESTS;
+          // Mark sync as safe since we successfully loaded data
+          isCloudSyncSafeRef.current = true;
+          console.log('[App] Cloud data loaded successfully. Sync enabled.');
+        } else if (cloudResult.status === 'not_found') {
+          // Valid "New User" scenario.
+          // Mark sync as safe because there is nothing to overwrite.
+          isCloudSyncSafeRef.current = true;
+          console.log('[App] No cloud data found (new user). Sync enabled.');
+        } else {
+          // ERROR SCENARIO
+          console.error('[App] Critical: Failed to load cloud data. Disabling cloud sync to prevent data loss.');
+          addToast('Failed to load your data. Cloud sync disabled. Please refresh.', 'error');
+          isCloudSyncSafeRef.current = false;
+          // We will fall back to defaults locally, but sync is blocked.
+        }
 
         // Migrate local preference to cloud if exists
         if (preferenceToMigrate) {
@@ -321,7 +371,7 @@ const App: React.FC = () => {
 
           return mergedState;
         } else {
-          console.log('[App] No cloud data found, using defaults + migrated prefs');
+          console.log('[App] No cloud data found (or error), using defaults + migrated prefs');
 
           // No cloud data: Use defaults + migrated data. Do NOT inherit from prevState (which might be stale A user data)
           // We preserve theme/language from prevState as they might be guest preferences
@@ -333,8 +383,12 @@ const App: React.FC = () => {
             subscriptionTier,
           };
 
-          // Sync current state to cloud for first-time users
-          syncToCloud(stateWithUser).catch(err => console.error('[App] Failed to sync to cloud:', err));
+          // Sync current state to cloud for first-time users - BUT ONLY IF SAFE
+          if (isCloudSyncSafeRef.current) {
+            syncToCloud(stateWithUser).catch(err => console.error('[App] Failed to sync to cloud:', err));
+          } else {
+            console.warn('[App] Skipping initial sync because sync is not safe (error mode)');
+          }
 
           if (preferenceToMigrate) {
             setTimeout(() => {
@@ -390,6 +444,9 @@ const App: React.FC = () => {
     setIsSettingsOpen(false);
     addToast('Signed out successfully', 'info');
   }, [addToast]);
+
+
+
 
   const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false) => {
     console.log('[App] fetchRandomSnippet called. isGenerating:', isGenerating, 'bypassLimit:', bypassLimit);
@@ -1267,7 +1324,8 @@ const App: React.FC = () => {
     console.log('[App] Initializing Google Auth...');
     setIsAuthChecking(true);
 
-    initGoogleAuth(async (user) => {
+    // Initialize Google Auth (Strict V2)
+    initGoogleAuthStrict(async (user) => {
       setIsAuthChecking(false); // Auth check complete
 
       if (user) {
@@ -1388,6 +1446,16 @@ const App: React.FC = () => {
           }
         } catch (error) {
           console.error('[App] Failed to parse state from storage event:', error);
+        }
+      }
+
+      // Handle explicit sign-out flag (migrated from legacy listener)
+      if (e.key === 'focus_tab_explicit_signout' && e.newValue === 'true') {
+        const currentUser = appStateRef.current.user;
+        if (currentUser) {
+          console.log('[App] Explicit sign out detected from another tab');
+          // Reset state
+          handleSignOut(); // Re-use handleSignOut function for consistency
         }
       }
 

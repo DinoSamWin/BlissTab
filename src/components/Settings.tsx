@@ -4,8 +4,8 @@ import { fetchSiteMetadata } from '../services/metadataService';
 import { canonicalizeUrl } from '../services/urlCanonicalService';
 import { getLocalLogoDataUrl, removeLocalLogo, upsertLocalLogo } from '../services/gatewayLogoCacheService';
 import { imageFileToSquareWebp } from '../services/imageProcessingService';
-import { fetchUserGatewayOverrides, upsertUserGatewayOverride, uploadGatewayLogo, submitFeedback } from '../services/supabaseService';
-import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG } from '../constants';
+import { fetchUserGatewayOverrides, upsertUserGatewayOverride, uploadGatewayLogo } from '../services/supabaseService';
+import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG, FEATUREBASE_URL } from '../constants';
 import { canAddGateway, canAddIntention, getSubscriptionTier, SUBSCRIPTION_LIMITS, isSubscribed } from '../services/usageLimitsService';
 import { redeemCode, toggleRedeemFeature, RedeemErrorCode, fetchUserMembership, fetchUserSettings } from '../services/redeemService';
 import { determineSubscriptionTier } from '../services/subscriptionService';
@@ -72,8 +72,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemStatus, setRedeemStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
-
-  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
   // Refresh membership state when switching tabs
   useEffect(() => {
@@ -578,70 +576,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       console.error('[Settings] Failed to sync snippet removal:', error);
       addToast('Failed to remove. Please try again.', 'error');
     }
-  };
-
-  const handleSendFeedback = async () => {
-    if (!feedbackInput.trim()) return;
-
-    setIsSendingFeedback(true);
-
-    // 1. Submit to Supabase (fire and forget from UI perspective, but we await to log)
-    await submitFeedback(state.user?.id, feedbackInput);
-
-    // 2. Open Mailto
-    const subject = encodeURIComponent('FocusTab Feedback');
-    const body = encodeURIComponent(feedbackInput);
-    window.open(`mailto:dinosamw@gmail.com?subject=${subject}&body=${body}`);
-
-    setFeedbackInput('');
-    setIsSendingFeedback(false);
-    setIsFeedbackModalOpen(false); // Close modal on send
-    addToast('Feedback prepared', 'success');
-  };
-
-  const FeedbackModal = () => {
-    if (!isFeedbackModalOpen) return null;
-    return (
-      <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-        <div className="bg-white dark:bg-[#1a1a1a] w-full max-w-lg rounded-3xl shadow-2xl p-8 animate-scale-in border border-gray-100 dark:border-white/5 relative">
-          <button
-            onClick={() => setIsFeedbackModalOpen(false)}
-            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-
-          <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">We value your feedback</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-            Have a suggestion, found a bug, or just want to say hi? We'd love to hear from you.
-          </p>
-
-          <textarea
-            className="w-full h-32 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none mb-6"
-            placeholder="Tell us what you think..."
-            value={feedbackInput}
-            onChange={(e) => setFeedbackInput(e.target.value)}
-            autoFocus
-          />
-
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setIsFeedbackModalOpen(false)}
-              className="px-6 py-3 text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-wide hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSendFeedback}
-              disabled={!feedbackInput.trim() || isSendingFeedback}
-              className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-sm font-bold uppercase tracking-wide hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isSendingFeedback ? 'Processing...' : 'Email Us'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -1239,34 +1173,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
             </div>
           )}
 
-          {activeTab === 'feedback' && (
-            <div className="space-y-6 animate-reveal">
-              <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5">
-                <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">We value your feedback</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  Have a suggestion, found a bug, or just want to say hi? We'd love to hear from you.
-                  Your feedback helps us make FocusTab better.
-                </p>
 
-                <textarea
-                  className="w-full h-32 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none mb-4"
-                  placeholder="Tell us what you think..."
-                  value={feedbackInput}
-                  onChange={(e) => setFeedbackInput(e.target.value)}
-                />
-
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleSendFeedback}
-                    disabled={!feedbackInput.trim() || isSendingFeedback}
-                    className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-sm font-bold uppercase tracking-wide hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {isSendingFeedback ? 'Processing...' : 'Email Us'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}
@@ -1298,12 +1205,14 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
             {/* Feedback - Right Aligned */}
             <div className="flex justify-end">
-              <button
-                onClick={() => setIsFeedbackModalOpen(true)}
-                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
+              <a
+                href={FEATUREBASE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors flex items-center gap-2"
               >
                 Feedback
-              </button>
+              </a>
             </div>
           </div>
 
@@ -1313,7 +1222,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         </div>
       </div>
 
-      <FeedbackModal />
+
 
       <SubscriptionUpsellModal
         isOpen={isSubscriptionModalOpen}

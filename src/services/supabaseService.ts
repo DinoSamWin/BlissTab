@@ -13,6 +13,8 @@ let supabaseClient: SupabaseClient | null = null;
 export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
 
+  console.log('[Supabase] Initializing client...', { url: supabaseUrl, hasKey: !!supabaseAnonKey });
+
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('Supabase not configured. Falling back to localStorage.');
     return null;
@@ -20,6 +22,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   try {
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    console.log('[Supabase] Client initialized successfully');
     return supabaseClient;
   } catch (e) {
     console.error('Failed to initialize Supabase:', e);
@@ -390,7 +393,15 @@ export async function syncToCloud(state: AppState): Promise<void> {
 /**
  * Fetch user data from Supabase
  */
-export async function fetchFromCloud(userId: string): Promise<Partial<AppState> | null> {
+export type SyncResult =
+  | { status: 'success', data: Partial<AppState> }
+  | { status: 'not_found' }
+  | { status: 'error', error: any };
+
+/**
+ * Fetch user data from Supabase
+ */
+export async function fetchFromCloud(userId: string): Promise<SyncResult> {
   const client = getSupabaseClient();
 
   // Fallback to localStorage if Supabase is not configured
@@ -399,12 +410,12 @@ export async function fetchFromCloud(userId: string): Promise<Partial<AppState> 
     const saved = localStorage.getItem(cloudKey);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return { status: 'success', data: JSON.parse(saved) };
       } catch (e) {
-        return null;
+        return { status: 'error', error: e };
       }
     }
-    return null;
+    return { status: 'not_found' };
   }
 
   try {
@@ -415,10 +426,10 @@ export async function fetchFromCloud(userId: string): Promise<Partial<AppState> 
       .single();
 
     if (error) {
-      // If no data found (first time user), return null (not an error)
+      // If no data found (first time user), return distinct status
       if (error.code === 'PGRST116') {
-        console.log('[Sync] No existing data for user, will create on first sync');
-        return null;
+        console.log('[Sync] No existing data for user (PGRST116), will create on first sync');
+        return { status: 'not_found' };
       }
       throw error;
     }
@@ -431,55 +442,29 @@ export async function fetchFromCloud(userId: string): Promise<Partial<AppState> 
         theme: data.data.theme,
         lastUpdated: data.updated_at
       });
-      return data.data;
+      return { status: 'success', data: data.data };
     }
 
-    return null;
+    console.warn('[Sync] Data fetch returned no data object or empty data', data);
+    return { status: 'not_found' };
   } catch (error) {
     console.error('[Sync] Failed to fetch from cloud:', error);
-    // Fallback to localStorage on error
-    const cloudKey = `cloud_sync_${userId}`;
-    const saved = localStorage.getItem(cloudKey);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return null;
-      }
+    if ((error as any).code) {
+      console.error('[Sync] Error details:', {
+        code: (error as any).code,
+        message: (error as any).message,
+        details: (error as any).details,
+        hint: (error as any).hint
+      });
     }
-    return null;
+
+    // Critical: Do NOT return null/empty here, return error status so caller knows fetch failed!
+    return { status: 'error', error };
   }
 }
 
 /**
  * Submit user feedback to Supabase
  */
-export async function submitFeedback(userId: string | undefined, content: string): Promise<void> {
-  const client = getSupabaseClient();
 
-  // Always log for debugging
-  console.log('[Feedback] Submitting feedback:', { userId, contentLength: content.length });
-
-  if (client) {
-    try {
-      const { error } = await client
-        .from('feedback')
-        .insert({
-          user_id: userId || null,
-          content,
-          created_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('[Feedback] Failed to submit feedback to Supabase:', error);
-      } else {
-        console.log('[Feedback] Feedback submitted successfully to Supabase');
-      }
-    } catch (error) {
-      console.error('[Feedback] Exception submitting feedback:', error);
-    }
-  } else {
-    console.warn('[Feedback] Supabase client not available, skipping cloud save');
-  }
-}
 

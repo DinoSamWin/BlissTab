@@ -1,5 +1,7 @@
 import { AppState } from '../types';
-import { syncToCloud as supabaseSync, fetchFromCloud as supabaseFetch } from './supabaseService';
+import { syncToCloud as supabaseSync, fetchFromCloud as supabaseFetch, SyncResult } from './supabaseService';
+
+export type { SyncResult } from './supabaseService';
 
 /**
  * Sync user data to cloud (Supabase) with localStorage fallback
@@ -29,24 +31,50 @@ export async function syncToCloud(state: AppState): Promise<void> {
 /**
  * Fetch user data from cloud (Supabase) with localStorage fallback
  */
-export async function fetchFromCloud(userId: string): Promise<Partial<AppState> | null> {
+export async function fetchFromCloud(userId: string): Promise<SyncResult> {
   try {
-    const data = await supabaseFetch(userId);
-    if (data) return data;
+    const result = await supabaseFetch(userId);
+
+    // If successful, return immediately
+    if (result.status === 'success') {
+      return result;
+    }
+
+    // If not found, that's a valid result (new user), return it
+    if (result.status === 'not_found') {
+      // Check localStorage just in case (e.g. offline mode previously)
+      const cloudKey = `cloud_sync_${userId}`;
+      const saved = localStorage.getItem(cloudKey);
+      if (saved) {
+        try {
+          return { status: 'success', data: JSON.parse(saved) };
+        } catch (e) {
+          // ignore error
+        }
+      }
+      return result;
+    }
+
+    // If error, fall through to localStorage fallback
+    console.warn('[Sync] Supabase fetch error:', result.error);
   } catch (error) {
-    console.warn('[Sync] Supabase fetch failed, trying localStorage fallback:', error);
+    console.warn('[Sync] Supabase fetch exception:', error);
   }
 
   // Fallback to localStorage
   const cloudKey = `cloud_sync_${userId}`;
   const saved = localStorage.getItem(cloudKey);
-  
+
   if (saved) {
     try {
-      return JSON.parse(saved);
+      return { status: 'success', data: JSON.parse(saved) };
     } catch (e) {
-      return null;
+      return { status: 'error', error: e };
     }
   }
-  return null;
+
+  // If we had a specific error from Supabase, return that. Otherwise generic error.
+  // Actually, if we are here, it means Supabase failed AND localStorage is empty.
+  // Ideally return error to be safe, but if it was not_found, we returned earlier.
+  return { status: 'error', error: new Error('Failed to fetch from cloud and local storage') };
 }

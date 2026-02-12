@@ -24,10 +24,13 @@ if (typeof window !== 'undefined') {
   console.log('[Auth] ======================================');
 }
 
-export async function initGoogleAuth(onUser: (user: User | null) => void) {
+export async function initGoogleAuthStrict(onUser: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
 
-  // 1. Check local storage first for immediate UI response
+  console.log('[AuthStrict] Initializing Strict Auth V2');
+  console.log('[AuthStrict] explicit_signout status:', localStorage.getItem('focus_tab_explicit_signout'));
+
+  // 1. Check local storage first
   const savedUser = localStorage.getItem('focus_tab_user');
   let hasExistingUser = false;
   let authCheckComplete = false;
@@ -38,50 +41,92 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
       onUser(user);
       hasExistingUser = true;
       authCheckComplete = true;
-      console.log('[Auth] Restored user from localStorage:', user.email);
+      console.log('[AuthStrict] Restored user:', user.email);
     } catch (e) {
-      console.error('[Auth] Auth restore failed', e);
+      console.error('[AuthStrict] Restore failed', e);
     }
   }
 
-  // 2. Poll for the Google SDK to load
+  // 2. Poll for Google SDK
   const gsiInterval = setInterval(() => {
     if ((window as any).google?.accounts?.id) {
       clearInterval(gsiInterval);
-
-      console.log('[Auth] Google SDK loaded, initializing...');
-      console.log('[Auth] Using Client ID:', IS_PLACEHOLDER_ID ? 'MOCK_ID (placeholder)' : CLIENT_ID);
-      console.log('[Auth] Has existing user:', hasExistingUser);
+      console.log('[AuthStrict] Google SDK loaded.');
 
       const handleCredentialResponse = (response: any) => {
         try {
-          console.log('[Auth] Received credential response');
-          // Decode the JWT ID Token
+          console.log('[AuthStrict] RESPONSE RECEIVED', response);
           const base64Url = response.credential.split('.')[1];
           const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
           const payload = JSON.parse(window.atob(base64));
 
-          const user: User = {
+          const incomingUser: User = {
             id: payload.sub,
             email: payload.email,
             name: payload.name,
             picture: payload.picture
           };
 
-          console.log('[Auth] User authenticated:', user.email);
-          localStorage.setItem('focus_tab_user', JSON.stringify(user));
-          onUser(user);
+          // 1. TIMESTAMP CHECK
+          // Reject credentials issued BEFORE the last explicit logout
+          const lastLogoutTs = localStorage.getItem('focus_tab_last_logout_ts');
+          const tokenIat = payload.iat; // Seconds
+          if (lastLogoutTs && tokenIat) {
+            const logoutTime = parseInt(lastLogoutTs, 10);
+            if (tokenIat * 1000 < logoutTime) {
+              console.error('[AuthStrict] BLOCKING STALE CREDENTIAL. Issued before logout.');
+              console.error(`[AuthStrict] Token: ${new Date(tokenIat * 1000).toISOString()}, Logout: ${new Date(logoutTime).toISOString()}`);
+              return;
+            }
+          }
+
+          // 2. EXPLICIT SIGNOUT CHECK
+          const isExplicitSignOut = localStorage.getItem('focus_tab_explicit_signout') === 'true';
+          const selectBy = response.select_by;
+
+          if (isExplicitSignOut) {
+            // If explicit sign out is true, we ONLY accept manual interaction
+            // 'user', 'btn', 'btn_confirm' are manual.
+            // 'auto' is auto.
+            // null/undefined usually means auto or one-tap silent.
+            // We will be VERY STRICT.
+            if (selectBy === 'auto' || !selectBy) {
+              console.error('[AuthStrict] BLOCKING AUTO-LOGIN due to Explicit SignOut.');
+              (window as any).google.accounts.id.disableAutoSelect(); // Reinforce
+              return;
+            }
+            // Even if 'user' (One Tap click), we might want to allow it IF the user clicked it.
+            console.log('[AuthStrict] Allowing manual sign-in despite explicit signout flag:', selectBy);
+          }
+
+          // 3. EXISTING USER CHECK
+          const existingUserStr = localStorage.getItem('focus_tab_user');
+          if (existingUserStr) {
+            const existing = JSON.parse(existingUserStr);
+            if (existing.email !== incomingUser.email) {
+              console.error('[AuthStrict] BLOCKING MISMATCH:', existing.email, '!=', incomingUser.email);
+              return;
+            }
+            if (selectBy === 'auto') {
+              console.warn('[AuthStrict] Blocking redundant auto-login for existing user');
+              return;
+            }
+          }
+
+          console.log('[AuthStrict] Authenticated successfully:', incomingUser.email);
+          localStorage.setItem('focus_tab_user', JSON.stringify(incomingUser));
+          // CLEAR explicit signout flag on successful login
+          localStorage.removeItem('focus_tab_explicit_signout');
+
+          onUser(incomingUser);
           authCheckComplete = true;
+
         } catch (e) {
-          console.error('[Auth] Auth parsing failed', e);
-          onUser(null);
-          authCheckComplete = true;
+          console.error('[AuthStrict] Credential handling failed', e);
         }
       };
 
-      // Detect Safari browser
-      const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
-        /^((?!chrome|android).)*safari/i.test(navigator.vendor);
+      const isSafariBrowser = isSafari();
 
       try {
         const isExplicitSignOut = localStorage.getItem('focus_tab_explicit_signout') === 'true';
@@ -89,68 +134,53 @@ export async function initGoogleAuth(onUser: (user: User | null) => void) {
         const initConfig: any = {
           client_id: IS_PLACEHOLDER_ID ? 'MOCK_ID' : CLIENT_ID,
           callback: handleCredentialResponse,
-          // Only auto-select if no existing user AND user didn't explicitly sign out
-          auto_select: !hasExistingUser && !isExplicitSignOut,
-          // FedCM is the new standard, but can be finicky in iframes. 
-          // We set it to false if the environment is restricted.
-          use_fedcm_for_prompt: false
+          auto_select: false, // HARDCODED FALSE
+          use_fedcm_for_prompt: false,
+          cancel_on_tap_outside: true
         };
 
-        if (isExplicitSignOut) {
-          console.log('[Auth] User explicitly signed out previously, disabling auto_select');
-        }
-
-        if (isSafariBrowser) {
-          console.log('[Auth] Safari detected, using Safari-optimized configuration');
-          // Safari has issues with popup mode, so we rely on button click instead of One Tap
-          // The button will use redirect mode automatically in Safari
-        }
-
-        console.log('[Auth] initializing Google ID with config:', {
-          auto_select: initConfig.auto_select,
-          hasExistingUser,
-          isExplicitSignOut,
-          isSafariBrowser
-        });
-
+        console.log('[AuthStrict] Initializing GSI with:', initConfig);
         (window as any).google.accounts.id.initialize(initConfig);
-        console.log('[Auth] Google SDK initialized successfully');
 
-        // If no existing user, notify that auth check is complete (no user found)
+        // Prompt Logic
         if (!hasExistingUser && !authCheckComplete) {
-          console.log('[Auth] No existing user found, auth check complete');
-          onUser(null);
-          authCheckComplete = true;
-        }
+          // If explicit sign out, DO NOT SHOW ONE TAP.
+          // This prevents the "Refresh -> Auto Login" loop described by the user.
+          // The user must click the "Sign In" button manually.
+          if (isExplicitSignOut) {
+            console.log('[AuthStrict] Explicit sign-out detected. Suppressing One Tap prompt.');
+            authCheckComplete = true;
+            onUser(null);
+            return;
+          }
 
-        // Only show One Tap if user is NOT already logged in AND not Safari
-        // Safari has issues with popup/One Tap, so we skip it and rely on button click
-        if (!IS_PLACEHOLDER_ID && !hasExistingUser && !isSafariBrowser) {
-          console.log('[Auth] No existing user, attempting One Tap prompt...');
-          (window as any).google.accounts.id.prompt();
-        } else if (hasExistingUser) {
-          console.log('[Auth] User already logged in, skipping One Tap prompt');
-        } else if (isSafariBrowser) {
-          console.log('[Auth] Safari detected, skipping One Tap (will use button click instead)');
+          console.log('[AuthStrict] No user, prompting...');
+          if (!isSafariBrowser) {
+            (window as any).google.accounts.id.prompt((notification: any) => {
+              console.log('[AuthStrict] Prompt Notification:', notification);
+              if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                console.log('[AuthStrict] Prompt skipped/hidden:', notification.getNotDisplayedReason());
+                authCheckComplete = true; // Mark done if skipped
+                onUser(null);
+              }
+            });
+          } else {
+            console.log('[AuthStrict] Safari: Skipping prompt');
+            authCheckComplete = true;
+            onUser(null);
+          }
         }
       } catch (error) {
-        console.error('[Auth] Failed to initialize Google SDK:', error);
-        // If initialization fails and no user exists, notify completion
-        if (!hasExistingUser && !authCheckComplete) {
-          onUser(null);
-          authCheckComplete = true;
-        }
+        console.error('[AuthStrict] Init failed', error);
       }
     }
   }, 300);
 
-  // Stop polling after 5 seconds and notify completion if not already done
   setTimeout(() => {
     clearInterval(gsiInterval);
     if (!authCheckComplete) {
-      console.log('[Auth] Auth check timeout, no user found');
+      console.log('[AuthStrict] Timeout');
       onUser(null);
-      authCheckComplete = true;
     }
   }, 5000);
 }
@@ -271,7 +301,7 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
   }
 }
 
-export function signOutUser() {
+export const signOutUser = () => {
   // Get current user email before clearing
   const currentUserEmail = localStorage.getItem('focus_tab_user');
   let userEmail: string | null = null;
@@ -286,25 +316,24 @@ export function signOutUser() {
   }
 
   localStorage.removeItem('focus_tab_user');
+  localStorage.removeItem('focus_tab_token');
+  // Set timestamp to invalidate any stale auto-login tokens
+  localStorage.setItem('focus_tab_last_logout_ts', Date.now().toString());
 
   if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
     try {
       (window as any).google.accounts.id.disableAutoSelect();
-      // Also cancel any pending prompts to prevent ghost logins from other tabs/states
+      // Also cancel any pending prompts
       (window as any).google.accounts.id.cancel();
 
-      // CRITICAL: Revoke the user's credentials to prevent account reversion
-      // This clears Google's internal cache of the logged-in user
+      // Aggressive Revocation: Invalidate the session permissions
       if (userEmail) {
-        console.log('[Auth] Revoking credentials for:', userEmail);
         (window as any).google.accounts.id.revoke(userEmail, (done: any) => {
-          console.log('[Auth] Revoke callback:', done);
+          console.log('[Auth] Revoked credential for:', userEmail, done);
         });
       }
-
-      console.log('[Auth] Disabled auto-select, canceled prompt, and revoked credentials');
     } catch (e) {
-      console.warn('[Auth] Failed to disable auto-select', e);
+      console.warn('[Auth] Failed to revoke/cancel', e);
     }
   }
-}
+};

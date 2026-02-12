@@ -33,9 +33,40 @@ const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     }
   });
 
+  // Sync with localStorage changes (e.g., logout in another tab)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'focus_tab_user') {
+        if (!e.newValue) {
+          // User logged out in another tab
+          setUser(null);
+        } else {
+          // User logged in/switched in another tab
+          try {
+            setUser(JSON.parse(e.newValue));
+          } catch (error) {
+            console.error('[AppRouter] Failed to parse user from storage event', error);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   // Silent background subscription check (1200ms timeout, no loading overlay)
   useEffect(() => {
     if (!user?.id) return;
+
+    // GUARD: If localStorage is empty, it means we are logged out.
+    // Do NOT attempt to fetch or write back to localStorage.
+    // This prevents "Zombie Resurrection" when tab initiates focus.
+    const storedUser = localStorage.getItem('focus_tab_user');
+    if (!storedUser) {
+      if (user) setUser(null); // Self-correct
+      return;
+    }
 
     const checkSubscription = async () => {
       const timeoutPromise = new Promise<null>((resolve) => {
@@ -63,8 +94,11 @@ const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       try {
         const updatedUser = await Promise.race([fetchPromise, timeoutPromise]);
         if (updatedUser) {
-          setUser(updatedUser);
-          localStorage.setItem('focus_tab_user', JSON.stringify(updatedUser));
+          // Double check if we are still logged in before writing
+          if (localStorage.getItem('focus_tab_user')) {
+            setUser(updatedUser);
+            localStorage.setItem('focus_tab_user', JSON.stringify(updatedUser));
+          }
         }
       } catch (error) {
         console.error('[AppRouter] Background subscription check failed:', error);
