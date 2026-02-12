@@ -42,7 +42,8 @@ export async function createCheckoutSession(productId: string, email?: string): 
             body: {
                 productId,
                 email,
-                action: 'create_checkout'
+                action: 'create_checkout',
+                testMode: import.meta.env.DEV || import.meta.env.VITE_CREEM_TEST_MODE === 'true'
             }
         });
 

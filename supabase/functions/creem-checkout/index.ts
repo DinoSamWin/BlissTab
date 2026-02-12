@@ -3,29 +3,16 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 // --- Configuration ---
 // Retrieve these from your Supabase Dashboard > Settings > Functions > Secrets
+// --- Constants ---
 const CREEM_API_KEY = Deno.env.get('CREEM_API_KEY') || '';
 const CREEM_PRODUCT_ID_PRO_MONTHLY = Deno.env.get('CREEM_PRODUCT_ID_PRO_MONTHLY') || '';
 const CREEM_PRODUCT_ID_PRO_YEARLY = Deno.env.get('CREEM_PRODUCT_ID_PRO_YEARLY') || '';
 const CREEM_PRODUCT_ID_LIFETIME = Deno.env.get('CREEM_PRODUCT_ID_LIFETIME') || '';
-const CREEM_TEST_MODE = Deno.env.get('CREEM_TEST_MODE') === 'true';
 
-// Use test API if in test mode, and select the appropriate API Key
-const CREEM_API_BASE = CREEM_TEST_MODE ? 'https://test-api.creem.io' : 'https://api.creem.io';
-// Dynamically select the API key based on the mode
-const ACTIVE_CREEM_API_KEY = CREEM_TEST_MODE
-    ? (Deno.env.get('CREEM_API_KEY_TEST') || CREEM_API_KEY)
-    : CREEM_API_KEY;
-
-// Dynamically select product IDs based on mode
-const ACTIVE_PRODUCT_ID_PRO_MONTHLY = CREEM_TEST_MODE
-    ? (Deno.env.get('CREEM_PRODUCT_ID_PRO_MONTHLY_TEST') || CREEM_PRODUCT_ID_PRO_MONTHLY)
-    : CREEM_PRODUCT_ID_PRO_MONTHLY;
-const ACTIVE_PRODUCT_ID_PRO_YEARLY = CREEM_TEST_MODE
-    ? (Deno.env.get('CREEM_PRODUCT_ID_PRO_YEARLY_TEST') || CREEM_PRODUCT_ID_PRO_YEARLY)
-    : CREEM_PRODUCT_ID_PRO_YEARLY;
-const ACTIVE_PRODUCT_ID_LIFETIME = CREEM_TEST_MODE
-    ? (Deno.env.get('CREEM_PRODUCT_ID_LIFETIME_TEST') || CREEM_PRODUCT_ID_LIFETIME)
-    : CREEM_PRODUCT_ID_LIFETIME;
+const CREEM_API_KEY_TEST = Deno.env.get('CREEM_API_KEY_TEST') || '';
+const CREEM_PRODUCT_ID_PRO_MONTHLY_TEST = Deno.env.get('CREEM_PRODUCT_ID_PRO_MONTHLY_TEST') || '';
+const CREEM_PRODUCT_ID_PRO_YEARLY_TEST = Deno.env.get('CREEM_PRODUCT_ID_PRO_YEARLY_TEST') || '';
+const CREEM_PRODUCT_ID_LIFETIME_TEST = Deno.env.get('CREEM_PRODUCT_ID_LIFETIME_TEST') || '';
 
 // --- CORS Headers ---
 const corsHeaders = {
@@ -48,7 +35,19 @@ serve(async (req) => {
     }
 
     try {
-        const { productId, email, action } = await req.json();
+        const { productId, email, action, testMode } = await req.json();
+
+        // Determine effective mode: Override if testMode param provided, else use env var
+        const effectiveTestMode = testMode !== undefined
+            ? testMode
+            : (Deno.env.get('CREEM_TEST_MODE') === 'true');
+
+        const activeCreemApiBase = effectiveTestMode ? 'https://test-api.creem.io' : 'https://api.creem.io';
+        const activeCreemApiKey = effectiveTestMode ? (CREEM_API_KEY_TEST || CREEM_API_KEY) : CREEM_API_KEY;
+
+        const activeProductIdProMonthly = effectiveTestMode ? (CREEM_PRODUCT_ID_PRO_MONTHLY_TEST || CREEM_PRODUCT_ID_PRO_MONTHLY) : CREEM_PRODUCT_ID_PRO_MONTHLY;
+        const activeProductIdProYearly = effectiveTestMode ? (CREEM_PRODUCT_ID_PRO_YEARLY_TEST || CREEM_PRODUCT_ID_PRO_YEARLY) : CREEM_PRODUCT_ID_PRO_YEARLY;
+        const activeProductIdLifetime = effectiveTestMode ? (CREEM_PRODUCT_ID_LIFETIME_TEST || CREEM_PRODUCT_ID_LIFETIME) : CREEM_PRODUCT_ID_LIFETIME;
 
         // 1. Create Checkout Session
         if (action === 'create_checkout') {
@@ -58,9 +57,9 @@ serve(async (req) => {
 
             // Map internal product IDs to Creem Product IDs
             let creemProductId = productId;
-            if (productId === 'pro_monthly') creemProductId = ACTIVE_PRODUCT_ID_PRO_MONTHLY;
-            else if (productId === 'pro_yearly') creemProductId = ACTIVE_PRODUCT_ID_PRO_YEARLY;
-            else if (productId === 'lifetime') creemProductId = ACTIVE_PRODUCT_ID_LIFETIME;
+            if (productId === 'pro_monthly') creemProductId = activeProductIdProMonthly;
+            else if (productId === 'pro_yearly') creemProductId = activeProductIdProYearly;
+            else if (productId === 'lifetime') creemProductId = activeProductIdLifetime;
 
             // Fallback: if no mapping found, assume the frontend passed the raw ID
             if (!creemProductId) {
@@ -72,11 +71,11 @@ serve(async (req) => {
 
             // Call Creem API - Using correct endpoint from official docs
             // Docs: https://docs.creem.io/code/checkout
-            const response = await fetch(`${CREEM_API_BASE}/v1/checkouts`, {
+            const response = await fetch(`${activeCreemApiBase}/v1/checkouts`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': ACTIVE_CREEM_API_KEY,
+                    'x-api-key': activeCreemApiKey,
                 },
                 body: JSON.stringify({
                     product_id: creemProductId,
@@ -118,7 +117,7 @@ serve(async (req) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': ACTIVE_CREEM_API_KEY,
+                    'x-api-key': activeCreemApiKey,
                 },
                 body: JSON.stringify({
                     customer_email: email, // You might need customer_id stored in DB instead
