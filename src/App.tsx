@@ -1732,6 +1732,7 @@ const App: React.FC = () => {
                 <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
                   Unlimited shortcuts, always one click away.
                 </p>
+
                 {/* Google Sign In Button Container */}
                 <div className="w-full flex flex-col items-center gap-4">
                   {(typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id) ? (
@@ -1828,7 +1829,7 @@ const App: React.FC = () => {
         isAuthenticated={isAuthenticated}
       />
       <DebugInfo currentUser={appState.user} />
-    </div>
+    </div >
   );
 };
 

@@ -11,7 +11,8 @@ import { redeemCode, toggleRedeemFeature, RedeemErrorCode, fetchUserMembership, 
 import { determineSubscriptionTier } from '../services/subscriptionService';
 import SubscriptionUpsellModal from './SubscriptionUpsellModal';
 import GatewayEditModal from './GatewayEditModal';
-import { Zap, Diamond, Briefcase } from 'lucide-react';
+import { Zap, Diamond, Briefcase, Download, Upload, FileJson } from 'lucide-react';
+import { exportUserData, parseImportData, parseInfinityImport } from '../services/exportImportService';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -578,6 +579,131 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     }
   };
 
+  const handleExport = () => {
+    try {
+      const json = exportUserData(state.links);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `focustab-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      addToast('Data exported successfully', 'success');
+    } catch (e: any) {
+      console.error('Export failed:', e);
+      addToast('Failed to export data', 'error');
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>, isInfinity = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        let importedLinks: QuickLink[] = [];
+
+        if (isInfinity) {
+          try {
+            importedLinks = parseInfinityImport(content); // May throw if not implemented
+          } catch (err: any) {
+            console.error('Infinity import error:', err);
+            addToast(err.message || "Infinity Tab format not recognized.", "error");
+            return;
+          }
+        } else {
+          importedLinks = parseImportData(content);
+        }
+
+        if (!importedLinks || importedLinks.length === 0) {
+          addToast('No valid links found in file', 'error');
+          return;
+        }
+
+        // Merge logic
+        const existingLinksMap = new Map();
+        // Use exact match on ID or canonical URL
+        // If importing from same app export, IDs might match.
+        state.links.forEach(l => {
+          // Key by ID if available, else by Canonical URL
+          existingLinksMap.set(l.id, l);
+          if (l.canonicalUrl) existingLinksMap.set(l.canonicalUrl, l);
+        });
+
+        let addedCount = 0;
+        let updatedCount = 0;
+
+        // Start with current links
+        // We will rebuild the list.
+        // Strategy: "Overwrite user's previous ones, based on user imported"
+        // This implies for any conflict, Import wins.
+        // It DOES NOT necessarily mean "Delete everything else".
+        // But if I strictly follow "based on user imported", maybe I should just taking the imported list as the NEW list?
+        // "Importing... needs to cover user's previous ones, based on user imported"
+        // "cover" (覆盖) usually means overwrite.
+        // If I have A, B. Import has A', C.
+        // Should result be A', B, C? (Merge)
+        // Or A', C? (Replace)
+        // Usually "restore" means replace or merge. "Cover" suggests merge-overwrite.
+        // I will do Merge-Overwrite (Upsert).
+
+        const finalLinks = [...state.links];
+
+        for (const imp of importedLinks) {
+          let matchIndex = -1;
+
+          // Try specific canonical URL match first
+          if (imp.canonicalUrl) {
+            matchIndex = finalLinks.findIndex(l => (l.canonicalUrl === imp.canonicalUrl) || (l.url === imp.url)); // fallback to url match
+          } else {
+            matchIndex = finalLinks.findIndex(l => l.url === imp.url);
+          }
+
+          // Also check ID if present in import (from same app export)
+          if (matchIndex === -1 && imp.id) {
+            matchIndex = finalLinks.findIndex(l => l.id === imp.id);
+          }
+
+          if (matchIndex >= 0) {
+            // Update existing
+            const existing = finalLinks[matchIndex];
+            finalLinks[matchIndex] = {
+              ...existing,
+              ...imp,
+              // Keep local ID if import doesn't specify one, or if we want to be stable?
+              // If import has ID, use it (assuming valid).
+              // If import has NO ID (e.g. from Infinity), keep existing ID.
+              id: existing.id // Prefer existing ID to avoid sync churn unless we really want to replace logic
+            };
+            updatedCount++;
+          } else {
+            // Add new
+            finalLinks.push({
+              ...imp,
+              id: imp.id || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            });
+            addedCount++;
+          }
+        }
+
+        await updateState({ ...state, links: finalLinks });
+        addToast(`Imported ${addedCount} new, updated ${updatedCount} links`, 'success');
+
+      } catch (e: any) {
+        console.error(e);
+        addToast('Failed to import: ' + e.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    e.target.value = '';
+  };
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-reveal">
       <div className="bg-white dark:bg-[#0F0F0F] w-full max-w-2xl rounded-[3.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden flex flex-col" style={{ maxHeight: 'min(80vh, 720px)' }}>
@@ -700,63 +826,71 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
               <div className="space-y-4">
                 <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Active Gateways</label>
-                <div className="grid grid-cols-1 gap-3">
-                  {state.links.map(link => {
-                    const isPending = link.id === pendingLinkId && isFetchingMetadata;
-                    const canonicalUrl = link.canonicalUrl || (() => {
-                      try { return canonicalizeUrl(link.url); } catch { return link.url; }
-                    })();
-                    const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
-                    const effectiveIcon = localLogo || link.customLogoUrl || link.icon;
-                    return (
-                      <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
-                            {isPending ? (
-                              <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
-                            ) : effectiveIcon ? (
-                              <img src={effectiveIcon} className="w-6 h-6 object-contain opacity-60" alt="" onError={(e) => {
-                                // Fallback to colored dot if icon fails to load
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const parent = target.parentElement;
-                                if (parent) {
-                                  const fallback = document.createElement('div');
-                                  fallback.className = 'w-3 h-3 rounded-full';
-                                  fallback.style.backgroundColor = link.color;
-                                  parent.appendChild(fallback);
-                                }
-                              }} />
-                            ) : (
-                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: link.color }} />
-                            )}
+                {state.user ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {state.links
+                      .filter(link => link.type !== 'group-placeholder')
+                      .map(link => {
+                        const isPending = link.id === pendingLinkId && isFetchingMetadata;
+                        const canonicalUrl = link.canonicalUrl || (() => {
+                          try { return canonicalizeUrl(link.url); } catch { return link.url; }
+                        })();
+                        const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
+                        const effectiveIcon = localLogo || link.customLogoUrl || link.icon;
+                        return (
+                          <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
+                                {isPending ? (
+                                  <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+                                ) : effectiveIcon ? (
+                                  <img src={effectiveIcon} className="w-6 h-6 object-contain opacity-60" alt="" onError={(e) => {
+                                    // Fallback to colored dot if icon fails to load
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      const fallback = document.createElement('div');
+                                      fallback.className = 'w-3 h-3 rounded-full';
+                                      fallback.style.backgroundColor = link.color;
+                                      parent.appendChild(fallback);
+                                    }
+                                  }} />
+                                ) : (
+                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: link.color }} />
+                                )}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className={`text-sm font-semibold ${isPending ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-200'}`}>
+                                  {link.customTitle || link.title}
+                                </span>
+                                <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center">
+                              <button
+                                onClick={() => openEditGateway(link)}
+                                className="p-3 text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
+                                disabled={isPending}
+                                aria-label="Edit gateway"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487a2.1 2.1 0 012.97 2.97L8.5 18.79 4 20l1.21-4.5L16.862 4.487z" />
+                                </svg>
+                              </button>
+                              <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors" disabled={isPending} aria-label="Remove gateway">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex flex-col">
-                            <span className={`text-sm font-semibold ${isPending ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-200'}`}>
-                              {link.customTitle || link.title}
-                            </span>
-                            <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <button
-                            onClick={() => openEditGateway(link)}
-                            className="p-3 text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
-                            disabled={isPending}
-                            aria-label="Edit gateway"
-                          >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487a2.1 2.1 0 012.97 2.97L8.5 18.79 4 20l1.21-4.5L16.862 4.487z" />
-                            </svg>
-                          </button>
-                          <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors" disabled={isPending} aria-label="Remove gateway">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 text-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Sign in to manage gateways</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -768,6 +902,60 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
             onClose={() => { setIsGatewayEditOpen(false); setEditingLink(null); }}
             onSave={handleSaveGatewayEdit}
           />
+          {activeTab === 'data' && (
+            <div className="space-y-10 animate-reveal">
+              <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5 space-y-8">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">Backup & Restore</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Export your gateways to a file or restore from a backup.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Export */}
+                  <button
+                    onClick={handleExport}
+                    className="flex flex-col items-center justify-center p-8 bg-white dark:bg-black/20 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mb-4 text-indigo-500 group-hover:scale-110 transition-transform">
+                      <Download size={24} />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Export Data</span>
+                    <span className="text-[10px] text-gray-400 mt-1">Save gateways to JSON</span>
+                  </button>
+
+                  {/* Import */}
+                  <label className="flex flex-col items-center justify-center p-8 bg-white dark:bg-black/20 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all group cursor-pointer">
+                    <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mb-4 text-indigo-500 group-hover:scale-110 transition-transform">
+                      <Upload size={24} />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Import Data</span>
+                    <span className="text-[10px] text-gray-400 mt-1">Restore shortcuts from file</span>
+                    <input type="file" accept=".json" onChange={(e) => handleImport(e)} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5 space-y-8">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">Import from Infinity Tab</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Migrate your data from Infinity New Tab extension.</p>
+                </div>
+
+                <label className="flex items-center gap-4 p-5 bg-white dark:bg-black/20 rounded-2xl border border-gray-200 dark:border-white/10 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all cursor-pointer group">
+                  <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform">
+                    <FileJson size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <span className="block text-sm font-semibold text-gray-700 dark:text-gray-200">Select Infinity Backup File</span>
+                    <span className="block text-[10px] text-gray-400">Usually a .json file exported from Infinity settings</span>
+                  </div>
+                  <input type="file" accept=".json" onChange={(e) => handleImport(e, true)} className="hidden" />
+                  <div className="px-4 py-2 bg-gray-100 dark:bg-white/10 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-300">Browse</div>
+                </label>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'snippets' && (
             <div className="space-y-10 animate-reveal">
               {/* Usage Indicator */}
@@ -1168,6 +1356,48 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                     <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5.04c1.74 0 3.3.6 4.53 1.77l3.39-3.39C17.85 1.5 15.15 0 12 0 7.31 0 3.25 2.69 1.25 6.64l3.96 3.07C6.16 6.94 8.86 5.04 12 5.04z" /><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58l3.76 2.91c2.2-2.02 3.46-4.99 3.46-8.73z" /><path fill="#FBBC05" d="M5.21 14.71c-.24-.7-.37-1.44-.37-2.21s.13-1.51.37-2.21L1.25 7.22C.45 8.71 0 10.33 0 12s.45 3.29 1.25 4.78l3.96-3.07z" /><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.76-2.91c-1.08.72-2.45 1.16-4.17 1.16-3.14 0-5.84-1.9-6.84-4.73L1.25 17.68C3.25 21.31 7.31 24 12 24z" /></svg>
                     <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-widest">{isAuthLoading ? 'Connecting...' : 'Continue with Google'}</span>
                   </button>
+                </div>
+              )}
+
+              {state.user && (
+                <div className="pt-8 border-t border-black/5 dark:border-white/5 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Data & Backup</label>
+                    {!isSubscribed(state) && (
+                      <button
+                        onClick={() => window.open(window.location.origin + '/subscription', '_blank')}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-700/50 shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                      >
+                        <Diamond size={10} className="fill-amber-400/20" strokeWidth={2.5} />
+                        <span className="text-[9px] font-bold tracking-wider uppercase">StartlyTab Pro Needed</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={`p-6 bg-gray-50 dark:bg-white/5 rounded-[2.5rem] border border-black/5 dark:border-white/5 space-y-6 ${!isSubscribed(state) ? 'opacity-60 pointer-events-none grayscale-[0.5]' : ''}`}>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button onClick={handleExport} className="flex flex-col items-center justify-center p-6 bg-white dark:bg-black/20 rounded-3xl border border-gray-200 dark:border-white/10 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all gap-2 group">
+                        <Download size={20} className="text-indigo-500 group-hover:scale-110 transition-transform mb-1" />
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Export</span>
+                      </button>
+                      <label className="flex flex-col items-center justify-center p-6 bg-white dark:bg-black/20 rounded-3xl border border-gray-200 dark:border-white/10 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all gap-2 cursor-pointer group">
+                        <Upload size={20} className="text-indigo-500 group-hover:scale-110 transition-transform mb-1" />
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Import</span>
+                        <input type="file" accept=".json" onChange={(e) => handleImport(e)} className="hidden" />
+                      </label>
+                    </div>
+
+                    <label className="flex items-center justify-between p-4 bg-white dark:bg-black/20 rounded-2xl border border-gray-200 dark:border-white/10 hover:border-orange-400 dark:hover:border-orange-400/50 transition-all cursor-pointer group">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform">
+                          <FileJson size={16} />
+                        </div>
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Import from Infinity</span>
+                      </div>
+                      <input type="file" accept=".json,.infinity" onChange={(e) => handleImport(e, true)} className="hidden" />
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Browse</span>
+                    </label>
+                  </div>
                 </div>
               )}
             </div>

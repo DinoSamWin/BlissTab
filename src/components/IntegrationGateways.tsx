@@ -390,15 +390,17 @@ interface DeleteConfirmModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    title?: string;
+    description?: string;
 }
 
-function DeleteConfirmModal({ isOpen, onClose, onConfirm }: DeleteConfirmModalProps) {
+function DeleteConfirmModal({ isOpen, onClose, onConfirm, title, description }: DeleteConfirmModalProps) {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[100020] flex items-center justify-center p-4 bg-black/20 dark:bg-black/80 backdrop-blur-xl animate-in fade-in duration-200">
             <div className="bg-white dark:bg-[#1A1A1A] w-full max-w-sm rounded-[2rem] shadow-2xl border border-black/5 dark:border-white/10 p-6 animate-in zoom-in-95 duration-200">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Shortcut?</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">This action cannot be undone.</p>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{title || 'Delete Shortcut?'}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{description || 'This action cannot be undone.'}</p>
                 <div className="flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 text-xs font-bold uppercase tracking-wide hover:bg-gray-200 dark:hover:bg-white/10">Cancel</button>
                     <button onClick={onConfirm} className="px-4 py-2 rounded-xl bg-red-500 text-white text-xs font-bold uppercase tracking-wide hover:bg-red-600 shadow-lg shadow-red-500/20">Delete</button>
@@ -526,7 +528,8 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const gatewayLimitCheck = canAddGateway(appState);
     const isLimitReached = !gatewayLimitCheck.allowed && gatewayLimitCheck.reason === 'limit_reached';
     const isUserSubscribed = isSubscribed(appState);
-    const [deleteId, setDeleteId] = useState<string | null>(null); // For Delete Confirmation
+    const [deleteId, setDeleteId] = useState<string | null>(null); // For Delete Shortcunt
+    const [deletingGroup, setDeletingGroup] = useState<string | null>(null); // For Delete Group
 
     const scrollAccumulator = useRef(0);
     const wheelTimeout = useRef<number | null>(null);
@@ -735,6 +738,19 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
         setEditingCategory(null);
     };
 
+    const handleDeleteGroup = () => {
+        if (!deletingGroup) return;
+        const newLinks = links.filter(l => {
+            const cat = l.category || "快捷指令";
+            const normalizedCat = cat === 'Shortcuts' ? '快捷指令' : cat;
+            return normalizedCat !== deletingGroup;
+        });
+        setLinks(newLinks);
+        onUpdate(newLinks);
+        setDeletingGroup(null);
+        if (deletingGroup === editingCategory) setEditingCategory(null);
+    };
+
 
 
     // Edit Gateway Logic (Compatible with GatewayEditModal)
@@ -853,18 +869,6 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                 if (createModal.isOpen) setCreateModal({ ...createModal, isOpen: false });
                 else if (editLink) setEditLink(null);
                 else if (isEditMode) {
-                    // Cleanup empty groups
-                    const groupsToCheck = { ...groupedGateways };
-                    const cleanLinks = links.filter(l => {
-                        if (!l.id.startsWith('ghost-')) return true;
-                        const catLinks = groupsToCheck[l.category || ''] || [];
-                        const realLinksCount = catLinks.filter(cl => !cl.id.startsWith('ghost-')).length;
-                        return realLinksCount > 0;
-                    });
-                    if (cleanLinks.length !== links.length) {
-                        setLinks(cleanLinks);
-                        onUpdate(cleanLinks);
-                    }
                     setIsEditMode(false);
                 }
                 else if (isExpanded) setIsExpanded(false);
@@ -1047,24 +1051,6 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                             <button
                                 onClick={() => {
                                     if (isEditMode) {
-                                        // Cleanup empty groups (remove ghost links if no real links exist in that category)
-                                        const groupsToCheck = { ...groupedGateways };
-                                        // const linksCopy = [...links]; // Not needed if we filter directly from state links which is available in closure
-                                        const cleanLinks = links.filter(l => {
-                                            if (!l.id.startsWith('ghost-')) return true;
-                                            // It's a ghost link. Keep it ONLY if there are other real links in this category?
-                                            // No, user said "If create empty group but no links, delete it".
-                                            // So if a category has NO real links, we should remove its ghost link.
-                                            // The groupedGateways includes the ghost link in the list.
-                                            const catLinks = groupsToCheck[l.category || ''] || [];
-                                            const realLinksCount = catLinks.filter(cl => !cl.id.startsWith('ghost-')).length;
-                                            return realLinksCount > 0;
-                                        });
-
-                                        if (cleanLinks.length !== links.length) {
-                                            setLinks(cleanLinks);
-                                            onUpdate(cleanLinks);
-                                        }
                                         setIsEditMode(false);
                                     } else {
                                         setIsEditMode(true);
@@ -1084,19 +1070,8 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                             <button
                                 onClick={() => {
                                     // Cleanup logic if closing while in edit mode
+                                    // Cleanup logic if closing while in edit mode
                                     if (isEditMode) {
-                                        const groupsToCheck = { ...groupedGateways };
-                                        const cleanLinks = links.filter(l => {
-                                            if (!l.id.startsWith('ghost-')) return true;
-                                            const catLinks = groupsToCheck[l.category || ''] || [];
-                                            const realLinksCount = catLinks.filter(cl => !cl.id.startsWith('ghost-')).length;
-                                            return realLinksCount > 0;
-                                        });
-
-                                        if (cleanLinks.length !== links.length) {
-                                            setLinks(cleanLinks);
-                                            onUpdate(cleanLinks);
-                                        }
                                         setIsEditMode(false);
                                     }
                                     setIsExpanded(false);
@@ -1117,7 +1092,9 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
                                         const visibleLinks = categoryLinks?.filter(l => !l.id.startsWith('ghost-')) || [];
 
-                                        if (!isEditMode && !isDefaultGroup && visibleLinks.length === 0) return null;
+                                        // Show group if it has ANY links (including ghost) OR if we are in edit mode
+                                        // This allows empty groups (with ghost links) to persist and be seen
+                                        if (!isEditMode && !isDefaultGroup && (!categoryLinks || categoryLinks.length === 0)) return null;
 
                                         return (
                                             <DroppableGroupContainer
@@ -1147,9 +1124,22 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                                                         {category === 'Shortcuts' ? '快捷指令' : category}
                                                                     </h3>
                                                                     {isEditMode && !isDefaultGroup && (
-                                                                        <button onClick={() => setEditingCategory(category)} className="opacity-0 group-hover/title:opacity-100 p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 transition-opacity">
-                                                                            <Edit2 className="w-4 h-4" />
-                                                                        </button>
+                                                                        <div className="flex items-center gap-1 opacity-100 transition-opacity">
+                                                                            <button
+                                                                                onClick={() => setEditingCategory(category)}
+                                                                                className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                                                                title="Rename Group"
+                                                                            >
+                                                                                <Edit2 className="w-4 h-4" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => setDeletingGroup(category)}
+                                                                                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                                                                                title="Delete Group"
+                                                                            >
+                                                                                <Trash2 className="w-4 h-4" />
+                                                                            </button>
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                                 {isDefaultGroup && (
@@ -1291,6 +1281,15 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                     setDeleteId(null);
                                 }
                             }}
+                        />
+
+                        {/* Delete Group Confirm Modal */}
+                        <DeleteConfirmModal
+                            isOpen={!!deletingGroup}
+                            title={`Delete "${deletingGroup}"?`}
+                            description="This will delete the group and all shortcuts inside it."
+                            onClose={() => setDeletingGroup(null)}
+                            onConfirm={handleDeleteGroup}
                         />
 
                     </div>

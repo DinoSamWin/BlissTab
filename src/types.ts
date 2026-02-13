@@ -6,6 +6,7 @@ export interface QuickLink {
   icon: string | null;
   color: string;
   category?: string; // Grouping category (e.g. "Work", "Personal")
+  type?: 'link' | 'group-placeholder'; // 'link' is default if undefined
 
   /**
    * Canonical URL used for deduping metadata / overrides across sessions.

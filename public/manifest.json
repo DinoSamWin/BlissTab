@@ -1,0 +1,66 @@
+{
+    "manifest_version": 3,
+    "name": "FocusTab",
+    "version": "1.0.0",
+    "description": "A beautiful New Tab dashboard with AI perspectives.",
+    "permissions": [
+        "activeTab",
+        "storage",
+        "unlimitedStorage",
+        "identity",
+        "sidePanel"
+    ],
+    "chrome_url_overrides": {
+        "newtab": "index.html"
+    },
+    "background": {
+        "service_worker": "assets/background.js",
+        "type": "module"
+    },
+    "side_panel": {
+        "default_path": "popup.html"
+    },
+    "action": {
+        "default_title": "Open Side Panel",
+        "default_icon": {
+            "16": "icons/icon-16x16.png",
+            "32": "icons/icon-32x32.png",
+            "48": "icons/icon-64x64.png",
+            "128": "icons/icon-128x128.png"
+        }
+    },
+    "icons": {
+        "16": "icons/icon-16x16.png",
+        "32": "icons/icon-32x32.png",
+        "48": "icons/icon-64x64.png",
+        "128": "icons/icon-128x128.png"
+    },
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "assets/*",
+                "public/*",
+                "icons/*"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    "commands": {
+        "_execute_action": {
+            "suggested_key": {
+                "default": "Ctrl+Shift+A",
+                "mac": "MacCtrl+Shift+A",
+                "windows": "Ctrl+Shift+A"
+            },
+            "description": "Open Side Panel"
+        }
+    }
+}
