@@ -1686,8 +1686,8 @@ const App: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center">
-              <h1 className="serif text-4xl md:text-6xl lg:text-8xl font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300 max-w-7xl px-4 text-center" style={{ textWrap: 'balance' }}>
+            <div className="flex flex-col items-center w-full">
+              <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.25] md:leading-[1.2] lg:leading-[1.2] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
                 StartlyTab | A New Tab That Understands Your Mood, Not Just Your Tasks
               </h1>
               <h2 className="mt-8 serif text-2xl md:text-3xl lg:text-4xl text-gray-600 dark:text-gray-400 font-normal max-w-4xl text-center">
