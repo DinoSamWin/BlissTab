@@ -17,6 +17,7 @@ import PreferenceInputModal from './components/PreferenceInputModal';
 import IntegrationGateways from './components/IntegrationGateways';
 import DebugInfo from './components/DebugInfo';
 import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
+import SocialProof from './components/SocialProof';
 
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
@@ -1634,7 +1635,7 @@ const App: React.FC = () => {
       </nav>
 
       {/* 3. HERO SECTION */}
-      <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 pt-8 pb-16">
+      <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 pt-24 pb-16">
         <div key={revealKey} className={`animate-reveal transition-all duration-500 ease-out text-center flex flex-col items-center 
           ${isAuthenticated && (currentSnippet?.length || 0) > 26 ? 'max-w-[95%] lg:max-w-[100rem]' : 'max-w-6xl'} 
           ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
@@ -1687,7 +1688,7 @@ const App: React.FC = () => {
             </>
           ) : (
             <div className="flex flex-col items-center w-full">
-              <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.25] md:leading-[1.2] lg:leading-[1.2] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
+              <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.4] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
                 StartlyTab | A New Tab That Understands Your Mood, Not Just Your Tasks
               </h1>
               <h2 className="mt-8 serif text-2xl md:text-3xl lg:text-4xl text-gray-600 dark:text-gray-400 font-normal max-w-4xl text-center">
@@ -1709,6 +1710,8 @@ const App: React.FC = () => {
                   Start My Mindful Day
                 </button>
               </div>
+
+              <SocialProof />
             </div>
           )}
         </div>
