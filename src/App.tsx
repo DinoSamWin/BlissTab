@@ -1607,9 +1607,9 @@ const App: React.FC = () => {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
-          {isAuthenticated && !IS_EXTENSION && (
-            {/* <ExtensionInstallPrompt theme={appState.theme} /> */ }
-          )}
+          {/* {isAuthenticated && !IS_EXTENSION && (
+            <ExtensionInstallPrompt theme={appState.theme} />
+          )} */}
           <button
             onClick={() => {
               const newTheme = appState.theme === 'light' ? 'dark' : 'light';
