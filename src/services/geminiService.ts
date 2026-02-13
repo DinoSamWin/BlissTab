@@ -87,10 +87,13 @@ async function fetchAndRefillPool(
   onImmediateChunk?: (text: string) => void
 ): Promise<{ text: string, plan: PerspectivePlan }> {
 
-  // API Configuration
+  // API Configuration - Prioritize DeepSeek API
   const deepseekKey = (process.env as any)?.DEEPSEEK_API_KEY || (import.meta.env as any)?.VITE_DEEPSEEK_API_KEY;
   const siliconKey = (process.env as any)?.SILICONFLOW_API_KEY || (import.meta.env as any)?.VITE_SILICONFLOW_API_KEY;
-  const apiKey = deepseekKey || siliconKey;
+  const zhipuKey = (process.env as any)?.ZHIPUAI_API_KEY || (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY;
+
+  // Use DeepSeek directly if key exists, otherwise try SiliconFlow (which delegates to DeepSeek V3), then ZhipuAI
+  const apiKey = deepseekKey || siliconKey || zhipuKey;
 
   // @ts-ignore
   const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
@@ -98,18 +101,21 @@ async function fetchAndRefillPool(
   let apiBase = (process.env as any)?.DEEPSEEK_API_BASE || (import.meta.env as any)?.VITE_DEEPSEEK_API_BASE || 'https://api.deepseek.com';
   let model = (process.env as any)?.DEEPSEEK_MODEL || (import.meta.env as any)?.VITE_DEEPSEEK_MODEL || 'deepseek-chat';
 
-  // Override for SiliconFlow
+  // Override for SiliconFlow (Serving DeepSeek V3)
   if (siliconKey && !deepseekKey) {
     apiBase = (process.env as any)?.SILICONFLOW_API_BASE || (import.meta.env as any)?.VITE_SILICONFLOW_API_BASE || 'https://api.siliconflow.cn/v1';
-    // Force DeepSeek-V3 for fast generation (R1 is too slow for New Tab)
-    // Ignore .env if it points to R1 to ensure latency requirements
     const envModel = (process.env as any)?.SILICONFLOW_MODEL || (import.meta.env as any)?.VITE_SILICONFLOW_MODEL;
+    // Force DeepSeek-V3 for latency
     if (envModel && (envModel.includes('R1') || envModel.includes('Reasoning'))) {
-      console.warn('[GeminiService] Detected R1 Reasoning model. Switching to V3 for latency perfermance.');
       model = 'deepseek-ai/DeepSeek-V3';
     } else {
       model = envModel || 'deepseek-ai/DeepSeek-V3';
     }
+  }
+  // Fallback to ZhipuAI
+  else if (zhipuKey && !deepseekKey && !siliconKey) {
+    apiBase = (process.env as any)?.ZHIPUAI_API_BASE || (import.meta.env as any)?.VITE_ZHIPUAI_API_BASE || 'https://open.bigmodel.cn/api/paas/v4';
+    model = (process.env as any)?.ZHIPUAI_MODEL || (import.meta.env as any)?.VITE_ZHIPUAI_MODEL || 'glm-4-flash';
   }
 
   // In web development (localhost), use proxy to avoid CORS

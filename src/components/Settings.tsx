@@ -826,63 +826,71 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
               <div className="space-y-4">
                 <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Active Gateways</label>
-                <div className="grid grid-cols-1 gap-3">
-                  {state.links.map(link => {
-                    const isPending = link.id === pendingLinkId && isFetchingMetadata;
-                    const canonicalUrl = link.canonicalUrl || (() => {
-                      try { return canonicalizeUrl(link.url); } catch { return link.url; }
-                    })();
-                    const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
-                    const effectiveIcon = localLogo || link.customLogoUrl || link.icon;
-                    return (
-                      <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
-                            {isPending ? (
-                              <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
-                            ) : effectiveIcon ? (
-                              <img src={effectiveIcon} className="w-6 h-6 object-contain opacity-60" alt="" onError={(e) => {
-                                // Fallback to colored dot if icon fails to load
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const parent = target.parentElement;
-                                if (parent) {
-                                  const fallback = document.createElement('div');
-                                  fallback.className = 'w-3 h-3 rounded-full';
-                                  fallback.style.backgroundColor = link.color;
-                                  parent.appendChild(fallback);
-                                }
-                              }} />
-                            ) : (
-                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: link.color }} />
-                            )}
+                {state.user ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {state.links
+                      .filter(link => link.type !== 'group-placeholder')
+                      .map(link => {
+                        const isPending = link.id === pendingLinkId && isFetchingMetadata;
+                        const canonicalUrl = link.canonicalUrl || (() => {
+                          try { return canonicalizeUrl(link.url); } catch { return link.url; }
+                        })();
+                        const localLogo = link.customLogoHash ? getLocalLogoDataUrl(canonicalUrl, link.customLogoHash) : null;
+                        const effectiveIcon = localLogo || link.customLogoUrl || link.icon;
+                        return (
+                          <div key={link.id} className="flex items-center justify-between p-5 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-transparent hover:border-black/5 transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className="w-11 h-11 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
+                                {isPending ? (
+                                  <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+                                ) : effectiveIcon ? (
+                                  <img src={effectiveIcon} className="w-6 h-6 object-contain opacity-60" alt="" onError={(e) => {
+                                    // Fallback to colored dot if icon fails to load
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      const fallback = document.createElement('div');
+                                      fallback.className = 'w-3 h-3 rounded-full';
+                                      fallback.style.backgroundColor = link.color;
+                                      parent.appendChild(fallback);
+                                    }
+                                  }} />
+                                ) : (
+                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: link.color }} />
+                                )}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className={`text-sm font-semibold ${isPending ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-200'}`}>
+                                  {link.customTitle || link.title}
+                                </span>
+                                <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center">
+                              <button
+                                onClick={() => openEditGateway(link)}
+                                className="p-3 text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
+                                disabled={isPending}
+                                aria-label="Edit gateway"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487a2.1 2.1 0 012.97 2.97L8.5 18.79 4 20l1.21-4.5L16.862 4.487z" />
+                                </svg>
+                              </button>
+                              <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors" disabled={isPending} aria-label="Remove gateway">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex flex-col">
-                            <span className={`text-sm font-semibold ${isPending ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-200'}`}>
-                              {link.customTitle || link.title}
-                            </span>
-                            <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{link.url}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <button
-                            onClick={() => openEditGateway(link)}
-                            className="p-3 text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
-                            disabled={isPending}
-                            aria-label="Edit gateway"
-                          >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487a2.1 2.1 0 012.97 2.97L8.5 18.79 4 20l1.21-4.5L16.862 4.487z" />
-                            </svg>
-                          </button>
-                          <button onClick={() => removeLink(link.id)} className="p-3 text-gray-300 hover:text-red-500 transition-colors" disabled={isPending} aria-label="Remove gateway">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 text-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Sign in to manage gateways</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

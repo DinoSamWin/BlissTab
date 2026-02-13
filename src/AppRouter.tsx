@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import App from './App';
 import SubscriptionPage from './components/SubscriptionPage';
 import PrivacyPolicy from './components/PrivacyPolicy';
@@ -180,6 +180,19 @@ const AppRoutes: React.FC = () => {
 };
 
 const AppRouter: React.FC = () => {
+  // Check if running in Chrome Extension environment
+  const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+
+  if (isExtension) {
+    return (
+      <HashRouter>
+        <UserProvider>
+          <AppRoutes />
+        </UserProvider>
+      </HashRouter>
+    );
+  }
+
   return (
     <BrowserRouter>
       <UserProvider>
