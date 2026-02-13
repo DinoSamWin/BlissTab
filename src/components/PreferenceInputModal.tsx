@@ -20,6 +20,13 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
   const [preference, setPreference] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Set default prompt when modal opens for unauthenticated users
+  useEffect(() => {
+    if (isOpen && !isAuthenticated && !preference) {
+      setPreference('Gentle and mindful, like the soft light of a sunrise over a quiet lake.');
+    }
+  }, [isOpen, isAuthenticated]);
+
   // Store preference when user types (for migration after Google login)
   useEffect(() => {
     if (preference.trim() && !isAuthenticated) {
@@ -90,13 +97,16 @@ const PreferenceInputModal: React.FC<PreferenceInputModalProps> = ({
 
           <div className="flex flex-col gap-3">
             {!isAuthenticated && (
-              <>
+              <div className="flex flex-col items-center gap-4">
                 {/* Google Sign-In Button (same as homepage) */}
                 <div
                   id="preference-modal-google-btn"
                   className="w-full flex justify-center transition-all hover:scale-[1.02] active:scale-[0.98]"
                 />
-              </>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                  No credit card required. A gentler way to work in Chrome.
+                </p>
+              </div>
             )}
 
             {isAuthenticated && (
