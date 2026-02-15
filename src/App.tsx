@@ -18,6 +18,7 @@ import IntegrationGateways from './components/IntegrationGateways';
 import DebugInfo from './components/DebugInfo';
 import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
 import SocialProof from './components/SocialProof';
+import LandingOptimization from './components/LandingOptimization';
 
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
@@ -1717,15 +1718,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* 3.5. INTEGRATION GATEWAYS (Real Data) */}
-      {isAuthenticated ? (
-        <IntegrationGateways
-          links={appState.links}
-          userId={appState.user?.id}
-          onUpdate={(newLinks) => saveState(prev => ({ ...prev, links: newLinks }))}
-          appState={appState}
-        />
-      ) : (
+      {!isAuthenticated && (
         /* Unauthenticated State: Hero Login Prompt */
         <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
           <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
@@ -1786,11 +1779,28 @@ const App: React.FC = () => {
                   <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
                     No credit card required. A gentler way to work in Chrome.
                   </p>
+                  <div className="flex items-center gap-3 mt-4 opacity-60">
+                    <a href="/privacy" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Privacy Policy</a>
+                    <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
+                    <a href="/terms" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Terms of Service</a>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
+      )}
+
+      {!isAuthenticated && <LandingOptimization />}
+
+      {/* 3.5. INTEGRATION GATEWAYS (Real Data) */}
+      {isAuthenticated && (
+        <IntegrationGateways
+          links={appState.links}
+          userId={appState.user?.id}
+          onUpdate={(newLinks) => saveState(prev => ({ ...prev, links: newLinks }))}
+          appState={appState}
+        />
       )}
 
       {/* 4. BOTTOM SECTION REMOVED (Replaced by IntegrationGateways) */}
