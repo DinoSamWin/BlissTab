@@ -157,7 +157,7 @@ const PrivacyPolicy: React.FC = () => {
                     <h2 className="text-2xl font-semibold">8. Data Deletion</h2>
                     <p>You may request deletion of your account and associated data at any time.</p>
                     <p>To request deletion, contact:</p>
-                    <p className="font-medium">Email: dinosamw@gmail.com</p>
+                    <p className="font-medium">Email: support@startlytab.com</p>
                     <p>Upon verified request:</p>
                     <ul className="list-disc pl-5 space-y-1">
                         <li>Account information will be deleted</li>
@@ -240,7 +240,7 @@ const PrivacyPolicy: React.FC = () => {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-semibold">14. Contact Information</h2>
                     <p>For privacy-related inquiries or deletion requests, contact:</p>
-                    <p className="font-medium text-lg text-indigo-600 dark:text-indigo-400">Email: dinosamw@gmail.com</p>
+                    <p className="font-medium text-lg text-indigo-600 dark:text-indigo-400">Email: support@startlytab.com</p>
                 </section>
             </div>
         </div>

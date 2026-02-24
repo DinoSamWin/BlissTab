@@ -11,8 +11,9 @@ import { redeemCode, toggleRedeemFeature, RedeemErrorCode, fetchUserMembership, 
 import { determineSubscriptionTier } from '../services/subscriptionService';
 import SubscriptionUpsellModal from './SubscriptionUpsellModal';
 import GatewayEditModal from './GatewayEditModal';
-import { Zap, Diamond, Briefcase, Download, Upload, FileJson } from 'lucide-react';
+import { Zap, Diamond, Briefcase, Download, Upload, FileJson, CreditCard, ExternalLink, Settings as SettingsIcon, History, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { exportUserData, parseImportData, parseInfinityImport } from '../services/exportImportService';
+import { getCustomerPortalUrl, getTransactionHistory, cancelSubscription } from '../services/creemService';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -73,12 +74,70 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemStatus, setRedeemStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
+  const [isPortalLoading, setIsPortalLoading] = useState(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [isCancelling, setIsCancelling] = useState<string | null>(null);
+
+  const handleManageSubscription = async () => {
+    if (isPortalLoading) return;
+    setIsPortalLoading(true);
+    try {
+      const url = await getCustomerPortalUrl(state.user?.email);
+      if (url && url !== '#') {
+        window.open(url, '_blank');
+      } else {
+        addToast('Unable to open subscription portal. Please contact support.', 'error');
+      }
+    } catch (error) {
+      addToast('Failed to load subscription portal.', 'error');
+    } finally {
+      setIsPortalLoading(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    if (!state.user?.email) return;
+    setIsHistoryLoading(true);
+    try {
+      const history = await getTransactionHistory(state.user.email);
+      setTransactions(history);
+    } catch (err: any) {
+      console.error('[Settings] History sync failed:', err);
+      addToast(`Failed to sync history: ${err.message || 'Unknown error'}`, 'error');
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const handleCancel = async (subId: string) => {
+    if (!subId || !window.confirm('Are you sure you want to cancel this subscription?')) return;
+    setIsCancelling(subId);
+    try {
+      const success = await cancelSubscription(subId);
+      if (success) {
+        addToast('Subscription cancelled successfully.', 'success');
+        fetchHistory(); // Refresh
+      } else {
+        addToast('Failed to cancel subscription.', 'error');
+      }
+    } catch (error) {
+      addToast('An error occurred while cancelling.', 'error');
+    } finally {
+      setIsCancelling(null);
+    }
+  };
 
   // Refresh membership state when switching tabs
   useEffect(() => {
     if (!isOpen || !state.user) return;
 
     const refreshMembershipState = async () => {
+      // Fetch history if on account tab
+      if (activeTab === 'account' && state.user?.email) {
+        fetchHistory();
+      }
+
       try {
         // Re-fetch membership and settings to get latest state
         const [membershipData, settingsData] = await Promise.all([
@@ -1398,6 +1457,79 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Browse</span>
                     </label>
                   </div>
+
+                  {/* Order & Subscription History - Always show if authenticated */}
+                  <div className="pt-8 border-t border-black/5 dark:border-white/5 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Order & Subscription History</label>
+                      <button
+                        onClick={fetchHistory}
+                        className="text-[9px] font-bold text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 uppercase tracking-widest disabled:opacity-50"
+                        disabled={isHistoryLoading}
+                      >
+                        {isHistoryLoading ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                    </div>
+
+                    {transactions.length > 0 ? (
+                      <div className="space-y-3">
+                        {transactions.map((tx) => (
+                          <div key={tx.id} className="p-5 bg-white dark:bg-black/20 rounded-3xl border border-black/5 dark:border-white/5 flex items-center justify-between group hover:border-black/10 dark:hover:border-white/10 transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.status === 'completed' || tx.status === 'active'
+                                ? 'bg-green-50 dark:bg-green-900/20 text-green-500'
+                                : tx.status === 'refunded' || tx.status === 'cancelled'
+                                  ? 'bg-red-50 dark:bg-red-900/20 text-red-500'
+                                  : 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'
+                                }`}>
+                                {tx.status === 'completed' || tx.status === 'active' ? <CheckCircle2 size={18} /> : tx.status === 'cancelled' ? <XCircle size={18} /> : <AlertCircle size={18} />}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{tx.product_name || 'StartlyTab Subscription'}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] text-gray-400 font-medium">#{tx.id.slice(-8).toUpperCase()}</span>
+                                  <span className="text-[9px] text-gray-300 dark:text-gray-600">•</span>
+                                  <span className="text-[9px] text-gray-400 font-medium">{new Date(tx.created_at).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              <div className="flex flex-col items-end">
+                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{tx.currency === 'USD' ? '$' : tx.currency}{tx.amount}</span>
+                                <span className={`text-[8px] font-bold uppercase tracking-widest ${tx.status === 'completed' || tx.status === 'active' ? 'text-green-500' : 'text-amber-500'
+                                  }`}>{tx.status}</span>
+                              </div>
+
+                              {tx.subscription_id && (tx.status === 'active' || tx.status === 'completed') && (
+                                <button
+                                  onClick={() => handleCancel(tx.subscription_id)}
+                                  disabled={isCancelling === tx.subscription_id}
+                                  className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                                >
+                                  {isCancelling === tx.subscription_id ? 'Wait...' : 'Cancel'}
+                                </button>
+                              )}
+
+                              {(tx.status === 'completed' || tx.status === 'active') && (
+                                <a
+                                  href={`mailto:support@startlytab.com?subject=Refund%20Request%20for%20Order%20${tx.id}&body=Hello%2C%20I%20would%20like%20to%20request%20a%20refund%20for%20my%20order%20%23${tx.id}.%0A%0AReason%3A%20`}
+                                  className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all"
+                                >
+                                  Refund
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center bg-gray-50/50 dark:bg-white/5 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-white/10">
+                        <History size={24} className="mx-auto text-gray-300 dark:text-gray-600 mb-4 opacity-50" />
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">No transaction history found</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1410,14 +1542,23 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
         <div className="px-12 py-8 bg-gray-50/50 dark:bg-black/40 border-t border-black/5 dark:border-white/5">
           <div className="grid grid-cols-3 gap-4 items-center">
             {/* Privacy Policy */}
-            <div className="flex justify-start">
+            <div className="flex justify-start items-center gap-4">
               <a
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors flex items-center gap-2"
+                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
               >
-                Privacy Policy
+                Privacy
+              </a>
+              <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
+              >
+                Terms
               </a>
             </div>
 

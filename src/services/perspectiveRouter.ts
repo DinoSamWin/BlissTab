@@ -1,4 +1,5 @@
-import { PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem } from '../types';
+import { PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem, TrackType } from '../types';
+import { getAllTrackAffinitiesSync } from './recommendationEngine';
 
 /**
  * Perspective Strategy Router (v3.0)
@@ -202,29 +203,51 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
     // POOL CHECK: If pool provided, try to find a match
     let cached_item: PerspectivePoolItem | undefined;
     if (pool && pool.length > 0) {
-        // Try up to 3 times to pick a style that exists in pool
-        for (let i = 0; i < 3; i++) {
-            const candidateStyle = weightedPick(baseWeights, styleCooldowns);
-            const matchIndex = pool.findIndex(item => item.style === candidateStyle);
-            if (matchIndex !== -1) {
-                // Found match!
-                cached_item = pool[matchIndex];
-                // Remove from pool (Mutates!) - Caller must handle saving
-                pool.splice(matchIndex, 1);
-                return {
-                    intent,
-                    style: candidateStyle,
-                    topic_source: topicSource,
-                    selected_theme: selectedTheme,
-                    language: ctx.language,
-                    max_length_chars: LANGUAGE_CONSTRAINTS[ctx.language] || 42,
-                    allow_one_comma: true,
-                    cached_item
-                };
+
+        // --- Epsilon-Greedy ECRA Selection (V7.0) ---
+        const EPSILON = 0.15; // 15% exploration, 85% exploitation
+        const affinities = getAllTrackAffinitiesSync();
+
+        const poolTracks = Array.from(new Set(pool.map(p => p.track).filter(Boolean))) as TrackType[];
+
+        if (poolTracks.length > 0) {
+            let targetTrack: TrackType | undefined;
+
+            // Exploration vs Exploitation
+            if (Math.random() < EPSILON) {
+                targetTrack = poolTracks[Math.floor(Math.random() * poolTracks.length)];
+                console.log('[ECRA] Exploring track:', targetTrack);
+            } else {
+                let maxAff = -1;
+                for (const t of poolTracks) {
+                    const aff = affinities[t] ?? 1.0;
+                    if (aff > maxAff) {
+                        maxAff = aff;
+                        targetTrack = t;
+                    }
+                }
+                console.log('[ECRA] Exploiting track:', targetTrack, 'Affinity:', maxAff);
+            }
+
+            if (targetTrack) {
+                const matchingIndices = pool
+                    .map((item, idx) => ({ item, idx }))
+                    .filter(x => x.item.track === targetTrack);
+
+                if (matchingIndices.length > 0) {
+                    // Random pick among matches for variety
+                    const randomMatch = matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
+                    cached_item = randomMatch.item;
+                    pool.splice(randomMatch.idx, 1);
+                }
             }
         }
-        // If strict match failed, fallback to ANY item from pool
-        cached_item = pool.shift(); // Just take the first one
+
+        // Fallback for empty/legacy pools
+        if (!cached_item) {
+            cached_item = pool.shift();
+        }
+
         if (cached_item) {
             return {
                 intent,

@@ -11,6 +11,9 @@ import { fetchUserMembership, fetchUserSettings } from './services/redeemService
 import { canonicalizeUrl } from './services/urlCanonicalService';
 import { getLocalLogoDataUrl, downloadAndCacheLogo } from './services/gatewayLogoCacheService';
 import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabaseService';
+import { EmotionType, TrackType } from './types';
+import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns } from './services/emotionService';
+import { updateTrackAffinity } from './services/recommendationEngine';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
@@ -22,6 +25,167 @@ import LandingOptimization from './components/LandingOptimization';
 
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
+
+// --- SHARED UI COMPONENTS (EXTRACTED) ---
+
+const renderSnippet = (text: string) => {
+  const parts = text.split(/\[h\](.*?)\[\/h\]/g);
+  return parts.map((part, i) => (
+    i % 2 === 1
+      ? <span key={i} className="text-purple-600 dark:text-purple-400">{part}</span>
+      : <span key={i}>{part}</span>
+  ));
+};
+
+const Typewriter: React.FC<{ text: string; onComplete?: () => void }> = ({ text, onComplete }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const [index, setIndex] = useState(0);
+  const containerRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (index < text.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedText(prev => prev + text[index]);
+        setIndex(prev => prev + 1);
+
+        // Auto-scroll logic: Keep the container in view as it grows
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          const isOffScreen = rect.bottom > window.innerHeight - 100;
+          if (isOffScreen) {
+            window.scrollBy({ top: 20, behavior: 'smooth' });
+          }
+        }
+      }, 55); // Slightly faster for responsiveness
+      return () => clearTimeout(timeout);
+    } else if (onComplete && text.length > 0) {
+      // Don't immediately complete to avoid the "swap flash"
+      const finalDelay = setTimeout(() => onComplete(), 100);
+      return () => clearTimeout(finalDelay);
+    }
+  }, [index, text, onComplete]);
+
+  return <span ref={containerRef}>{renderSnippet(displayedText)}</span>;
+};
+
+const EmotionalPulsePerceiver: React.FC<{ emotion: EmotionType | null; currentLang: string }> = ({ emotion, currentLang }) => {
+  const labels: Record<string, string> = {
+    happy: '正在同步你的快乐能量...',
+    neutral: '正在感知你的平静...',
+    angry: '捕捉到了你的愤怒频率...',
+    anxious: '感应到了你的焦虑状态...',
+    sad: '正在接收你的伤感信号...',
+    exhausted: '捕捉到了你的疲惫状态...'
+  };
+
+  const subLabels: Record<string, string> = {
+    'Chinese (Simplified)': '正在感受你的情绪...',
+    'English': 'Feeling your emotion...',
+    'Japanese': 'あなたの感情を感じています...',
+    'Korean': '당신의 감정을 느끼고 있습니다...',
+    'German': 'Fühle deine Emotionen...',
+    'French': 'Ressentir votre émotion...',
+    'Spanish': 'Sintiendo tu emoción...',
+    'Italian': 'Sentendo la tua emozione...',
+    'Portuguese': 'Sentindo a sua emoção...'
+  };
+
+  const subLabel = subLabels[currentLang] || subLabels['English'];
+
+  return (
+    <div className="flex flex-col items-center justify-center animate-reveal h-full py-2">
+      <div className="relative mb-4">
+        {/* Subtle Outer Glow (Breathing) */}
+        <div className="absolute inset-[-30px] bg-indigo-500/10 dark:bg-indigo-400/10 rounded-full blur-[25px] animate-breathing-light-glow" />
+
+        {/* Central Breathing Light Container */}
+        <div className="relative w-24 h-24 flex items-center justify-center bg-white/40 dark:bg-white/10 backdrop-blur-2xl rounded-full shadow-2xl border border-white/30 animate-breathing-light">
+          <div className="w-16 h-16 animate-float-slow select-none flex items-center justify-center">
+            {emotion ? (
+              <img
+                src={`/icons/emotions/${emotion}.png`}
+                alt={emotion}
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  const emojiMap: Record<string, string> = {
+                    happy: '😊',
+                    neutral: '😌',
+                    angry: '😠',
+                    anxious: '😟',
+                    sad: '😭',
+                    exhausted: '😫'
+                  };
+                  e.currentTarget.style.display = 'none';
+                  const fallback = document.createElement('span');
+                  fallback.innerText = emojiMap[emotion as string] || '💭';
+                  fallback.className = 'text-5xl';
+                  e.currentTarget.parentElement?.appendChild(fallback);
+                }}
+              />
+            ) : (
+              <span className="text-5xl">💭</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Primary Caption */}
+      <div className="text-lg md:text-xl font-medium tracking-tight text-black/80 dark:text-white/80 serif mb-2">
+        {emotion ? labels[emotion] : '正在深度感应...'}
+      </div>
+
+      {/* Localized Sub-label (Small Text) */}
+      <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-black/30 dark:text-white/30">
+        {subLabel}
+      </div>
+    </div>
+  );
+};
+
+const JumpStarLoading: React.FC<{ caption?: string; captionClassName?: string }> = ({
+  caption = 'Reflecting…',
+  captionClassName = "mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide"
+}) => {
+  return (
+    <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
+      <style>{`
+        @keyframes st-jump {
+          0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+          18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
+          50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
+          80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
+          100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+        }
+        @keyframes st-shadow {
+          0%   { transform: scaleX(1); opacity: 0.22; }
+          50%  { transform: scaleX(0.62); opacity: 0.10; }
+          100% { transform: scaleX(1); opacity: 0.22; }
+        }
+        @keyframes st-glow {
+          0%   { filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.2)); }
+          50%  { filter: drop-shadow(0 0 16px rgba(99, 102, 241, 0.45)); }
+          100% { filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.2)); }
+        }
+      `}</style>
+      <div
+        className="w-10 h-10 flex items-center justify-center relative z-10"
+        style={{ animation: 'st-jump 1.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite, st-glow 1.6s ease-in-out infinite' }}
+      >
+        <svg viewBox="0 0 24 24" strokeWidth="1.5" className="w-7 h-7 text-indigo-500 dark:text-indigo-400 stroke-current opacity-80" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v6M12 16v6M2 12h6M16 12h6" opacity="0.4" />
+          <path fill="currentColor" fillOpacity="0.2" d="M12 5.5l1.5 5 5 1.5-5 1.5-1.5 5-1.5-5-5-1.5 5-1.5z" />
+        </svg>
+      </div>
+      <div
+        className="mt-6 w-8 h-1.5 bg-black dark:bg-white rounded-[100%] blur-[2px] z-0"
+        style={{ animation: 'st-shadow 1.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite' }}
+      />
+      {caption && (
+        <div className={captionClassName}>{caption}</div>
+      )}
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(() => {
@@ -107,16 +271,77 @@ const App: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const perspectiveTitleRef = useRef<HTMLHeadingElement>(null);
   const [isSingleLine, setIsSingleLine] = useState<boolean>(false);
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const lastPromptIdRef = useRef<string | null>(null);
   const snippetRequestIdRef = useRef<number>(0);
   const didInitialSnippetFetchRef = useRef<boolean>(false);
+
+  // Emotion & ECRA State
+  const [isEmotionFrozen, setIsEmotionFrozen] = useState(false);
+  const [isPerceiving, setIsPerceiving] = useState(false);
+  const [isSootheActive, setIsSootheActive] = useState(false);
+  const [showEmotionTooltip, setShowEmotionTooltip] = useState(false);
+  const emotionTooltipShownRef = useRef(false);
+  const [lastClickedEmotion, setLastClickedEmotion] = useState<EmotionType | null>(() => {
+    return (localStorage.getItem('focus_tab_last_emotion') as EmotionType) || 'neutral';
+  });
+  const [isCompassHovered, setIsCompassHovered] = useState(false);
+  const [isAuraActive, setIsAuraActive] = useState(false);
+  const [compassHoverCount, setCompassHoverCount] = useState(0);
+  const [hasInteractedWithCompass, setHasInteractedWithCompass] = useState<boolean>(() => {
+    return localStorage.getItem('focus_tab_has_interacted_emotion') === 'true';
+  });
+
+  const [useTypewriter, setUseTypewriter] = useState(false);
+  const [typewriterKey, setTypewriterKey] = useState(0);
+
+  const currentSnippetStartTimeRef = useRef<number>(Date.now());
+  const currentSnippetTrackRef = useRef<TrackType | null>(null);
+
+
 
   // Store latest appState in ref to avoid dependency issues in storage event listener
   const appStateRef = useRef<AppState>(appState);
 
   // Track if cloud sync is safe (prevent overwriting cloud data if fetch failed)
   const isCloudSyncSafeRef = useRef<boolean>(true);
+
+  // Handle reporting Dwell Time
+  const reportDwellTime = useCallback((exitReason: 'REFRESH' | 'NAVIGATE' | 'EMOTION_CLICK' | 'HIDDEN') => {
+    if (!currentSnippetTrackRef.current) return;
+    const durationMs = Date.now() - currentSnippetStartTimeRef.current;
+
+    updateTrackAffinity({
+      userId: appState.user?.id,
+      trackType: currentSnippetTrackRef.current,
+      durationMs,
+      exitReason
+    }).catch(e => console.error('[App] Failed to update track affinity:', e));
+  }, [appState.user]);
+
+  // Hook for visibility and before unload tracking
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        reportDwellTime('HIDDEN');
+      } else {
+        currentSnippetStartTimeRef.current = Date.now(); // Reset timer if coming back
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      reportDwellTime('NAVIGATE');
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [reportDwellTime]);
 
   // Keep ref in sync with appState
   useEffect(() => {
@@ -454,8 +679,7 @@ const App: React.FC = () => {
 
 
 
-  const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false) => {
-    console.log('[App] fetchRandomSnippet called. isGenerating:', isGenerating, 'bypassLimit:', bypassLimit);
+  const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false, clickedEmotion?: EmotionType) => {
     if (isGenerating) {
       console.warn('[App] Request rejected: isGenerating is TRUE');
       return;
@@ -562,30 +786,48 @@ const App: React.FC = () => {
         custom_themes: appState.requests.filter(r => r.active).map(r => r.prompt),
         language: appState.language,
         recent_history: history,
-        // V3.5 Context
         weather: 'Unknown',
-        battery_level: batteryLevel
+        battery_level: batteryLevel,
+        clickedEmotion: clickedEmotion,
+        emotionalBaseline: calculateEmotionalBaseline(),
+        emotionalPatterns: analyzeEmotionalPatterns(),
+        bypassPool: !!clickedEmotion || bypassLimit,
+        deepObservationMode: getTodayEmotionClickCount() > 3,
       };
 
-      // Generate with context - V3.5
-      // @ts-ignore
-      const { text: result, plan } = await generateSnippet(context);
+      // --- NORMAL MODE: Real AI Generation ---
+      const response = await generateSnippet(context);
+      const result = response.text;
+      const plan = response.plan;
 
       // Only apply the latest in-flight request result
       if (requestId !== snippetRequestIdRef.current) return;
 
       console.log('[App] Generated perspective:', result.substring(0, 50));
 
-      // Save to history (include plan metadata if available)
       const updatedHistory = addToHistory(result, randomReq.id, history, {
         intent: plan?.intent,
         style: plan?.style,
-        theme: plan?.selected_theme
+        theme: plan?.selected_theme,
+        // Hack: infer track from style mapping if backend isn't sending it directly yet
+        trackType: plan?.cached_item?.track || 'A_PHYSICAL' // We will fix backend to return track soon
       });
       saveHistory(updatedHistory);
 
+      // Report Dwell Time for previous item
+      if (currentSnippetTrackRef.current) {
+        reportDwellTime(clickedEmotion ? 'EMOTION_CLICK' : 'REFRESH');
+      }
+
+      currentSnippetTrackRef.current = updatedHistory[0].trackType || null;
+      currentSnippetStartTimeRef.current = Date.now();
+
       setCurrentSnippet(result);
-      setRevealKey(prev => prev + 1);
+      // Only bump revealKey for generic refreshes to trigger 'animate-reveal'
+      // For emotions, we use the internal Typewriter/reveal system
+      if (!clickedEmotion) {
+        setRevealKey(prev => prev + 1);
+      }
     } catch (error) {
       if (requestId !== snippetRequestIdRef.current) return;
       console.error('[App] Error generating perspective:', error);
@@ -595,7 +837,7 @@ const App: React.FC = () => {
         setIsGenerating(false);
       }
     }
-  }, [appState]);
+  }, [appState, reportDwellTime, isAuthenticated, showInlineGuidance, hasLocalPreference, isGenerating]);
 
   const renderSnippet = (text: string) => {
     const parts = text.split(/\[h\](.*?)\[\/h\]/g);
@@ -607,7 +849,10 @@ const App: React.FC = () => {
   };
 
   // Jump loading (inspired by the reference): a soft "jumping star" with squash + shadow
-  const JumpStarLoading: React.FC<{ caption?: string }> = ({ caption = 'Reflecting…' }) => {
+  const JumpStarLoading: React.FC<{ caption?: string; captionClassName?: string }> = ({
+    caption = 'Reflecting…',
+    captionClassName = "mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide"
+  }) => {
     return (
       <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
         <style>{`
@@ -658,7 +903,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide">
+          <div className={captionClassName}>
             {caption}
           </div>
         </div>
@@ -1274,27 +1519,70 @@ const App: React.FC = () => {
   const visibleLinks = appState.links.slice(0, 10);
   const remainingLinks = Math.max(0, appState.links.length - visibleLinks.length);
 
-  const handleShareQuote = async () => {
-    if (isSharing) return;
-    if (!currentSnippet) return;
-    try {
-      setIsSharing(true);
-      // Pass quote with highlights preserved - createShareCard will parse them
-      const blob = await createShareCard(currentSnippet);
-      if (!blob) throw new Error('Failed to create image');
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `startlytab-quote-${Date.now()}.png`;
-      link.click();
-      URL.revokeObjectURL(url);
-      addToast('Quote ready to share', 'success');
-    } catch (e) {
-      console.error(e);
-      addToast('Share failed', 'error');
-    } finally {
-      setIsSharing(false);
+  const handleEmotionClick = async (emotion: EmotionType) => {
+    if (isEmotionFrozen) return;
+
+    // 1. Force state reset and clear tooltips
+    setIsCompassHovered(false);
+    setShowEmotionTooltip(false);
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
     }
+
+    // 2. Lock UI & Selected State
+    setIsEmotionFrozen(true);
+    setLastClickedEmotion(emotion);
+    localStorage.setItem('focus_tab_last_emotion', emotion);
+
+    if (!hasInteractedWithCompass) {
+      setHasInteractedWithCompass(true);
+      localStorage.setItem('focus_tab_has_interacted_emotion', 'true');
+    }
+
+    // 3. Central Text Transition - Perception Stage
+    setCurrentSnippet(null);
+    setIsPerceiving(true);
+    setUseTypewriter(true);
+    setTypewriterKey(prev => prev + 1);
+
+    // 4. Background Micro-feedback
+    if (emotion === 'angry' || emotion === 'anxious' || emotion === 'sad' || emotion === 'exhausted') {
+      setIsSootheActive(true);
+      setTimeout(() => setIsSootheActive(false), 4500);
+    }
+
+    // 5. Trigger Aura Animation
+    setIsAuraActive(true);
+    setTimeout(() => setIsAuraActive(false), 2000);
+
+    const now = new Date();
+    const timeSlot = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    saveEmotionLog(emotion, timeSlot);
+
+    // 6. Brief Pause (0.5s) for "Perceiving" animation start
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 6. Mandatory "Sensing" Duration (min 1.5s total)
+    const senseStart = Date.now();
+
+    // 7. Fetch with Bypass & Generate
+    // We already set useTypewriter to true and incremented typewriterKey above
+    await fetchRandomSnippet(true, emotion);
+
+    // Ensure users can actually read the sensing prompt
+    const elapsed = Date.now() - senseStart;
+    if (elapsed < 1500) {
+      await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
+    }
+
+    // 8. Exit sensing phase
+    setIsPerceiving(false);
+
+    // 9. Cool-down to prevent rapid re-clicks
+    setTimeout(() => {
+      setIsEmotionFrozen(false);
+    }, 3000);
   };
 
   // Detect if perspective text is single line
@@ -1512,6 +1800,8 @@ const App: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
+      {/* Background Soothe Layer */}
+      <div className={`bg-soothe-overlay ${isSootheActive ? 'bg-soothe-active' : ''}`} />
 
       {/* 1. LAYERED BACKGROUNDS */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -1636,86 +1926,252 @@ const App: React.FC = () => {
       </nav>
 
       {/* 3. HERO SECTION */}
-      <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 pt-24 pb-16">
-        <div key={revealKey} className={`animate-reveal transition-all duration-500 ease-out text-center flex flex-col items-center 
-          ${isAuthenticated && (currentSnippet?.length || 0) > 26 ? 'max-w-[95%] lg:max-w-[100rem]' : 'max-w-6xl'} 
-          ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
+      <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 py-10">
+        {(() => {
+          const isCN = appState.language === 'Chinese (Simplified)';
+          const rawLen = currentSnippet?.length || 0;
+          // Language-specific container heuristics
+          // V1.4 strict cap is ~45 CN chars (and approx 100 EN chars).
+          // We force wide max-widths to allow single/double-line spread rather than stacking.
+          const containerClass = isCN
+            ? 'max-w-6xl lg:max-w-[90rem]' // Always allow Chinese to spread horizontally
+            : (rawLen > 90 ? 'max-w-5xl lg:max-w-6xl' : 'max-w-6xl lg:max-w-[85rem]');
 
-          {isAuthenticated ? (
-            <>
-              {/* Text Container: Handles scrolling for long text while keeping buttons visible */}
-              <div className="max-h-[50vh] overflow-y-auto no-scrollbar w-full px-4 md:px-8">
-                <h1
-                  ref={perspectiveTitleRef}
-                  className={`serif editorial-title font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300
-                    ${(currentSnippet?.length || 0) > 26
-                      ? 'text-3xl md:text-5xl lg:text-6xl'
-                      : 'text-4xl md:text-6xl lg:text-8xl'}
+          return (
+            <div key={revealKey} className={`animate-reveal transition-all duration-500 ease-out text-center flex flex-col items-center 
+              ${containerClass} 
+              ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
+
+              {isAuthenticated ? (
+                <>
+                  {/* Text Container: Handles scrolling for long text while keeping buttons visible */}
+                  <div className="min-h-[220px] md:min-h-[260px] lg:min-h-[280px] transition-all duration-700 flex flex-col items-center justify-center w-full px-4 md:px-8">
+                    <div
+                      ref={perspectiveTitleRef}
+                      key={`${revealKey}-${typewriterKey}`}
+                      className={`serif editorial-title font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300
+                        ${isCN
+                          ? (rawLen > 38
+                            ? 'text-3xl md:text-5xl lg:text-6xl'
+                            : rawLen > 22
+                              ? 'text-4xl md:text-6xl lg:text-[4.5rem]'
+                              : 'text-5xl md:text-7xl lg:text-[5.5rem] font-medium leading-[1.2]')
+                          : (rawLen > 120
+                            ? 'text-3xl md:text-5xl lg:text-6xl'
+                            : rawLen > 80
+                              ? 'text-4xl md:text-6xl lg:text-7xl'
+                              : 'text-5xl md:text-7xl lg:text-[5.5rem] font-medium leading-[1.15]')}
+                    ${useTypewriter && !isPerceiving ? 'animate-text-emerge' : 'animate-reveal'}
                   `}
-                  style={{ textWrap: 'balance', orphans: 3, widows: 3 }}
-                >
-                  {currentSnippet ? (
-                    renderSnippet(currentSnippet)
-                  ) : (
-                    <JumpStarLoading caption="Content coming soon" />
-                  )}
-                </h1>
-              </div>
+                      style={{ textWrap: 'balance', orphans: 3, widows: 3 }}
+                    >
+                      {isPerceiving ? (
+                        <div className="flex flex-col items-center justify-center w-full">
+                          <EmotionalPulsePerceiver emotion={lastClickedEmotion} currentLang={appState.language || 'English'} />
+                        </div>
+                      ) : currentSnippet ? (
+                        useTypewriter ? (
+                          <Typewriter text={currentSnippet} onComplete={() => setUseTypewriter(false)} />
+                        ) : (
+                          renderSnippet(currentSnippet)
+                        )
+                      ) : (
+                        <JumpStarLoading caption="Collecting moments..." />
+                      )}
+                    </div>
+                  </div>
 
-              <div className="mt-10 flex flex-col items-center gap-4">
-                {/* Action buttons - always visible */}
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => fetchRandomSnippet()}
-                    disabled={isGenerating}
-                    className="px-10 py-5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isGenerating ? 'Reflecting...' : 'New Perspective'}
-                  </button>
-                  <button
-                    onClick={handleShareQuote}
-                    disabled={isSharing || !currentSnippet}
-                    className="px-6 py-4 rounded-full border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-600 dark:text-gray-200 transition-all hover:bg-white/80 dark:hover:bg-white/10 active:scale-95 flex items-center gap-2 disabled:opacity-60"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
-                      <path d="M12 16V4" />
-                      <path d="M8 8l4-4 4 4" />
-                    </svg>
-                    <span>Share Quote</span>
-                  </button>
+                  <div className="mt-6 flex justify-center w-full px-4">
+                    <div className="relative flex items-center gap-4 translate-y-[-10px] animate-reveal">
+
+                      {/* 1. Neutral State View (Centered Pair) */}
+                      <div className={`flex items-center gap-4 transition-all duration-500
+                    ${(isCompassHovered && !isEmotionFrozen) ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}
+                      >
+                        <button
+                          onClick={() => fetchRandomSnippet()}
+                          disabled={isGenerating || isEmotionFrozen}
+                          className={`w-[280px] h-[64px] rounded-full font-bold uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-black/5 flex items-center justify-center transition-all
+                        ${isGenerating || isEmotionFrozen
+                              ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                              : 'bg-black dark:bg-white text-white dark:text-black hover:scale-[1.02] active:scale-95'
+                            }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isGenerating && (
+                              <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            )}
+                            <span>NEW PERSPECTIVE</span>
+                          </div>
+                        </button>
+
+                        {/* Spacer for Collapsed Emoji Area */}
+                        <div className="w-[64px] h-[64px]" />
+                      </div>
+
+                      {/* 2. Onboarding Tooltip (Positioned relative to the anchor pair) */}
+                      {showEmotionTooltip && !hasInteractedWithCompass && (
+                        <div className="absolute -top-16 right-0 translate-x-[-12px] px-5 py-2.5 bg-black/90 dark:bg-white text-white dark:text-black rounded-2xl text-[11px] font-medium tracking-wide whitespace-nowrap shadow-2xl animate-reveal-bounce z-[60] border border-white/10">
+                          How is this moment feeling? <span className="opacity-60 italic">(Just for you)</span>
+                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-black/90 dark:bg-white rotate-45"></div>
+                        </div>
+                      )}
+
+                      {/* 3. Emotion Interaction Drawer (Overlay) */}
+                      <div
+                        onMouseEnter={() => {
+                          setIsCompassHovered(true);
+                          if (!hasInteractedWithCompass && compassHoverCount < 3) {
+                            tooltipTimeoutRef.current = setTimeout(() => {
+                              setCompassHoverCount(prev => prev + 1);
+                              setShowEmotionTooltip(true);
+                            }, 500);
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          setIsCompassHovered(false);
+                          setShowEmotionTooltip(false);
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current);
+                            tooltipTimeoutRef.current = null;
+                          }
+                        }}
+                        className={`absolute transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] rounded-full bg-white dark:bg-black backdrop-blur-3xl border border-black/[0.03] dark:border-white/[0.08] flex items-center group/drawer z-20 cursor-pointer
+                      ${isCompassHovered && !isEmotionFrozen
+                            ? 'w-[520px] h-16 top-0 right-[-80px] md:right-[-80px] px-10 shadow-[0_20px_50px_rgba(0,0,0,0.1)]'
+                            : 'w-16 h-16 right-0 top-0 justify-center bg-white/90 dark:bg-white/10 overflow-hidden shadow-indigo-500/10'}
+                      ${isEmotionFrozen ? 'pointer-events-none' : ''}`}
+                      >
+                        {/* Collapsed State Icon */}
+                        <div
+                          className={`absolute inset-0 flex items-center justify-center transition-all duration-500 rounded-full
+                        ${(isCompassHovered && !isEmotionFrozen) ? 'opacity-0 scale-50 pointer-events-none' : 'opacity-100 scale-100'}
+                        ${isAuraActive ? 'animate-aura-glow' : ''}`}
+                        >
+                          {lastClickedEmotion ? (
+                            <img
+                              src={`/icons/emotions/${lastClickedEmotion}.png`}
+                              alt=""
+                              className="w-11 h-11 object-contain"
+                              onError={(e) => {
+                                const emojiMap: Record<string, string> = {
+                                  happy: '😊',
+                                  neutral: '😌',
+                                  angry: '😠',
+                                  anxious: '😟',
+                                  sad: '😭',
+                                  exhausted: '😫'
+                                };
+                                e.currentTarget.style.display = 'none';
+                                const span = document.createElement('span');
+                                span.innerText = emojiMap[lastClickedEmotion as string] || '💭';
+                                span.className = 'text-2xl';
+                                e.currentTarget.parentElement?.appendChild(span);
+                              }}
+                            />
+                          ) : (
+                            <span className="text-2xl">💭</span>
+                          )}
+                        </div>
+
+                        {/* Gradient Flourish */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-transparent to-purple-500/5 opacity-0 group-hover/drawer:opacity-100 transition-opacity duration-700 pointer-events-none rounded-full overflow-hidden"></div>
+
+                        {/* Expanded Content */}
+                        <div className={`w-full flex items-center justify-around transition-all duration-500
+                      ${(isCompassHovered && !isEmotionFrozen) ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-8 scale-90 pointer-events-none'}`}>
+                          {[
+                            { type: 'happy', zh: '开心', en: 'Happy' },
+                            { type: 'neutral', zh: '平静', en: 'Neutral' },
+                            { type: 'angry', zh: '愤怒', en: 'Angry' },
+                            { type: 'anxious', zh: '焦虑', en: 'Anxious' },
+                            { type: 'sad', zh: '难过', en: 'Sad' },
+                            { type: 'exhausted', zh: '疲惫', en: 'Exhausted' }
+                          ].map((emotion) => (
+                            <div key={emotion.type} className="flex flex-col items-center group/item relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEmotionClick(emotion.type as EmotionType);
+                                }}
+                                disabled={isGenerating || isEmotionFrozen}
+                                className={`relative w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 transform
+                              ${isEmotionFrozen && lastClickedEmotion !== emotion.type
+                                    ? 'opacity-0 scale-50 pointer-events-none'
+                                    : isEmotionFrozen && lastClickedEmotion === emotion.type
+                                      ? 'scale-125'
+                                      : 'hover:bg-black/5 dark:hover:bg-white/10 hover:scale-110 active:scale-95'
+                                  }`}
+                              >
+                                <span className={`w-10 h-10 flex items-center justify-center ${isAuraActive && lastClickedEmotion === emotion.type ? 'animate-aura-glow' : ''}`}>
+                                  <img
+                                    src={`/icons/emotions/${emotion.type}.png`}
+                                    alt={appState.language === 'Chinese (Simplified)' ? emotion.zh : emotion.en}
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      const emojiMap: Record<string, string> = {
+                                        happy: '😊',
+                                        neutral: '😌',
+                                        angry: '😠',
+                                        anxious: '😟',
+                                        sad: '😭',
+                                        exhausted: '😫'
+                                      };
+                                      e.currentTarget.style.display = 'none';
+                                      const span = document.createElement('span');
+                                      span.innerText = emojiMap[emotion.type as string] || '💭';
+                                      span.className = 'text-3xl';
+                                      e.currentTarget.parentElement?.appendChild(span);
+                                    }}
+                                  />
+                                </span>
+                              </button>
+
+                              {/* Hover Label (Multi-language) */}
+                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/90 dark:bg-white text-white dark:text-black rounded-lg text-[10px] font-bold tracking-tight opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 pointer-events-none whitespace-nowrap shadow-lg">
+                                {appState.language === 'Chinese (Simplified)' ? emotion.zh : emotion.en}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center w-full">
+                  <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.4] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
+                    StartlyTab | A New Tab That Understands Your Mood, Not Just Your Tasks
+                  </h1>
+                  <h2 className="mt-8 serif text-2xl md:text-3xl lg:text-4xl text-gray-600 dark:text-gray-400 font-normal max-w-4xl text-center">
+                    Break the Cycle of Work Anxiety and Digital Noise.
+                  </h2>
+
+                  {/* Invisible SEO block */}
+                  <div className="sr-only">
+                    StartlyTab is a mental rhythm adjustment tool designed for high-pressure workers. Get your free emotional workspace and break free from anxious digital noise through gentle reminders and emotional awareness.
+                  </div>
+
+                  <div className="mt-12">
+                    <button
+                      onClick={() => setIsPreferenceModalOpen(true)}
+                      title="Start your mindful journey with StartlyTab"
+                      aria-label="Start your mindful day and get your free emotional workspace"
+                      className="px-12 py-6 bg-black dark:bg-white text-white dark:text-black rounded-full text-sm font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
+                    >
+                      Start My Mindful Day
+                    </button>
+                  </div>
+
+                  <SocialProof />
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center w-full">
-              <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.4] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
-                StartlyTab | A New Tab That Understands Your Mood, Not Just Your Tasks
-              </h1>
-              <h2 className="mt-8 serif text-2xl md:text-3xl lg:text-4xl text-gray-600 dark:text-gray-400 font-normal max-w-4xl text-center">
-                Break the Cycle of Work Anxiety and Digital Noise.
-              </h2>
-
-              {/* Invisible SEO block */}
-              <div className="sr-only">
-                StartlyTab is a mental rhythm adjustment tool designed for high-pressure workers. Get your free emotional workspace and break free from anxious digital noise through gentle reminders and emotional awareness.
-              </div>
-
-              <div className="mt-12">
-                <button
-                  onClick={() => setIsPreferenceModalOpen(true)}
-                  title="Start your mindful journey with StartlyTab"
-                  aria-label="Start your mindful day and get your free emotional workspace"
-                  className="px-12 py-6 bg-black dark:bg-white text-white dark:text-black rounded-full text-sm font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
-                >
-                  Start My Mindful Day
-                </button>
-              </div>
-
-              <SocialProof />
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()}
       </main>
 
       {!isAuthenticated && (
@@ -1842,6 +2298,7 @@ const App: React.FC = () => {
         isAuthenticated={isAuthenticated}
       />
       <DebugInfo currentUser={appState.user} />
+
     </div >
   );
 };
