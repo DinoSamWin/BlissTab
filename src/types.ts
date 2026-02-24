@@ -73,6 +73,26 @@ export interface ToastMessage {
   type: ToastType;
 }
 
+export type EmotionType = 'happy' | 'neutral' | 'angry' | 'sad' | 'anxious' | 'exhausted';
+
+export interface EmotionLog {
+  id?: string;
+  userId?: string;
+  emotionType: EmotionType;
+  score: number;
+  timeSlot: string;
+  timestamp: number;
+}
+
+export type TrackType = 'A_PHYSICAL' | 'B_TIME_ECHO' | 'C_EMOTION' | 'D_THEME' | 'E_QUESTION';
+
+export interface TrackAffinity {
+  userId: string;
+  trackType: TrackType;
+  affinityScore: number;
+  updatedAt: number;
+}
+
 
 export interface PerspectiveHistory {
   text: string;
@@ -81,6 +101,7 @@ export interface PerspectiveHistory {
   intent?: string;
   style?: string;
   theme?: string;
+  trackType?: TrackType;
 }
 
 export interface PerspectiveRouterContext {
@@ -98,12 +119,18 @@ export interface PerspectiveRouterContext {
   // V3.5 Environment Context
   weather?: string;
   battery_level?: number;
+  // V7.0 Emotion & ECRA Context
+  clickedEmotion?: EmotionType;
+  emotionalBaseline?: number;
+  bypassPool?: boolean;
+  historyKeywords?: string[];
+  deepObservationMode?: boolean;
 }
 
 export interface PerspectivePoolItem {
   text: string;
   style: string;
-  track: 'A' | 'B';
+  track: TrackType | 'A' | 'B';
 }
 
 export interface PerspectivePlan {
@@ -114,4 +141,5 @@ export interface PerspectivePlan {
   language: string;
   max_length_chars: number;
   allow_one_comma: boolean;
+  cached_item?: PerspectivePoolItem;
 }

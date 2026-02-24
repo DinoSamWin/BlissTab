@@ -3,62 +3,76 @@
  * Converts markdown format to system prompt format for AI model
  */
 
+export interface ParsedPerspectiveRules {
+  prompt: string;
+  dimensions: string[];
+}
+
 /**
- * Parses markdown rules and converts to system prompt format
- * This function extracts the relevant sections and formats them for the AI
- * Preserves the structure and meaning while converting markdown to plain text
+ * Parses markdown rules and extracts dimensions
  */
-export function parseRulesToPrompt(markdownContent: string, language: string): string {
-  // Remove developer notes section (everything after "## NOTES FOR DEVELOPERS")
-  const notesIndex = markdownContent.indexOf('## NOTES FOR DEVELOPERS');
-  const rulesContent = notesIndex > 0 
+export function parseRulesData(markdownContent: string, language: string): ParsedPerspectiveRules {
+  // Extract dimensions
+  const dimensions: string[] = [];
+  const dimRegex = /\[\d{2}\.\s+(.+?)\]：(.+)/g;
+  let match;
+  while ((match = dimRegex.exec(markdownContent)) !== null) {
+    dimensions.push(`[${match[1]}] ${match[2]}`);
+  }
+
+  // Remove developer notes section
+  const notesIndex = markdownContent.indexOf('## 5. Emotion Strategies');
+  const rulesContent = notesIndex > 0
     ? markdownContent.substring(0, notesIndex).trim()
     : markdownContent.trim();
 
   // Convert markdown to plain text while preserving structure
   let prompt = rulesContent
-    // Convert headers to uppercase labels (keep structure)
     .replace(/^##\s+(.+)$/gm, (_, text) => `\n${text.toUpperCase()}:`)
     .replace(/^###\s+(.+)$/gm, (_, text) => `\n${text}:`)
     .replace(/^#\s+(.+)$/gm, (_, text) => `${text.toUpperCase()}\n`)
-    // Remove horizontal rules (replace with blank line)
     .replace(/^---$/gm, '')
-    // Convert bold to emphasis (keep the text)
     .replace(/\*\*(.*?)\*\*/g, '$1')
-    // Convert list items to bullet points (keep indentation)
     .replace(/^[-*]\s+(.+)$/gm, '- $1')
-    // Remove code blocks
     .replace(/```[\s\S]*?```/g, '')
-    // Clean up multiple blank lines
     .replace(/\n{3,}/g, '\n\n')
-    // Trim and ensure proper spacing
     .trim();
 
-  // Add language instruction at the end
   prompt += `\n\nLANGUAGE: Output must be entirely in ${language.toUpperCase()}.`;
 
-  return prompt;
+  return { prompt, dimensions };
 }
 
 /**
- * Loads rules from markdown file and converts to prompt
- * In browser environment, this will fetch the file
+ * Original signature for backwards compatibility
  */
-export async function loadPerspectiveRules(language: string): Promise<string> {
+export function parseRulesToPrompt(markdownContent: string, language: string): string {
+  return parseRulesData(markdownContent, language).prompt;
+}
+
+/**
+ * Loads rules and dimensions
+ */
+export async function loadPerspectiveRulesData(language: string): Promise<ParsedPerspectiveRules> {
   try {
-    // Try to fetch the markdown file
     const response = await fetch('/PERSPECTIVE_GENERATION_RULES.md');
-    if (!response.ok) {
-      throw new Error(`Failed to load rules file: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Failed to load rules file: ${response.status}`);
     const markdownContent = await response.text();
-    return parseRulesToPrompt(markdownContent, language);
+    return parseRulesData(markdownContent, language);
   } catch (error) {
     console.warn('[PerspectiveRules] Failed to load rules from file, using fallback:', error);
-    // Fallback to embedded rules if file loading fails
-    return getFallbackRules(language);
+    return { prompt: getFallbackRules(language), dimensions: [] };
   }
 }
+
+/**
+ * Loads rules string
+ */
+export async function loadPerspectiveRules(language: string): Promise<string> {
+  const data = await loadPerspectiveRulesData(language);
+  return data.prompt;
+}
+
 
 /**
  * Fallback rules if file cannot be loaded

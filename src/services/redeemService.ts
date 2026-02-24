@@ -278,8 +278,8 @@ export async function fetchUserMembership(userId: string): Promise<{
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No membership record, return defaults
+      if (error.code === 'PGRST116' || error.status === 406) {
+        // Table doesn't exist or no membership record, return defaults silent
         return {
           isSubscribed: false,
           memberViaRedeem: false,
