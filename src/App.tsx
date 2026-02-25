@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
 import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
-import { generateSnippet } from './services/geminiService';
+import { generateSnippet, clearAllPerspectivePools } from './services/geminiService';
 import { initGoogleAuthStrict, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory, getSessionCountToday, getMinutesSinceLast, getLateNightStreak } from './services/perspectiveService';
@@ -297,6 +297,12 @@ const App: React.FC = () => {
 
   const [useTypewriter, setUseTypewriter] = useState(false);
   const [typewriterKey, setTypewriterKey] = useState(0);
+
+  // Clear pools when language changes to prevent mix-ups (Reactive Safety)
+  useEffect(() => {
+    console.log('[App] Language changed to:', appState.language, '- Clearing perspective pools');
+    clearAllPerspectivePools();
+  }, [appState.language]);
 
   const currentSnippetStartTimeRef = useRef<number>(Date.now());
   const currentSnippetTrackRef = useRef<TrackType | null>(null);
@@ -1986,7 +1992,10 @@ const App: React.FC = () => {
                             <span className="absolute -right-10 -top-4 cursor-help inline-block no-editorial-title" style={{ WebkitTextFillColor: 'initial', background: 'none' }}>
                               <span className="text-2xl animate-pulse inline-block">✨</span>
                               <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 dark:bg-white/90 text-white dark:text-black text-[12px] md:text-sm p-3 rounded-lg shadow-2xl z-50 font-sans leading-tight">
-                                {currentSnippetEchoType === 'node_3' ? "我注意到了你最近的心理节律。" : "这是来自你昨天的节奏反馈。"}
+                                {appState.language === 'Chinese (Simplified)'
+                                  ? (currentSnippetEchoType === 'node_3' ? "我注意到了你最近的心理节律。" : "这是来自你昨天的节奏反馈。")
+                                  : (currentSnippetEchoType === 'node_3' ? "I've noticed your recent psychological rhythm." : "This is feedback from your rhythm yesterday.")
+                                }
                               </span>
                             </span>
                           )}

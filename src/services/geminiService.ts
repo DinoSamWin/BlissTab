@@ -1,5 +1,5 @@
 import { LOCALIZED_FALLBACKS } from "../constants";
-import { PerspectiveHistory, PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem, EmotionType } from "../types";
+import { PerspectiveHistory, PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem, EmotionType, TrackType } from "../types";
 import { isTooSimilar } from "./perspectiveService";
 import { routePerspective } from "./perspectiveRouter";
 import { getSkeleton, getCustomThemeSkeleton } from "./perspectiveSkeletons";
@@ -44,12 +44,12 @@ export function clearAllPerspectivePools() {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.startsWith('v3_pool_') || key.startsWith('v4_pool_'))) {
+      if (key && (key.includes('_pool_'))) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    console.log(`[GeminiService] Cleared ${keysToRemove.length} perspective pools.`);
+    console.log(`[GeminiService] Force-cleared ${keysToRemove.length} perspective pools.`);
   } catch (e) {
     console.warn('Failed to clear perspective pools:', e);
   }
@@ -251,6 +251,18 @@ async function fetchAndRefillPool(
                       try {
                         const item = JSON.parse(jsonStr) as PerspectivePoolItem;
                         if (item.text && item.style) { // Validate it's our item
+                          // Normalize track mapping from A/B/C/D/E to full TrackType
+                          const trackMap: Record<string, TrackType> = {
+                            'A': 'A_PHYSICAL',
+                            'B': 'B_TIME_ECHO',
+                            'C': 'C_EMOTION',
+                            'D': 'D_THEME',
+                            'E': 'E_QUESTION'
+                          };
+                          if (item.track && trackMap[item.track]) {
+                            item.track = trackMap[item.track];
+                          }
+
                           newItems.push(item);
 
                           if (item.is_memory_echo !== undefined) {
