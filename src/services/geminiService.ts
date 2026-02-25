@@ -16,7 +16,8 @@ function getPoolKey(plan: PerspectivePlan, ctx: PerspectiveRouterContext): strin
   // If we have custom themes, the pool is specific to those themes
   const themeHash = (ctx.custom_themes || []).sort().join('_') || 'default';
   // Key depends on Intent (Time Slot) + Themes + Date
-  return `v3_pool_${dateStr}_${plan.intent}_${themeHash}`;
+  // Key depends on Intent (Time Slot) + Language + Themes + Date
+  return `v4_pool_${dateStr}_${plan.intent}_${plan.language}_${themeHash}`;
 }
 
 function getPool(key: string): PerspectivePoolItem[] {
@@ -479,6 +480,7 @@ Instruction:
 - Strictly follow the 5-Track distribution (A:30%, B:30%, C:20%, D:10%, E:10%).
 - If active emotion is present, infuse the strategy across ALL tracks conceptually.
 - Avoid advice. Maintain the "Inner Voice" role.
+- CRITICAL: DO NOT literally state the Time or Battery level as facts (e.g., "It is 10:22 and 80% battery"). Instead, use them as metaphors for your inner rhythm or feeling (e.g., "The pace of the clock matches your breathing" or "Feeling a bit low on energy today?").
 - OUTPUT LANGUAGE: ${plan.language.toUpperCase()}.`;
 }
 
