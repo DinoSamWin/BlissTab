@@ -15,6 +15,7 @@ import GatewayEditModal from './GatewayEditModal';
 import { Zap, Diamond, Briefcase, Download, Upload, FileJson, CreditCard, ExternalLink, Settings as SettingsIcon, History, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { exportUserData, parseImportData, parseInfinityImport } from '../services/exportImportService';
 import { getCustomerPortalUrl, getTransactionHistory, cancelSubscription } from '../services/creemService';
+import { clearAllPerspectivePools } from '../services/geminiService';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -1511,7 +1512,11 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
               {SUPPORTED_LANGUAGES.map(lang => (
                 <button
                   key={lang.code}
-                  onClick={() => { updateState({ ...state, language: lang.code }); addToast(`Language: ${lang.name}`); }}
+                  onClick={() => {
+                    clearAllPerspectivePools();
+                    updateState({ ...state, language: lang.code });
+                    addToast(`Language: ${lang.name}`);
+                  }}
                   className={`p-6 rounded-[2rem] text-sm font-bold transition-all text-left border-2 ${state.language === lang.code ? 'border-indigo-500 bg-indigo-500/5 text-indigo-600' : 'border-transparent bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10'}`}
                 >
                   {lang.name}

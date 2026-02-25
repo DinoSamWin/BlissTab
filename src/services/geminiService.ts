@@ -39,6 +39,22 @@ function savePool(key: string, pool: PerspectivePoolItem[]) {
 
 // --- Main Generation Service ---
 
+export function clearAllPerspectivePools() {
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('v3_pool_') || key.startsWith('v4_pool_'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    console.log(`[GeminiService] Cleared ${keysToRemove.length} perspective pools.`);
+  } catch (e) {
+    console.warn('Failed to clear perspective pools:', e);
+  }
+}
+
 export async function generateSnippet(
   context: PerspectiveRouterContext,
   retryCount: number = 0,
