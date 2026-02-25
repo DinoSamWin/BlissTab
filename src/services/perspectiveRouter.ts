@@ -145,6 +145,13 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
         }
     }
 
+    // 3.5. Pattern Recognition Overrides
+    const activePatterns = ctx.emotionalPatterns || [];
+    let overrideTrack: TrackType | undefined;
+    if (activePatterns.includes('AFTERNOON_DIP') && hours >= 14 && hours < 16) {
+        overrideTrack = 'B_TIME_ECHO';
+    }
+
     // 4. Session Count Override
     if (ctx.session_count_today >= 6 && intent !== 'sleep' && intent !== 'care') {
         const intentShiftWeights: Record<string, number> = { [intent]: 40, lighten: 30, decompress: 30 };
@@ -227,6 +234,12 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
                     }
                 }
                 console.log('[ECRA] Exploiting track:', targetTrack, 'Affinity:', maxAff);
+            }
+
+            // Apply specific pattern override if any
+            if (overrideTrack && poolTracks.includes(overrideTrack)) {
+                targetTrack = overrideTrack;
+                console.log('[ECRA] Pattern Override active, forcing track:', targetTrack);
             }
 
             if (targetTrack) {

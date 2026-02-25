@@ -1,5 +1,5 @@
 import { LOCALIZED_FALLBACKS } from "../constants";
-import { PerspectiveHistory, PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem, EmotionType } from "../types";
+import { PerspectiveHistory, PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem, EmotionType, TrackType } from "../types";
 import { isTooSimilar } from "./perspectiveService";
 import { routePerspective } from "./perspectiveRouter";
 import { getSkeleton, getCustomThemeSkeleton } from "./perspectiveSkeletons";
@@ -16,7 +16,8 @@ function getPoolKey(plan: PerspectivePlan, ctx: PerspectiveRouterContext): strin
   // If we have custom themes, the pool is specific to those themes
   const themeHash = (ctx.custom_themes || []).sort().join('_') || 'default';
   // Key depends on Intent (Time Slot) + Themes + Date
-  return `v3_pool_${dateStr}_${plan.intent}_${themeHash}`;
+  // Key depends on Intent (Time Slot) + Language + Themes + Date
+  return `v4_pool_${dateStr}_${plan.intent}_${plan.language}_${themeHash}`;
 }
 
 function getPool(key: string): PerspectivePoolItem[] {
@@ -37,6 +38,22 @@ function savePool(key: string, pool: PerspectivePoolItem[]) {
 }
 
 // --- Main Generation Service ---
+
+export function clearAllPerspectivePools() {
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.includes('_pool_'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    console.log(`[GeminiService] Force-cleared ${keysToRemove.length} perspective pools.`);
+  } catch (e) {
+    console.warn('Failed to clear perspective pools:', e);
+  }
+}
 
 export async function generateSnippet(
   context: PerspectiveRouterContext,
@@ -234,7 +251,25 @@ async function fetchAndRefillPool(
                       try {
                         const item = JSON.parse(jsonStr) as PerspectivePoolItem;
                         if (item.text && item.style) { // Validate it's our item
+                          // Normalize track mapping from A/B/C/D/E to full TrackType
+                          const trackMap: Record<string, TrackType> = {
+                            'A': 'A_PHYSICAL',
+                            'B': 'B_TIME_ECHO',
+                            'C': 'C_EMOTION',
+                            'D': 'D_THEME',
+                            'E': 'E_QUESTION'
+                          };
+                          if (item.track && trackMap[item.track]) {
+                            item.track = trackMap[item.track];
+                          }
+
                           newItems.push(item);
+
+                          if (item.is_memory_echo !== undefined) {
+                            plan.cached_item = plan.cached_item || {} as PerspectivePoolItem;
+                            plan.cached_item.is_memory_echo = item.is_memory_echo;
+                            plan.cached_item.echo_type = item.echo_type;
+                          }
 
                           // If this is the FIRST item and we have a waiter (onImmediateChunk), serve it!
                           if (!firstItemFound && onImmediateChunk) {
@@ -363,8 +398,9 @@ Strictly distribute the 50 items according to these Tracks:
 
 Output Format (Strict JSON Array):
 [
-  {"text": "...", "style": "A_PHYSICAL", "track": "A"},
-  {"text": "...", "style": "B_TIME_ECHO", "track": "B"}
+  {"text": "...", "style": "A_PHYSICAL", "track": "A", "is_memory_echo": false},
+  {"text": "...", "style": "B_TIME_ECHO", "track": "B", "is_memory_echo": true, "echo_type": "node_2"},
+  {"text": "...", "style": "C_MICRO_ACTION", "track": "C", "is_memory_echo": true, "echo_type": "node_3"}
 ]
 
 Constraints:
@@ -462,6 +498,7 @@ Context Anchors:
 - Weather: ${weather}
 - Battery: ${battery}
 - Sessions: ${ctx.session_count_today}
+- Active Patterns: ${(ctx.emotionalPatterns || []).join(', ')}
 ${emotionStrategy}
 ${baselineContext}
 ${deepObs}
@@ -471,6 +508,7 @@ Instruction:
 - Strictly follow the 5-Track distribution (A:30%, B:30%, C:20%, D:10%, E:10%).
 - If active emotion is present, infuse the strategy across ALL tracks conceptually.
 - Avoid advice. Maintain the "Inner Voice" role.
+- CRITICAL: DO NOT literally state the Time or Battery level as facts (e.g., "It is 10:22 and 80% battery"). Instead, use them as metaphors for your inner rhythm or feeling (e.g., "The pace of the clock matches your breathing" or "Feeling a bit low on energy today?").
 - OUTPUT LANGUAGE: ${plan.language.toUpperCase()}.`;
 }
 
