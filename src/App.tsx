@@ -5,14 +5,14 @@ import { generateSnippet, clearAllPerspectivePools } from './services/geminiServ
 import { initGoogleAuthStrict, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory, getSessionCountToday, getMinutesSinceLast, getLateNightStreak } from './services/perspectiveService';
-import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount } from './services/usageLimitsService';
+import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount, isSubscribed } from './services/usageLimitsService';
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import { canonicalizeUrl } from './services/urlCanonicalService';
 import { getLocalLogoDataUrl, downloadAndCacheLogo } from './services/gatewayLogoCacheService';
 import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabaseService';
 import { EmotionType, TrackType } from './types';
-import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns } from './services/emotionService';
+import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns, getEmotionLogs } from './services/emotionService';
 import { updateTrackAffinity } from './services/recommendationEngine';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
@@ -22,6 +22,8 @@ import DebugInfo from './components/DebugInfo';
 import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
 import SocialProof from './components/SocialProof';
 import LandingOptimization from './components/LandingOptimization';
+import TrendHub from './components/TrendHub';
+import { Activity, Sparkles } from 'lucide-react';
 
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
@@ -248,6 +250,7 @@ const App: React.FC = () => {
   const [currentSnippetEchoType, setCurrentSnippetEchoType] = useState<'node_2' | 'node_3' | undefined>();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isTrendHubOpen, setIsTrendHubOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [revealKey, setRevealKey] = useState(0);
@@ -1913,6 +1916,20 @@ const App: React.FC = () => {
           {/* {isAuthenticated && !IS_EXTENSION && (
             <ExtensionInstallPrompt theme={appState.theme} />
           )} */}
+
+          <button
+            onClick={() => setIsTrendHubOpen(true)}
+            className="relative p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
+            aria-label="Trend Hub"
+          >
+            <Activity className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 transition-colors" />
+            {isSubscribed(appState) && getEmotionLogs().length > 0 && Math.floor((Date.now() - [...getEmotionLogs()].sort((a, b) => b.timestamp - a.timestamp)[getEmotionLogs().length - 1].timestamp) / (1000 * 60 * 60 * 24)) >= 7 && (
+              <div className="absolute top-1.5 right-1.5 text-indigo-500 pointer-events-none animate-pulse">
+                <Sparkles size={10} />
+              </div>
+            )}
+          </button>
+
           <button
             onClick={() => {
               const newTheme = appState.theme === 'light' ? 'dark' : 'light';
@@ -2310,6 +2327,13 @@ const App: React.FC = () => {
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
       />
+
+      <TrendHub
+        isOpen={isTrendHubOpen}
+        onClose={() => setIsTrendHubOpen(false)}
+        state={appState}
+      />
+
 
       <LoginPromptModal
         isOpen={isLoginModalOpen}

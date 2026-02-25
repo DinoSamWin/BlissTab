@@ -64,7 +64,7 @@ const PlanBadge = ({ user }: { user: AppState['user'] }) => {
 const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState, addToast, onSignIn, onSignOut }) => {
   const [newUrl, setNewUrl] = useState('');
   const [newPrompt, setNewPrompt] = useState('');
-  const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'reflection' | 'data' | 'language' | 'redeem' | 'account'>('links');
+  const [activeTab, setActiveTab] = useState<'links' | 'snippets' | 'data' | 'language' | 'redeem' | 'account'>('links');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
@@ -785,13 +785,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
         {/* Tab Navigation - Sticky */}
         <div className="flex px-12 border-b border-black/5 dark:border-white/5 no-scrollbar overflow-x-auto flex-shrink-0 sticky top-0 z-10 bg-white dark:bg-[#0F0F0F]">
-          {['links', 'snippets', 'reflection', 'data', 'language', 'redeem', 'account'].map((tab) => (
+          {['links', 'snippets', 'data', 'language', 'redeem', 'account'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
               className={`py-6 px-1 mr-10 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${activeTab === tab ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
             >
-              {tab === 'links' ? 'Gateways' : tab === 'snippets' ? 'Intentions' : tab === 'reflection' ? 'Insight' : tab === 'redeem' ? 'Redeem Code' : tab === 'data' ? 'Data' : tab}
+              {tab === 'links' ? 'Gateways' : tab === 'snippets' ? 'Intentions' : tab === 'redeem' ? 'Redeem Code' : tab === 'data' ? 'Data' : tab}
             </button>
           ))}
         </div>
@@ -1118,129 +1118,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
             </div>
           )}
 
-          {activeTab === 'reflection' && (() => {
-            const allLogs = getEmotionLogs();
-            const now = Date.now();
-            const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-            const sortedLogs = [...allLogs].sort((a, b) => b.timestamp - a.timestamp);
-
-            const recentLogs = sortedLogs.filter(l => now - l.timestamp <= sevenDaysMs);
-            const lockedLogs = sortedLogs.filter(l => now - l.timestamp > sevenDaysMs);
-
-            const eAvg = recentLogs.length > 0
-              ? (recentLogs.reduce((sum, l) => sum + l.score, 0) / recentLogs.length).toFixed(1)
-              : '0.0';
-
-            const slotCounts = recentLogs.reduce((acc, l) => {
-              acc[l.timeSlot] = (acc[l.timeSlot] || 0) + 1;
-              return acc;
-            }, {} as Record<string, number>);
-            const heaviestSlot = Object.keys(slotCounts).length > 0
-              ? Object.keys(slotCounts).reduce((a, b) => slotCounts[a] > slotCounts[b] ? a : b)
-              : 'N/A';
-
-            let volatilityStr = 'Low';
-            if (recentLogs.length > 1) {
-              const avg = parseFloat(eAvg);
-              const variance = recentLogs.reduce((sum, l) => sum + Math.pow(l.score - avg, 2), 0) / recentLogs.length;
-              if (variance > 2.0) volatilityStr = 'High';
-              else if (variance > 0.5) volatilityStr = 'Medium';
-            }
-
-            const hasPro = isSubscribed(state);
-
-            return (
-              <div className="space-y-10 animate-reveal">
-                <div className="p-8 bg-gray-50 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5 space-y-8 relative overflow-hidden">
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">7-Day Emotional Reflection</h3>
-                      <p className="text-[13px] text-gray-500 dark:text-gray-400">Discover your emotional rhythms and patterns.</p>
-                    </div>
-                    {!hasPro && (
-                      <div className="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-widest rounded-full border border-indigo-200 dark:border-indigo-500/20">
-                        PRO FEATURE
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="p-6 bg-white dark:bg-[#1A1A1A] rounded-2xl border border-black/5 dark:border-white/5 flex flex-col items-center justify-center text-center">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Energy Avg</span>
-                      <span className="text-3xl font-light text-gray-800 dark:text-gray-100">{eAvg}</span>
-                    </div>
-                    <div className="p-6 bg-white dark:bg-[#1A1A1A] rounded-2xl border border-black/5 dark:border-white/5 flex flex-col items-center justify-center text-center">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Peak Time</span>
-                      <span className="text-xl font-medium text-gray-800 dark:text-gray-100">{heaviestSlot}</span>
-                    </div>
-                    <div className="p-6 bg-white dark:bg-[#1A1A1A] rounded-2xl border border-black/5 dark:border-white/5 flex flex-col items-center justify-center text-center">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Volatility</span>
-                      <span className="text-xl font-medium text-gray-800 dark:text-gray-100">{volatilityStr}</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-8">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-4">Recent Logs</h4>
-                    <div className="space-y-3">
-                      {recentLogs.slice(0, 5).map((log: any) => (
-                        <div key={log.id} className="flex items-center justify-between p-4 bg-white dark:bg-[#1A1A1A] rounded-xl border border-black/5 dark:border-white/5">
-                          <div className="flex items-center gap-3">
-                            <img src={`/icons/emotions/${log.emotionType}.png`} className="w-6 h-6 object-contain opacity-80" alt={log.emotionType} />
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{log.emotionType}</span>
-                          </div>
-                          <div className="text-xs text-gray-400 font-mono">
-                            {new Date(log.timestamp).toLocaleDateString()} {log.timeSlot}
-                          </div>
-                        </div>
-                      ))}
-                      {recentLogs.length === 0 && (
-                        <div className="text-center py-6 text-sm text-gray-400 italic">No emotions logged in the last 7 days.</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-8 relative">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-4">Archived History ({'>'} 7 Days)</h4>
-
-                    <div className={`space-y-3 ${!hasPro ? 'filter blur-[4px] opacity-60 select-none pointer-events-none' : ''}`}>
-                      {lockedLogs.slice(0, 3).map((log: any) => (
-                        <div key={log.id} className="flex items-center justify-between p-4 bg-white dark:bg-[#1A1A1A] rounded-xl border border-black/5 dark:border-white/5">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{log.emotionType}</span>
-                          </div>
-                          <div className="text-xs text-gray-400 font-mono">
-                            {new Date(log.timestamp).toLocaleDateString()}
-                          </div>
-                        </div>
-                      ))}
-                      {lockedLogs.length === 0 && (
-                        <div className="text-center py-6 text-sm text-gray-400 italic">No archived logs found.</div>
-                      )}
-                    </div>
-
-                    {!hasPro && lockedLogs.length > 0 && (
-                      <div className="absolute inset-0 flex items-center justify-center z-10 m-[-8px]">
-                        <div className="bg-white/90 dark:bg-[#0F0F0F]/90 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-black/10 dark:border-white/10 text-center max-w-sm">
-                          <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 mx-auto mb-4">
-                            <History size={24} />
-                          </div>
-                          <h4 className="text-base font-bold text-gray-900 dark:text-white mb-2">Unlock Your Past</h4>
-                          <p className="text-xs text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">有些日子值得被记住。升级 Pro，找回你被隐藏的情绪轨迹。</p>
-                          <button
-                            onClick={() => window.open(window.location.origin + '/subscription', '_blank')}
-                            className="w-full py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold uppercase tracking-widest hover:scale-[1.02] transition-transform"
-                          >
-                            Upgrade to Pro
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
           {activeTab === 'redeem' && (
             <div className="space-y-10 animate-reveal">
