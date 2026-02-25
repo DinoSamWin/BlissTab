@@ -244,6 +244,8 @@ const App: React.FC = () => {
   });
 
   const [currentSnippet, setCurrentSnippet] = useState<string | null>(null);
+  const [currentSnippetIsMemoryEcho, setCurrentSnippetIsMemoryEcho] = useState<boolean>(false);
+  const [currentSnippetEchoType, setCurrentSnippetEchoType] = useState<'node_2' | 'node_3' | undefined>();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -810,7 +812,7 @@ const App: React.FC = () => {
         style: plan?.style,
         theme: plan?.selected_theme,
         // Hack: infer track from style mapping if backend isn't sending it directly yet
-        trackType: plan?.cached_item?.track || 'A_PHYSICAL' // We will fix backend to return track soon
+        trackType: (plan?.cached_item?.track as TrackType) || 'A_PHYSICAL' // We will fix backend to return track soon
       });
       saveHistory(updatedHistory);
 
@@ -823,6 +825,9 @@ const App: React.FC = () => {
       currentSnippetStartTimeRef.current = Date.now();
 
       setCurrentSnippet(result);
+      setCurrentSnippetIsMemoryEcho(plan?.cached_item?.is_memory_echo || false);
+      setCurrentSnippetEchoType(plan?.cached_item?.echo_type);
+
       // Only bump revealKey for generic refreshes to trigger 'animate-reveal'
       // For emotions, we use the internal Typewriter/reveal system
       if (!clickedEmotion) {
@@ -1949,7 +1954,7 @@ const App: React.FC = () => {
                     <div
                       ref={perspectiveTitleRef}
                       key={`${revealKey}-${typewriterKey}`}
-                      className={`serif editorial-title font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300
+                      className={`serif font-normal leading-[1.35] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.02em] text-black dark:text-white transition-all duration-300
                         ${isCN
                           ? (rawLen > 38
                             ? 'text-3xl md:text-5xl lg:text-6xl'
@@ -1966,17 +1971,30 @@ const App: React.FC = () => {
                       style={{ textWrap: 'balance', orphans: 3, widows: 3 }}
                     >
                       {isPerceiving ? (
-                        <div className="flex flex-col items-center justify-center w-full">
+                        <div className="flex flex-col items-center justify-center w-full min-h-[100px]">
                           <EmotionalPulsePerceiver emotion={lastClickedEmotion} currentLang={appState.language || 'English'} />
                         </div>
                       ) : currentSnippet ? (
-                        useTypewriter ? (
-                          <Typewriter text={currentSnippet} onComplete={() => setUseTypewriter(false)} />
-                        ) : (
-                          renderSnippet(currentSnippet)
-                        )
+                        <div className="relative group inline-block editorial-title">
+                          {useTypewriter ? (
+                            <Typewriter text={currentSnippet} onComplete={() => setUseTypewriter(false)} />
+                          ) : (
+                            renderSnippet(currentSnippet)
+                          )}
+
+                          {currentSnippetIsMemoryEcho && (
+                            <span className="absolute -right-10 -top-4 cursor-help inline-block no-editorial-title" style={{ WebkitTextFillColor: 'initial', background: 'none' }}>
+                              <span className="text-2xl animate-pulse inline-block">✨</span>
+                              <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 dark:bg-white/90 text-white dark:text-black text-[12px] md:text-sm p-3 rounded-lg shadow-2xl z-50 font-sans leading-tight">
+                                {currentSnippetEchoType === 'node_3' ? "我注意到了你最近的心理节律。" : "这是来自你昨天的节奏反馈。"}
+                              </span>
+                            </span>
+                          )}
+                        </div>
                       ) : (
-                        <JumpStarLoading caption="Collecting moments..." />
+                        <div className="flex flex-col items-center justify-center py-10">
+                          <JumpStarLoading caption="Collecting moments..." />
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2015,7 +2033,11 @@ const App: React.FC = () => {
                       {/* 2. Onboarding Tooltip (Positioned relative to the anchor pair) */}
                       {showEmotionTooltip && !hasInteractedWithCompass && (
                         <div className="absolute -top-16 right-0 translate-x-[-12px] px-5 py-2.5 bg-black/90 dark:bg-white text-white dark:text-black rounded-2xl text-[11px] font-medium tracking-wide whitespace-nowrap shadow-2xl animate-reveal-bounce z-[60] border border-white/10">
-                          How is this moment feeling? <span className="opacity-60 italic">(Just for you)</span>
+                          {appState.language === 'Chinese (Simplified)' ? (
+                            <>此刻的感觉如何？ <span className="opacity-60 italic">(专属你的视界)</span></>
+                          ) : (
+                            <>How is this moment feeling? <span className="opacity-60 italic">(Just for you)</span></>
+                          )}
                           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-black/90 dark:bg-white rotate-45"></div>
                         </div>
                       )}

@@ -102,6 +102,8 @@ export interface PerspectiveHistory {
   style?: string;
   theme?: string;
   trackType?: TrackType;
+  is_memory_echo?: boolean;
+  echo_type?: 'node_2' | 'node_3';
 }
 
 export interface PerspectiveRouterContext {
@@ -125,12 +127,15 @@ export interface PerspectiveRouterContext {
   bypassPool?: boolean;
   historyKeywords?: string[];
   deepObservationMode?: boolean;
+  emotionalPatterns?: string[];
 }
 
 export interface PerspectivePoolItem {
   text: string;
   style: string;
   track: TrackType | 'A' | 'B';
+  is_memory_echo?: boolean;
+  echo_type?: 'node_2' | 'node_3';
 }
 
 export interface PerspectivePlan {

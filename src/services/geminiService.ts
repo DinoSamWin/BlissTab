@@ -236,6 +236,12 @@ async function fetchAndRefillPool(
                         if (item.text && item.style) { // Validate it's our item
                           newItems.push(item);
 
+                          if (item.is_memory_echo !== undefined) {
+                            plan.cached_item = plan.cached_item || {} as PerspectivePoolItem;
+                            plan.cached_item.is_memory_echo = item.is_memory_echo;
+                            plan.cached_item.echo_type = item.echo_type;
+                          }
+
                           // If this is the FIRST item and we have a waiter (onImmediateChunk), serve it!
                           if (!firstItemFound && onImmediateChunk) {
                             firstItemFound = true;
@@ -363,8 +369,9 @@ Strictly distribute the 50 items according to these Tracks:
 
 Output Format (Strict JSON Array):
 [
-  {"text": "...", "style": "A_PHYSICAL", "track": "A"},
-  {"text": "...", "style": "B_TIME_ECHO", "track": "B"}
+  {"text": "...", "style": "A_PHYSICAL", "track": "A", "is_memory_echo": false},
+  {"text": "...", "style": "B_TIME_ECHO", "track": "B", "is_memory_echo": true, "echo_type": "node_2"},
+  {"text": "...", "style": "C_MICRO_ACTION", "track": "C", "is_memory_echo": true, "echo_type": "node_3"}
 ]
 
 Constraints:
@@ -462,6 +469,7 @@ Context Anchors:
 - Weather: ${weather}
 - Battery: ${battery}
 - Sessions: ${ctx.session_count_today}
+- Active Patterns: ${(ctx.emotionalPatterns || []).join(', ')}
 ${emotionStrategy}
 ${baselineContext}
 ${deepObs}
