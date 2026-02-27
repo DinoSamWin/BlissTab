@@ -23,6 +23,8 @@ import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
 import SocialProof from './components/SocialProof';
 import LandingOptimization from './components/LandingOptimization';
 import TrendHub from './components/TrendHub';
+import DailyRhythm from './components/DailyRhythm';
+import VentingModePromo from './components/VentingModePromo';
 import { Activity, Sparkles } from 'lucide-react';
 
 // Check if running in Chrome Extension environment
@@ -2291,7 +2293,13 @@ const App: React.FC = () => {
         </section>
       )}
 
-      {!isAuthenticated && <LandingOptimization />}
+      {!isAuthenticated && (
+        <>
+          <LandingOptimization />
+          <DailyRhythm />
+          <VentingModePromo />
+        </>
+      )}
 
       {/* 3.5. INTEGRATION GATEWAYS (Real Data) */}
       {isAuthenticated && (
