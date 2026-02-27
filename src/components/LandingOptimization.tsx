@@ -78,7 +78,7 @@ const LandingOptimization: React.FC = () => {
     };
 
     return (
-        <section className="w-full relative py-32 pb-40 overflow-hidden bg-transparent -mt-[500px] z-0">
+        <section className="w-full relative py-10 overflow-hidden bg-transparent -mt-[500px] z-0">
             {/* Seamless Transition Background Layer - Softened Colors */}
             <div className="absolute inset-0 z-0">
                 <div
@@ -91,12 +91,12 @@ const LandingOptimization: React.FC = () => {
             </div>
 
             {/* Seamless Grid Pattern Overlay - Faded behind content */}
-            <div className="absolute inset-0 z-10 opacity-[0.25] dark:opacity-[0.08]"
+            <div className="absolute inset-0 z-10 opacity-[0.6] dark:opacity-[0.1]"
                 style={{
-                    backgroundImage: `linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)`,
+                    backgroundImage: `linear-gradient(rgba(255,255,255,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.8) 1px, transparent 1px)`,
                     backgroundSize: '40px 40px',
-                    maskImage: 'linear-gradient(to bottom, transparent 20%, black 50%, transparent 80%)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 20%, black 50%, transparent 80%)'
+                    maskImage: 'linear-gradient(to bottom, transparent 10%, black 40%, transparent 70%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 10%, black 40%, transparent 70%)'
                 }}
             />
 
@@ -106,7 +106,7 @@ const LandingOptimization: React.FC = () => {
                 <div className="absolute bottom-[0%] -right-[5%] w-[1200px] h-[1200px] bg-yellow-300/25 dark:bg-yellow-900/20 rounded-full blur-[180px] animate-pulse" style={{ animationDuration: '10s' }} />
             </div>
 
-            <div className="w-full max-w-7xl mx-auto px-8 lg:px-12 relative z-20 pt-[550px]">
+            <div className="w-full max-w-7xl mx-auto px-8 lg:px-12 relative z-20 pt-[520px]">
 
                 {/* Floating Decorative Elements - Clearly in front */}
                 <div className="absolute top-[500px] right-[10%] animate-bounce opacity-80 z-30" style={{ animationDuration: '6s' }}>
