@@ -2192,7 +2192,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center w-full">
                   <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.4] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
-                    StartlyTab | A New Tab That Understands Your Mood, Not Just Your Tasks
+                    StartlyTab | <span className="text-purple-600 dark:text-purple-400">A New Tab That Understands Your Mood,</span> Not Only Just Your Tasks
                   </h1>
                   <h2 className="mt-8 serif text-2xl md:text-3xl lg:text-4xl text-gray-600 dark:text-gray-400 font-normal max-w-4xl text-center">
                     Break the Cycle of Work Anxiety and Digital Noise.
@@ -2226,15 +2226,14 @@ const App: React.FC = () => {
         /* Unauthenticated State: Hero Login Prompt */
         <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
           <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
-            <div className="w-full flex flex-col items-center justify-center py-6">
+            <div className="w-full flex flex-col items-center justify-center py-2">
               <div className="max-w-md w-full flex flex-col items-center text-center">
                 <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2 whitespace-nowrap">Start your day softly — with everything ready</h2>
                 <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
                   Unlimited shortcuts, always one click away.
                 </p>
 
-                {/* Google Sign In Button Container */}
-                <div className="w-full flex flex-col items-center gap-4">
+                <div className="w-full flex flex-col items-center gap-4 mt-4">
                   {(typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id) ? (
                     <button
                       onClick={handleSignIn}
@@ -2280,10 +2279,7 @@ const App: React.FC = () => {
                       )}
                     </div>
                   )}
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
-                    No credit card required. A gentler way to work in Chrome.
-                  </p>
-                  <div className="flex items-center gap-3 mt-4 opacity-60">
+                  <div className="flex items-center justify-center gap-3 mt-4 opacity-60">
                     <a href="/privacy" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Privacy Policy</a>
                     <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
                     <a href="/terms" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Terms of Service</a>

@@ -102,8 +102,8 @@ const LandingOptimization: React.FC = () => {
 
             {/* Ambient Vibrant Glows - Moved to z-0, behind content & grid */}
             <div className="absolute top-0 left-0 w-full h-full z-0 pointer-events-none">
-                <div className="absolute top-[20%] -left-[10%] w-[1000px] h-[1000px] bg-purple-400/15 dark:bg-purple-900/10 rounded-full blur-[180px] animate-pulse" style={{ animationDuration: '8s' }} />
-                <div className="absolute bottom-[10%] -right-[10%] w-[900px] h-[900px] bg-yellow-300/15 dark:bg-yellow-900/10 rounded-full blur-[180px] animate-pulse" style={{ animationDuration: '10s' }} />
+                <div className="absolute top-[10%] -left-[5%] w-[1200px] h-[1200px] bg-purple-400/25 dark:bg-purple-900/20 rounded-full blur-[180px] animate-pulse" style={{ animationDuration: '8s' }} />
+                <div className="absolute bottom-[0%] -right-[5%] w-[1200px] h-[1200px] bg-yellow-300/25 dark:bg-yellow-900/20 rounded-full blur-[180px] animate-pulse" style={{ animationDuration: '10s' }} />
             </div>
 
             <div className="w-full max-w-7xl mx-auto px-8 lg:px-12 relative z-20 pt-[550px]">
@@ -160,9 +160,9 @@ const LandingOptimization: React.FC = () => {
                                 >
                                     <div className="bg-white/95 dark:bg-[#1C1E36]/95 backdrop-blur-[32px] rounded-[4rem] p-12 shadow-[0_80px_160px_-40px_rgba(0,0,0,0.15)] dark:shadow-[0_80px_160px_-40px_rgba(0,0,0,1)] border border-white/60 dark:border-white/10 group">
                                         <div className="flex flex-col items-center text-center">
-                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-white dark:bg-[#2A2D4F] px-10 py-3.5 rounded-full shadow-xl border border-gray-100 dark:border-white/5 flex items-center gap-3">
+                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-white dark:bg-[#2A2D4F] px-8 py-3.5 rounded-full shadow-xl border border-gray-100 dark:border-white/5 flex items-center gap-3">
                                                 <span className="text-xl">{card.icon}</span>
-                                                <h3 className="serif text-xl text-gray-900 dark:text-gray-100 font-semibold uppercase tracking-wider">{card.title}</h3>
+                                                <h3 className="serif text-base md:text-lg text-gray-900 dark:text-gray-100 font-semibold uppercase tracking-wider whitespace-nowrap">{card.title}</h3>
                                             </div>
 
                                             <div className="w-28 h-28 rounded-full overflow-hidden mt-6 mb-8 border-[6px] border-[#F2F4FF] dark:border-[#2D3154] shadow-lg group-hover:scale-110 transition-transform duration-500">
@@ -201,10 +201,13 @@ const LandingOptimization: React.FC = () => {
                         <button
                             onClick={handleCTAClick}
                             aria-label="Start reducing work anxiety with StartlyTab mindful new tab"
-                            className="px-14 py-6 bg-[#121212] dark:bg-white text-white dark:text-black rounded-full text-lg font-bold uppercase tracking-[0.15em] shadow-2xl hover:scale-105 active:scale-95 transition-all mb-12"
+                            className="px-14 py-6 bg-[#121212] dark:bg-white text-white dark:text-black rounded-full text-lg font-bold uppercase tracking-[0.15em] shadow-2xl hover:scale-105 active:scale-95 transition-all mb-4"
                         >
                             I want a gentler workday
                         </button>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 tracking-wide mb-12">
+                            Free to try. No complex setup. Just peace of mind
+                        </p>
                     </div>
 
                     <div className="space-y-6">
@@ -212,10 +215,9 @@ const LandingOptimization: React.FC = () => {
                             A path to feeling better
                         </h4>
                         <p className="text-gray-500 dark:text-gray-400 text-lg md:text-xl font-light leading-relaxed max-w-3xl mx-auto">
-                            While traditional focus apps emphasize speed and output, StartlyTab is designed for
-                            <span className="text-gray-900 dark:text-white font-normal mx-1 italic underline decoration-purple-500/30 underline-offset-8">emotional regulation at work.</span>
-                            We provide a mindful intervention between tasks, helping professionals
-                            break the cycle of digital noise and performance anxiety.
+                            Most tools want you to do more. We want you to feel better. Traditional Starter page Focus on speed, shortcuts, and endless output — often increasing your hidden anxiety.
+                            <span className="text-gray-900 dark:text-white font-normal mx-1 italic underline decoration-purple-500/30 underline-offset-8">We provide a mindful intervention between tasks,</span>
+                            helping you break the cycle of digital noise and performance anxiety.
                         </p>
                     </div>
                 </div>
