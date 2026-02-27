@@ -91,12 +91,12 @@ const LandingOptimization: React.FC = () => {
             </div>
 
             {/* Seamless Grid Pattern Overlay - Faded behind content */}
-            <div className="absolute inset-0 z-10 opacity-[0.25] dark:opacity-[0.05]"
+            <div className="absolute inset-0 z-10 opacity-[0.25] dark:opacity-[0.08]"
                 style={{
-                    backgroundImage: `linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)`,
-                    backgroundSize: '60px 60px',
-                    maskImage: 'linear-gradient(to bottom, transparent 50%, black 80%)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 50%, black 80%)'
+                    backgroundImage: `linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)`,
+                    backgroundSize: '40px 40px',
+                    maskImage: 'linear-gradient(to bottom, transparent 20%, black 50%, transparent 80%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 20%, black 50%, transparent 80%)'
                 }}
             />
 
@@ -162,7 +162,7 @@ const LandingOptimization: React.FC = () => {
                                         <div className="flex flex-col items-center text-center">
                                             <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-white dark:bg-[#2A2D4F] px-8 py-3.5 rounded-full shadow-xl border border-gray-100 dark:border-white/5 flex items-center gap-3">
                                                 <span className="text-xl">{card.icon}</span>
-                                                <h3 className="serif text-base md:text-lg text-gray-900 dark:text-gray-100 font-semibold uppercase tracking-wider whitespace-nowrap">{card.title}</h3>
+                                                <h3 className="serif text-base md:text-lg text-gray-900 dark:text-gray-100 font-semibold tracking-wide whitespace-nowrap">{card.title}</h3>
                                             </div>
 
                                             <div className="w-28 h-28 rounded-full overflow-hidden mt-6 mb-8 border-[6px] border-[#F2F4FF] dark:border-[#2D3154] shadow-lg group-hover:scale-110 transition-transform duration-500">
@@ -215,7 +215,7 @@ const LandingOptimization: React.FC = () => {
                             A path to feeling better
                         </h4>
                         <p className="text-gray-500 dark:text-gray-400 text-lg md:text-xl font-light leading-relaxed max-w-3xl mx-auto">
-                            Most tools want you to do more. We want you to feel better. Traditional Starter page Focus on speed, shortcuts, and endless output — often increasing your hidden anxiety.
+                            Traditional Starter Page focus on speed, shortcuts, and endless output — often increasing your hidden anxiety.
                             <span className="text-gray-900 dark:text-white font-normal mx-1 italic underline decoration-purple-500/30 underline-offset-8">We provide a mindful intervention between tasks,</span>
                             helping you break the cycle of digital noise and performance anxiety.
                         </p>

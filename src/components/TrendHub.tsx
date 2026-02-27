@@ -23,11 +23,32 @@ const TrendHub: React.FC<TrendHubProps> = ({ isOpen, onClose, state }) => {
     const firstLog = sortedLogs[sortedLogs.length - 1];
     const actualDaysUsed = firstLog ? Math.floor((Date.now() - firstLog.timestamp) / (1000 * 60 * 60 * 24)) : 0;
 
-    const daysUsed = actualDaysUsed;
-    const forceHasPro = hasPro;
+    // FOR TESTING: State for overriding days and pro status
+    const [testDaysUsed, setTestDaysUsed] = React.useState<number | null>(null);
+    const [testHasPro, setTestHasPro] = React.useState<boolean | null>(null);
+    const [mockScenario, setMockScenario] = React.useState<string | null>(null);
+
+    let daysUsed = testDaysUsed !== null ? testDaysUsed : actualDaysUsed;
+    const forceHasPro = testHasPro !== null ? testHasPro : hasPro;
 
     let activeLogs = sortedLogs;
     let last7DaysLogs = sortedLogs.filter(l => Date.now() - l.timestamp <= 7 * 24 * 60 * 60 * 1000);
+
+    if (mockScenario === 'SCENARIO_1_EMPTY') {
+        daysUsed = 3;
+        last7DaysLogs = [];
+        activeLogs = [];
+    } else if (mockScenario === 'SCENARIO_2_EMPTY') {
+        daysUsed = 8;
+        last7DaysLogs = [];
+        activeLogs = [];
+    } else if (mockScenario === 'SCENARIO_3_SPARSE') {
+        daysUsed = 8;
+        last7DaysLogs = [
+            { timestamp: Date.now() - 2 * 24 * 60 * 60 * 1000, emotionType: 'exhausted', score: -2, id: 'mock1', created_at: '', user_id: '1' } as any
+        ];
+        activeLogs = last7DaysLogs;
+    }
 
     const isSeniorPro = forceHasPro && daysUsed >= 7;
     const isNewPro = forceHasPro && daysUsed < 7;
@@ -389,7 +410,16 @@ const TrendHub: React.FC<TrendHubProps> = ({ isOpen, onClose, state }) => {
 
                 <div className="flex-1 overflow-y-auto px-12 py-6 no-scrollbar relative z-10 w-full">
 
-
+                    {/* TEST CONTROLS (Only visible in development/for testing) */}
+                    <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900/50 rounded-xl flex flex-wrap gap-2 text-[10px] justify-center relative z-50 pointer-events-auto">
+                        <span className="font-bold text-yellow-800 dark:text-yellow-500 my-auto">TEST SCENARIOS:</span>
+                        <button onClick={() => { setMockScenario('SCENARIO_1_EMPTY'); }} className="px-2 py-1 bg-white dark:bg-black rounded-lg shadow-sm border border-black/10 dark:border-white/10">Scen 1 (Day 1, 0 Record)</button>
+                        <button onClick={() => { setTestHasPro(true); setMockScenario('SCENARIO_2_EMPTY'); }} className="px-2 py-1 bg-white dark:bg-black rounded-lg shadow-sm border border-black/10 dark:border-white/10">Scen 2 (Day 8, 0 Record)</button>
+                        <button onClick={() => { setTestHasPro(true); setMockScenario('SCENARIO_3_SPARSE'); }} className="px-2 py-1 bg-white dark:bg-black rounded-lg shadow-sm border border-black/10 dark:border-white/10">Scen 3 (Day 8, 1 Record)</button>
+                        <button onClick={() => { setTestHasPro(false); setMockScenario(null); setTestDaysUsed(8); }} className="px-2 py-1 bg-white dark:bg-black rounded-lg shadow-sm border border-black/10 dark:border-white/10">Free (Day 8, Normal)</button>
+                        <button onClick={() => { setTestHasPro(true); setMockScenario(null); setTestDaysUsed(8); }} className="px-2 py-1 bg-white dark:bg-black rounded-lg shadow-sm border border-black/10 dark:border-white/10">Pro (Day 8, Normal)</button>
+                        <button onClick={() => { setTestHasPro(null); setTestDaysUsed(null); setMockScenario(null); }} className="px-2 py-1 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg">Reset Actual</button>
+                    </div>
 
                     {/* DAY 0-6 VIEW (Default for all users < 7 days) */}
                     {!isDay7Plus && (
