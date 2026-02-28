@@ -5,14 +5,14 @@ import { generateSnippet, clearAllPerspectivePools } from './services/geminiServ
 import { initGoogleAuthStrict, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory, getSessionCountToday, getMinutesSinceLast, getLateNightStreak } from './services/perspectiveService';
-import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount } from './services/usageLimitsService';
+import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount, isSubscribed } from './services/usageLimitsService';
 import { fetchSubscriptionState, determineSubscriptionTier } from './services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from './services/redeemService';
 import { canonicalizeUrl } from './services/urlCanonicalService';
 import { getLocalLogoDataUrl, downloadAndCacheLogo } from './services/gatewayLogoCacheService';
 import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabaseService';
 import { EmotionType, TrackType } from './types';
-import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns } from './services/emotionService';
+import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns, getEmotionLogs } from './services/emotionService';
 import { updateTrackAffinity } from './services/recommendationEngine';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
@@ -22,6 +22,13 @@ import DebugInfo from './components/DebugInfo';
 import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
 import SocialProof from './components/SocialProof';
 import LandingOptimization from './components/LandingOptimization';
+import TrendHub from './components/TrendHub';
+import DailyRhythm from './components/DailyRhythm';
+import VentingModePromo from './components/VentingModePromo';
+import TheRhythmBlueprint from './components/TheRhythmBlueprint';
+import FAQScreen from './components/FAQScreen';
+import SemanticFooter from './components/SemanticFooter';
+import { Activity, Sparkles } from 'lucide-react';
 
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
@@ -248,6 +255,7 @@ const App: React.FC = () => {
   const [currentSnippetEchoType, setCurrentSnippetEchoType] = useState<'node_2' | 'node_3' | undefined>();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isTrendHubOpen, setIsTrendHubOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [revealKey, setRevealKey] = useState(0);
@@ -1810,7 +1818,7 @@ const App: React.FC = () => {
   }, [isAuthenticated, appState.user]); // Re-check when user state changes
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
+    <div className="relative min-h-screen w-full flex flex-col items-center selection:bg-indigo-100 dark:selection:bg-indigo-900/40 clip-path-bounds">
       {/* Background Soothe Layer */}
       <div className={`bg-soothe-overlay ${isSootheActive ? 'bg-soothe-active' : ''}`} />
 
@@ -1913,6 +1921,20 @@ const App: React.FC = () => {
           {/* {isAuthenticated && !IS_EXTENSION && (
             <ExtensionInstallPrompt theme={appState.theme} />
           )} */}
+
+          <button
+            onClick={() => setIsTrendHubOpen(true)}
+            className="relative p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
+            aria-label="Trend Hub"
+          >
+            <Activity className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 transition-colors" />
+            {isSubscribed(appState) && getEmotionLogs().length > 0 && Math.floor((Date.now() - [...getEmotionLogs()].sort((a, b) => b.timestamp - a.timestamp)[getEmotionLogs().length - 1].timestamp) / (1000 * 60 * 60 * 24)) >= 7 && (
+              <div className="absolute top-1.5 right-1.5 text-indigo-500 pointer-events-none animate-pulse">
+                <Sparkles size={10} />
+              </div>
+            )}
+          </button>
+
           <button
             onClick={() => {
               const newTheme = appState.theme === 'light' ? 'dark' : 'light';
@@ -2175,7 +2197,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center w-full">
                   <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.4] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
-                    StartlyTab | A New Tab That Understands Your Mood, Not Just Your Tasks
+                    StartlyTab | <span className="text-purple-600 dark:text-purple-400">A New Tab That Understands Your Mood,</span> Not Only Just Your Tasks
                   </h1>
                   <h2 className="mt-8 serif text-2xl md:text-3xl lg:text-4xl text-gray-600 dark:text-gray-400 font-normal max-w-4xl text-center">
                     Break the Cycle of Work Anxiety and Digital Noise.
@@ -2209,15 +2231,14 @@ const App: React.FC = () => {
         /* Unauthenticated State: Hero Login Prompt */
         <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
           <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
-            <div className="w-full flex flex-col items-center justify-center py-6">
+            <div className="w-full flex flex-col items-center justify-center py-2">
               <div className="max-w-md w-full flex flex-col items-center text-center">
                 <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2 whitespace-nowrap">Start your day softly — with everything ready</h2>
                 <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
                   Unlimited shortcuts, always one click away.
                 </p>
 
-                {/* Google Sign In Button Container */}
-                <div className="w-full flex flex-col items-center gap-4">
+                <div className="w-full flex flex-col items-center gap-4 mt-4">
                   {(typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id) ? (
                     <button
                       onClick={handleSignIn}
@@ -2263,10 +2284,7 @@ const App: React.FC = () => {
                       )}
                     </div>
                   )}
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
-                    No credit card required. A gentler way to work in Chrome.
-                  </p>
-                  <div className="flex items-center gap-3 mt-4 opacity-60">
+                  <div className="flex items-center justify-center gap-3 mt-4 opacity-60">
                     <a href="/privacy" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Privacy Policy</a>
                     <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
                     <a href="/terms" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Terms of Service</a>
@@ -2278,7 +2296,16 @@ const App: React.FC = () => {
         </section>
       )}
 
-      {!isAuthenticated && <LandingOptimization />}
+      {!isAuthenticated && (
+        <>
+          <LandingOptimization />
+          <DailyRhythm />
+          <VentingModePromo onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <TheRhythmBlueprint onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <FAQScreen onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <SemanticFooter />
+        </>
+      )}
 
       {/* 3.5. INTEGRATION GATEWAYS (Real Data) */}
       {isAuthenticated && (
@@ -2310,6 +2337,13 @@ const App: React.FC = () => {
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
       />
+
+      <TrendHub
+        isOpen={isTrendHubOpen}
+        onClose={() => setIsTrendHubOpen(false)}
+        state={appState}
+      />
+
 
       <LoginPromptModal
         isOpen={isLoginModalOpen}
