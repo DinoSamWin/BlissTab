@@ -1815,7 +1815,7 @@ const App: React.FC = () => {
   }, [isAuthenticated, appState.user]); // Re-check when user state changes
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center overflow-x-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/40">
+    <div className="relative min-h-screen w-full flex flex-col items-center selection:bg-indigo-100 dark:selection:bg-indigo-900/40 clip-path-bounds">
       {/* Background Soothe Layer */}
       <div className={`bg-soothe-overlay ${isSootheActive ? 'bg-soothe-active' : ''}`} />
 
@@ -2297,7 +2297,7 @@ const App: React.FC = () => {
         <>
           <LandingOptimization />
           <DailyRhythm />
-          <VentingModePromo />
+          <VentingModePromo onRequireLogin={() => setIsLoginModalOpen(true)} />
         </>
       )}
 

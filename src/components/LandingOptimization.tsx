@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Search, Activity, Moon } from 'lucide-react';
 
 const CARDS = [
     {
@@ -219,6 +220,84 @@ const LandingOptimization: React.FC = () => {
                             <span className="text-gray-900 dark:text-white font-normal mx-1 italic underline decoration-purple-500/30 underline-offset-8">We provide a mindful intervention between tasks,</span>
                             helping you break the cycle of digital noise and performance anxiety.
                         </p>
+                    </div>
+
+                    {/* App Dashboard Mockup */}
+                    <div className="mt-20 relative w-full max-w-5xl mx-auto bg-[#FAFAFA] dark:bg-[#0B0C1A] rounded-[2rem] overflow-hidden shadow-[0_40px_100px_-20px_rgba(0,0,0,0.15)] dark:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-gray-200 dark:border-white/10" style={{ height: '640px' }}>
+                        {/* Top Bar */}
+                        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white">
+                                        <path d="M12 4V2M12 22V20M4 12H2M22 12H20M5.636 5.636L4.222 4.222M19.778 19.778L18.364 18.364M5.636 18.364L4.222 19.778M19.778 5.636L18.364 4.222" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </div>
+                                <span className="font-bold text-gray-900 dark:text-white tracking-widest text-sm">StartlyTab</span>
+                            </div>
+
+                            <div className="flex-1 max-w-xl mx-8 hidden md:block">
+                                <div className="flex items-center bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-full px-4 py-2.5 shadow-sm">
+                                    <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-red-500 to-yellow-500 flex items-center justify-center text-[10px] font-bold text-white mr-3">G</div>
+                                    <input type="text" placeholder="Search" className="bg-transparent border-none focus:outline-none text-sm text-gray-400 dark:text-gray-500 w-full" disabled />
+                                    <Search className="w-4 h-4 text-gray-400" />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-400 shadow-sm cursor-not-allowed">
+                                    <Activity className="w-4 h-4" />
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-400 shadow-sm cursor-not-allowed">
+                                    <Moon className="w-4 h-4" />
+                                </div>
+                                <button className="px-6 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold tracking-[0.2em] uppercase shadow-md pointer-events-none">
+                                    Studio
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Main Content Area */}
+                        <div className="flex flex-col items-center justify-center h-full -mt-20 px-8 relative">
+                            <h1 className="serif text-4xl md:text-5xl lg:text-6xl text-center text-gray-900 dark:text-gray-100 max-w-4xl tracking-tight leading-[1.1] mb-12">
+                                Even one completed task can make today meaningful.
+                            </h1>
+
+                            <div className="flex items-center justify-center gap-4 mb-16 relative z-10 w-full">
+                                <button className="px-8 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold tracking-[0.2em] uppercase shadow-2xl pointer-events-none">
+                                    New Perspective
+                                </button>
+                                <button className="w-14 h-14 bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/10 rounded-full flex items-center justify-center text-2xl shadow-xl pointer-events-none">
+                                    <span className="opacity-90">😊</span>
+                                </button>
+                            </div>
+
+                            {/* Gateways Box */}
+                            <div className="absolute bottom-12 w-full max-w-5xl px-8">
+                                <div className="bg-white/80 dark:bg-white/[0.02] backdrop-blur-2xl border border-gray-200/60 dark:border-white/10 rounded-[2rem] p-5 shadow-xl">
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                        {[
+                                            { name: 'Gmail', icon: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=64' },
+                                            { name: 'Slack', icon: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64' },
+                                            { name: 'Notion', icon: 'https://www.google.com/s2/favicons?domain=notion.so&sz=64' },
+                                            { name: 'ChatGPT', icon: 'https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64' },
+                                            { name: 'GitHub', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64' },
+                                            { name: 'Google Drive', icon: 'https://www.google.com/s2/favicons?domain=drive.google.com&sz=64' },
+                                            { name: 'Jira', icon: 'https://www.google.com/s2/favicons?domain=atlassian.com&sz=64' },
+                                            { name: 'Figma', icon: 'https://www.google.com/s2/favicons?domain=figma.com&sz=64' },
+                                            { name: 'Zoom', icon: 'https://www.google.com/s2/favicons?domain=zoom.us&sz=64' },
+                                            { name: 'LinkedIn', icon: 'https://www.google.com/s2/favicons?domain=linkedin.com&sz=64' },
+                                        ].map((link, i) => (
+                                            <div key={i} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm hover:-translate-y-0.5 transition-transform cursor-default">
+                                                <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
+                                                    <img src={link.icon} alt={link.name} className="w-5 h-5 object-contain" />
+                                                </div>
+                                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{link.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
