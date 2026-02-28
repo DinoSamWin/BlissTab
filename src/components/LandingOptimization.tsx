@@ -53,8 +53,18 @@ const CARDS = [
 const LandingOptimization: React.FC = () => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
+    const [activeBottomSlide, setActiveBottomSlide] = useState(0);
+    const [isBottomPaused, setIsBottomPaused] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (isBottomPaused) return;
+        const interval = setInterval(() => {
+            setActiveBottomSlide(prev => (prev + 1) % 3);
+        }, 4000);
+        return () => clearInterval(interval);
+    }, [isBottomPaused]);
 
     const startTimer = () => {
         if (timerRef.current) clearInterval(timerRef.current);
@@ -256,47 +266,202 @@ const LandingOptimization: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Main Content Area */}
-                        <div className="flex flex-col items-center justify-center h-full -mt-20 px-8 relative">
-                            <h1 className="serif text-4xl md:text-5xl lg:text-6xl text-center text-gray-900 dark:text-gray-100 max-w-4xl tracking-tight leading-[1.1] mb-12">
-                                Even one completed task can make today meaningful.
-                            </h1>
+                        {/* Main Content Area (Carousel) */}
+                        <div
+                            className="relative h-full -mt-20 px-4 md:px-8 w-full flex items-center justify-center overflow-hidden"
+                            onMouseEnter={() => setIsBottomPaused(true)}
+                            onMouseLeave={() => setIsBottomPaused(false)}
+                        >
+                            {/* Slide 0: The Original Dashboard View */}
+                            <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-700 ${activeBottomSlide === 0 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-12 pointer-events-none'}`}>
+                                <h1 className="serif text-4xl md:text-5xl lg:text-6xl text-center text-gray-900 dark:text-gray-100 max-w-4xl tracking-tight leading-[1.1] mb-12">
+                                    Even one completed task can make today meaningful.
+                                </h1>
 
-                            <div className="flex items-center justify-center gap-4 mb-16 relative z-10 w-full">
-                                <button className="px-8 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold tracking-[0.2em] uppercase shadow-2xl pointer-events-none">
-                                    New Perspective
-                                </button>
-                                <button className="w-14 h-14 bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/10 rounded-full flex items-center justify-center text-2xl shadow-xl pointer-events-none">
-                                    <span className="opacity-90">😊</span>
-                                </button>
-                            </div>
+                                <div className="flex items-center justify-center gap-4 mb-20 relative z-10 w-full">
+                                    <button className="px-8 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold tracking-[0.2em] uppercase shadow-2xl pointer-events-none">
+                                        New Perspective
+                                    </button>
+                                    <button className="w-14 h-14 bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/10 rounded-full flex items-center justify-center text-2xl shadow-xl pointer-events-none">
+                                        <span className="opacity-90">😊</span>
+                                    </button>
+                                </div>
 
-                            {/* Gateways Box */}
-                            <div className="absolute bottom-12 w-full max-w-5xl px-8">
-                                <div className="bg-white/80 dark:bg-white/[0.02] backdrop-blur-2xl border border-gray-200/60 dark:border-white/10 rounded-[2rem] p-5 shadow-xl">
-                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                        {[
-                                            { name: 'Gmail', icon: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=64' },
-                                            { name: 'Slack', icon: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64' },
-                                            { name: 'Notion', icon: 'https://www.google.com/s2/favicons?domain=notion.so&sz=64' },
-                                            { name: 'ChatGPT', icon: 'https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64' },
-                                            { name: 'GitHub', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64' },
-                                            { name: 'Google Drive', icon: 'https://www.google.com/s2/favicons?domain=drive.google.com&sz=64' },
-                                            { name: 'Jira', icon: 'https://www.google.com/s2/favicons?domain=atlassian.com&sz=64' },
-                                            { name: 'Figma', icon: 'https://www.google.com/s2/favicons?domain=figma.com&sz=64' },
-                                            { name: 'Zoom', icon: 'https://www.google.com/s2/favicons?domain=zoom.us&sz=64' },
-                                            { name: 'LinkedIn', icon: 'https://www.google.com/s2/favicons?domain=linkedin.com&sz=64' },
-                                        ].map((link, i) => (
-                                            <div key={i} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm hover:-translate-y-0.5 transition-transform cursor-default">
-                                                <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
-                                                    <img src={link.icon} alt={link.name} className="w-5 h-5 object-contain" />
+                                {/* Gateway Mini Box at the bottom */}
+                                <div className="absolute bottom-12 w-full max-w-5xl px-8 z-20">
+                                    <div className="bg-white/80 dark:bg-white/[0.02] backdrop-blur-2xl border border-gray-200/60 dark:border-white/10 rounded-[2rem] p-5 shadow-xl flex justify-center">
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 justify-items-center w-full">
+                                            {[
+                                                { name: 'Gmail', icon: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=64' },
+                                                { name: 'Slack', icon: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64' },
+                                                { name: 'Notion', icon: 'https://www.google.com/s2/favicons?domain=notion.so&sz=64' },
+                                                { name: 'ChatGPT', icon: 'https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64' },
+                                                { name: 'GitHub', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64' },
+                                                { name: 'Figma', icon: 'https://www.google.com/s2/favicons?domain=figma.com&sz=64' },
+                                                { name: 'Linear', icon: 'https://www.google.com/s2/favicons?domain=linear.app&sz=64' },
+                                                { name: 'Zoom', icon: 'https://www.google.com/s2/favicons?domain=zoom.us&sz=64' },
+                                                { name: 'Drive', icon: 'https://www.google.com/s2/favicons?domain=drive.google.com&sz=64' },
+                                                { name: 'LinkedIn', icon: 'https://www.google.com/s2/favicons?domain=linkedin.com&sz=64' }
+                                            ].map((link, i) => (
+                                                <div key={i} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm hover:-translate-y-1 transition-transform cursor-pointer w-full max-w-[170px]">
+                                                    <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
+                                                        <img src={link.icon} alt={link.name} className="w-5 h-5 object-contain" />
+                                                    </div>
+                                                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{link.name}</span>
                                                 </div>
-                                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{link.name}</span>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Slide 1: All Gateways Full Screen View */}
+                            <div className={`absolute inset-0 flex flex-col transition-all duration-700 pt-10 h-full overflow-hidden bg-[#FAFAFA] dark:bg-[#0B0C1A] ${activeBottomSlide === 1 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-12 pointer-events-none z-10'}`}>
+                                <div className="px-8 md:px-16 w-full max-w-6xl mx-auto flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-20">
+                                    <div className="flex justify-between items-start mb-10 w-full">
+                                        <div className="text-left w-full pl-2">
+                                            <div className="inline-block border-2 border-[#E95454] px-6 py-3 bg-white/50 dark:bg-black/20 rounded-lg shadow-sm">
+                                                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Quick Shortcuts</h2>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wider font-medium">Frequently used tools & collections</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3 hidden md:flex pt-2">
+                                            <button className="px-5 py-2 text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-full shadow-sm hover:bg-blue-100 transition-colors uppercase tracking-widest">+ New Group</button>
+                                            <button className="px-5 py-2 text-xs font-bold text-orange-500 bg-orange-50 dark:bg-orange-500/10 rounded-full shadow-sm hover:bg-orange-100 transition-colors uppercase tracking-widest">+ Add Gateway</button>
+                                            <button className="px-6 py-2 text-xs font-bold text-gray-600 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-full shadow-sm uppercase tracking-widest">Edit</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-12 w-full flex flex-col items-start px-2">
+                                        {/* Group 1 */}
+                                        <div className="w-full text-left">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 justify-items-center sm:justify-items-start">
+                                                {[
+                                                    { name: 'Start.me', icon: 'https://www.google.com/s2/favicons?domain=start.me&sz=64' },
+                                                    { name: 'Gmail', icon: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=64' },
+                                                    { name: 'ChatGPT', icon: 'https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64' },
+                                                    { name: 'YouTube', icon: 'https://www.google.com/s2/favicons?domain=youtube.com&sz=64' },
+                                                    { name: 'StartlyTab', icon: 'https://www.google.com/s2/favicons?domain=google.com&sz=64' },
+                                                    { name: 'Dribbble', icon: 'https://www.google.com/s2/favicons?domain=dribbble.com&sz=64' },
+                                                    { name: 'Pinterest', icon: 'https://www.google.com/s2/favicons?domain=pinterest.com&sz=64' },
+                                                    { name: 'Baidu', icon: 'https://www.google.com/s2/favicons?domain=baidu.com&sz=64' }
+                                                ].map((link, i) => (
+                                                    <div key={`a-${i}`} className="flex flex-col items-center gap-2 p-3 bg-transparent rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 w-full max-w-[120px] transition-all cursor-pointer">
+                                                        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-white/10 flex items-center justify-center shrink-0 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-md hover:-translate-y-1 transition-all">
+                                                            <img src={link.icon} alt={link.name} className="w-7 h-7 object-contain" />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-full text-center truncate">{link.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Group 2 */}
+                                        <div className="w-full text-left">
+                                            <div className="inline-block border-2 border-[#E95454] px-6 py-2 bg-white/50 dark:bg-black/20 rounded-lg mb-6 shadow-sm">
+                                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 m-0">Vibe Coding</h3>
+                                            </div>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 justify-items-center sm:justify-items-start">
+                                                {[
+                                                    { name: 'GitHub', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64' },
+                                                    { name: 'Supabase', icon: 'https://www.google.com/s2/favicons?domain=supabase.com&sz=64' },
+                                                    { name: 'Vercel', icon: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64' },
+                                                    { name: 'AI Studio', icon: 'https://www.google.com/s2/favicons?domain=aistudio.google.com&sz=64' },
+                                                    { name: 'Claude', icon: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=64' },
+                                                    { name: 'DS API', icon: 'https://www.google.com/s2/favicons?domain=deepseek.com&sz=64' }
+                                                ].map((link, i) => (
+                                                    <div key={`b-${i}`} className="flex flex-col items-center gap-2 p-3 bg-transparent rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 w-full max-w-[120px] transition-all cursor-pointer">
+                                                        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-white/10 flex items-center justify-center shrink-0 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-md hover:-translate-y-1 transition-all">
+                                                            <img src={link.icon} alt={link.name} className="w-7 h-7 object-contain" />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-full text-center truncate">{link.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Group 3 */}
+                                        <div className="w-full text-left">
+                                            <div className="inline-block border-2 border-[#E95454] px-8 py-2 bg-white/50 dark:bg-black/20 rounded-lg mb-6 shadow-sm">
+                                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 m-0">Work</h3>
+                                            </div>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 justify-items-center sm:justify-items-start">
+                                                {[
+                                                    { name: 'Notion', icon: 'https://www.google.com/s2/favicons?domain=notion.so&sz=64' },
+                                                    { name: 'Slack', icon: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64' },
+                                                    { name: 'Figma', icon: 'https://www.google.com/s2/favicons?domain=figma.com&sz=64' },
+                                                    { name: 'Linear', icon: 'https://www.google.com/s2/favicons?domain=linear.app&sz=64' },
+                                                    { name: 'Zoom', icon: 'https://www.google.com/s2/favicons?domain=zoom.us&sz=64' }
+                                                ].map((link, i) => (
+                                                    <div key={`c-${i}`} className="flex flex-col items-center gap-2 p-3 bg-transparent rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 w-full max-w-[120px] transition-all cursor-pointer">
+                                                        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-white/10 flex items-center justify-center shrink-0 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-md hover:-translate-y-1 transition-all">
+                                                            <img src={link.icon} alt={link.name} className="w-7 h-7 object-contain" />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-full text-center truncate">{link.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Slide 2: Trend Hub Specific View Modal */}
+                            <div className={`absolute inset-0 flex flex-col items-center justify-center px-4 md:px-12 transition-all duration-700 bg-gray-900/20 dark:bg-black/40 backdrop-blur-md ${activeBottomSlide === 2 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-12 pointer-events-none z-20'}`}>
+                                <div className="w-full max-w-4xl bg-white dark:bg-[#1C1C1E] rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden relative transform transition-transform duration-700 delay-100 scale-100">
+                                    {/* Modal Header */}
+                                    <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-gray-50 dark:border-white/5">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-500">
+                                                <Activity className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Trend Hub</h3>
+                                                <p className="text-[9px] font-bold tracking-widest text-gray-400 uppercase">Your Emotional Footprint</p>
+                                            </div>
+                                        </div>
+                                        <button className="w-8 h-8 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                            <span className="text-lg leading-none">×</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Modal Content - Text Only */}
+                                    <div className="p-6 md:p-12 relative overflow-hidden">
+                                        <div className="bg-white dark:bg-[#252527] rounded-3xl p-8 md:p-12 border border-gray-100 dark:border-white/5 shadow-sm relative">
+                                            {/* Top Quotes Decoration */}
+                                            <div className="absolute top-8 right-10 text-6xl text-gray-100 dark:text-gray-700/50 font-serif leading-none opacity-50">"</div>
+
+                                            <h4 className="serif text-2xl md:text-3xl font-medium text-gray-900 dark:text-gray-100 mb-8 max-w-xl relative z-10">
+                                                To the one who has felt a persistent heaviness lately:
+                                            </h4>
+
+                                            <div className="space-y-6 text-gray-600 dark:text-gray-300 font-light leading-relaxed text-[15px] relative z-10">
+                                                <p>Your emotional footprint over the past week shows a recurring pattern of exhaustion and sadness. First and foremost, please know that this is entirely human. You are not broken because you feel weighed down; you are likely carrying more than your current energetic capacity allows. When the baseline is low, productivity cannot be the metric for self-worth. Your body and mind are signaling a deep need for rest, retreat, and gentle care, rather than another push forward.</p>
+
+                                                <p>In states of prolonged low energy, the world often feels overwhelmingly loud, and the distance between where you are and where you "should" be feels impossibly vast. It is crucial to remember that depression or severe fatigue changes the lens through which you perceive reality—it heightens the shadows. What you are experiencing is a valid physiological and psychological state, not a personal failure. Lower the bar for today. Achieving the bare minimum is an absolute victory.</p>
+
+                                                {/* Bottom Box Decor */}
+                                                <div className="mt-8 p-6 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-2xl border border-indigo-100/50 dark:border-indigo-500/10">
+                                                    <p className="italic text-indigo-900/80 dark:text-indigo-200">For now, strip away the non-essentials. Practice 'Fractional Living'—don't look at the whole day, just look at the next hour. Can you manage one small, comforting act for yourself in this current hour?</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Indicators */}
+                            <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-30">
+                                {[0, 1, 2].map(idx => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => setActiveBottomSlide(idx)}
+                                        className={`w-2 h-2 rounded-full transition-all duration-300 ${activeBottomSlide === idx ? 'bg-gray-800 dark:bg-gray-200 w-6' : 'bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 shadow-sm'}`}
+                                        aria-label={`Go to slide ${idx + 1}`}
+                                    />
+                                ))}
+                            </div>
+
                         </div>
                     </div>
                 </div>
