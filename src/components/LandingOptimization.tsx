@@ -268,7 +268,7 @@ const LandingOptimization: React.FC = () => {
 
                         {/* Main Content Area (Carousel) */}
                         <div
-                            className="relative h-full -mt-20 px-4 md:px-8 w-full flex items-center justify-center overflow-hidden"
+                            className="absolute inset-0 pt-16 px-4 md:px-8 w-full flex items-center justify-center overflow-hidden"
                             onMouseEnter={() => setIsBottomPaused(true)}
                             onMouseLeave={() => setIsBottomPaused(false)}
                         >
@@ -335,7 +335,7 @@ const LandingOptimization: React.FC = () => {
                                     <div className="space-y-12 w-full flex flex-col items-start px-2">
                                         {/* Group 1 */}
                                         <div className="w-full text-left">
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 justify-items-center sm:justify-items-start">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 justify-items-start">
                                                 {[
                                                     { name: 'Start.me', icon: 'https://www.google.com/s2/favicons?domain=start.me&sz=64' },
                                                     { name: 'Gmail', icon: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=64' },
@@ -346,11 +346,11 @@ const LandingOptimization: React.FC = () => {
                                                     { name: 'Pinterest', icon: 'https://www.google.com/s2/favicons?domain=pinterest.com&sz=64' },
                                                     { name: 'Baidu', icon: 'https://www.google.com/s2/favicons?domain=baidu.com&sz=64' }
                                                 ].map((link, i) => (
-                                                    <div key={`a-${i}`} className="flex flex-col items-center gap-2 p-3 bg-transparent rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 w-full max-w-[120px] transition-all cursor-pointer">
-                                                        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-white/10 flex items-center justify-center shrink-0 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-md hover:-translate-y-1 transition-all">
-                                                            <img src={link.icon} alt={link.name} className="w-7 h-7 object-contain" />
+                                                    <div key={`a-${i}`} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer w-full max-w-[170px]">
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
+                                                            <img src={link.icon} alt={link.name} className="w-5 h-5 object-contain" />
                                                         </div>
-                                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-full text-center truncate">{link.name}</span>
+                                                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{link.name}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -361,7 +361,7 @@ const LandingOptimization: React.FC = () => {
                                             <div className="inline-block border-2 border-[#E95454] px-6 py-2 bg-white/50 dark:bg-black/20 rounded-lg mb-6 shadow-sm">
                                                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 m-0">Vibe Coding</h3>
                                             </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 justify-items-center sm:justify-items-start">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 justify-items-start">
                                                 {[
                                                     { name: 'GitHub', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64' },
                                                     { name: 'Supabase', icon: 'https://www.google.com/s2/favicons?domain=supabase.com&sz=64' },
@@ -370,11 +370,11 @@ const LandingOptimization: React.FC = () => {
                                                     { name: 'Claude', icon: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=64' },
                                                     { name: 'DS API', icon: 'https://www.google.com/s2/favicons?domain=deepseek.com&sz=64' }
                                                 ].map((link, i) => (
-                                                    <div key={`b-${i}`} className="flex flex-col items-center gap-2 p-3 bg-transparent rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 w-full max-w-[120px] transition-all cursor-pointer">
-                                                        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-white/10 flex items-center justify-center shrink-0 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-md hover:-translate-y-1 transition-all">
-                                                            <img src={link.icon} alt={link.name} className="w-7 h-7 object-contain" />
+                                                    <div key={`b-${i}`} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer w-full max-w-[170px]">
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
+                                                            <img src={link.icon} alt={link.name} className="w-5 h-5 object-contain" />
                                                         </div>
-                                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-full text-center truncate">{link.name}</span>
+                                                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{link.name}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -385,7 +385,7 @@ const LandingOptimization: React.FC = () => {
                                             <div className="inline-block border-2 border-[#E95454] px-8 py-2 bg-white/50 dark:bg-black/20 rounded-lg mb-6 shadow-sm">
                                                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 m-0">Work</h3>
                                             </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 justify-items-center sm:justify-items-start">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 justify-items-start">
                                                 {[
                                                     { name: 'Notion', icon: 'https://www.google.com/s2/favicons?domain=notion.so&sz=64' },
                                                     { name: 'Slack', icon: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64' },
@@ -393,11 +393,11 @@ const LandingOptimization: React.FC = () => {
                                                     { name: 'Linear', icon: 'https://www.google.com/s2/favicons?domain=linear.app&sz=64' },
                                                     { name: 'Zoom', icon: 'https://www.google.com/s2/favicons?domain=zoom.us&sz=64' }
                                                 ].map((link, i) => (
-                                                    <div key={`c-${i}`} className="flex flex-col items-center gap-2 p-3 bg-transparent rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 w-full max-w-[120px] transition-all cursor-pointer">
-                                                        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-white/10 flex items-center justify-center shrink-0 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-md hover:-translate-y-1 transition-all">
-                                                            <img src={link.icon} alt={link.name} className="w-7 h-7 object-contain" />
+                                                    <div key={`c-${i}`} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer w-full max-w-[170px]">
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
+                                                            <img src={link.icon} alt={link.name} className="w-5 h-5 object-contain" />
                                                         </div>
-                                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-full text-center truncate">{link.name}</span>
+                                                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{link.name}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -436,9 +436,7 @@ const LandingOptimization: React.FC = () => {
                                             </h4>
 
                                             <div className="space-y-6 text-gray-600 dark:text-gray-300 font-light leading-relaxed text-[15px] relative z-10">
-                                                <p>Your emotional footprint over the past week shows a recurring pattern of exhaustion and sadness. First and foremost, please know that this is entirely human. You are not broken because you feel weighed down; you are likely carrying more than your current energetic capacity allows. When the baseline is low, productivity cannot be the metric for self-worth. Your body and mind are signaling a deep need for rest, retreat, and gentle care, rather than another push forward.</p>
-
-                                                <p>In states of prolonged low energy, the world often feels overwhelmingly loud, and the distance between where you are and where you "should" be feels impossibly vast. It is crucial to remember that depression or severe fatigue changes the lens through which you perceive reality—it heightens the shadows. What you are experiencing is a valid physiological and psychological state, not a personal failure. Lower the bar for today. Achieving the bare minimum is an absolute victory.</p>
+                                                <p>Your emotional footprint over the past week shows a recurring pattern of exhaustion and sadness. Please know that this is entirely human—you are not broken, you are simply carrying more than your energetic capacity allows. When your baseline is low, productivity cannot be the metric for self-worth. Lower the bar for today. Achieving the bare minimum is an absolute victory.</p>
 
                                                 {/* Bottom Box Decor */}
                                                 <div className="mt-8 p-6 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-2xl border border-indigo-100/50 dark:border-indigo-500/10">

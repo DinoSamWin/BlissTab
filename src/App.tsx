@@ -25,6 +25,7 @@ import LandingOptimization from './components/LandingOptimization';
 import TrendHub from './components/TrendHub';
 import DailyRhythm from './components/DailyRhythm';
 import VentingModePromo from './components/VentingModePromo';
+import TheRhythmBlueprint from './components/TheRhythmBlueprint';
 import { Activity, Sparkles } from 'lucide-react';
 
 // Check if running in Chrome Extension environment
@@ -2298,6 +2299,7 @@ const App: React.FC = () => {
           <LandingOptimization />
           <DailyRhythm />
           <VentingModePromo onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <TheRhythmBlueprint />
         </>
       )}
 
