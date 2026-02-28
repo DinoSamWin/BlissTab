@@ -27,6 +27,7 @@ import DailyRhythm from './components/DailyRhythm';
 import VentingModePromo from './components/VentingModePromo';
 import TheRhythmBlueprint from './components/TheRhythmBlueprint';
 import FAQScreen from './components/FAQScreen';
+import SemanticFooter from './components/SemanticFooter';
 import { Activity, Sparkles } from 'lucide-react';
 
 // Check if running in Chrome Extension environment
@@ -2300,8 +2301,9 @@ const App: React.FC = () => {
           <LandingOptimization />
           <DailyRhythm />
           <VentingModePromo onRequireLogin={() => setIsLoginModalOpen(true)} />
-          <TheRhythmBlueprint />
-          <FAQScreen />
+          <TheRhythmBlueprint onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <FAQScreen onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <SemanticFooter />
         </>
       )}
 

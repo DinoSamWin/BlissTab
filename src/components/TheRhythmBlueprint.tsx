@@ -5,8 +5,11 @@ const EmotionIcon = ({ type }: { type: string }) => (
         <img src={`/icons/emotions/${type}.png`} alt={type} className="w-full h-full object-contain" />
     </div>
 );
+interface TheRhythmBlueprintProps {
+    onRequireLogin?: () => void;
+}
 
-const TheRhythmBlueprint: React.FC = () => {
+const TheRhythmBlueprint: React.FC<TheRhythmBlueprintProps> = ({ onRequireLogin }) => {
     const [currentFrame, setCurrentFrame] = useState(0);
     const [isHovered, setIsHovered] = useState(false);
 
@@ -60,7 +63,7 @@ const TheRhythmBlueprint: React.FC = () => {
                     <div className="mt-12">
                         <button
                             className="px-8 py-4 bg-black dark:bg-white text-white dark:text-black rounded-full font-bold uppercase tracking-[0.15em] text-xs shadow-xl shadow-rose-900/10 dark:shadow-rose-100/10 hover:scale-105 active:scale-95 transition-all text-center w-auto inline-flex items-center gap-2"
-                            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                            onClick={onRequireLogin}
                             aria-label="Experience the Rhythm"
                         >
                             Experience the space

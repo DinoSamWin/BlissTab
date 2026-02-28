@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { ChevronDown, ShieldCheck } from 'lucide-react';
+interface FAQScreenProps {
+    onRequireLogin?: () => void;
+}
 
-const FAQScreen: React.FC = () => {
+const FAQScreen: React.FC<FAQScreenProps> = ({ onRequireLogin }) => {
     // 0 is the first item, default expanded
     const [openIndex, setOpenIndex] = useState<number>(0);
 
@@ -60,7 +63,7 @@ const FAQScreen: React.FC = () => {
                     {/* Left Column: Image */}
                     <div className="flex-1 w-full rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-200/60 sticky top-24">
                         <img
-                            src="https://images.unsplash.com/photo-1542435503-956c469947f6?q=80&w=1000&auto=format&fit=crop"
+                            src="/images/faq-image.jpg"
                             alt="A calm, minimalist workspace representing clarity and focus"
                             className="w-full h-[500px] object-cover object-center transform hover:scale-105 transition-transform duration-1000 ease-out"
                         />
@@ -75,8 +78,8 @@ const FAQScreen: React.FC = () => {
                                     <div
                                         key={index}
                                         className={`rounded-2xl border transition-all duration-300 overflow-hidden ${isOpen
-                                                ? 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.04)]'
-                                                : 'bg-transparent border-transparent hover:bg-gray-50'
+                                            ? 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.04)]'
+                                            : 'bg-transparent border-transparent hover:bg-gray-50'
                                             }`}
                                     >
                                         <button
@@ -118,7 +121,7 @@ const FAQScreen: React.FC = () => {
 
                     <button
                         className="group relative px-10 py-5 bg-black text-white rounded-full font-bold uppercase tracking-[0.15em] text-sm shadow-[0_20px_40px_-10px_rgba(0,0,0,0.3)] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.4)] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 overflow-hidden"
-                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        onClick={onRequireLogin}
                     >
                         {/* Shine effect */}
                         <div className="absolute inset-0 -translate-x-full group-hover:animate-[shine_1.5s_ease-in-out] bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"></div>
