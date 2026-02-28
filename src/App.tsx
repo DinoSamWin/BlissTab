@@ -26,6 +26,7 @@ import TrendHub from './components/TrendHub';
 import DailyRhythm from './components/DailyRhythm';
 import VentingModePromo from './components/VentingModePromo';
 import TheRhythmBlueprint from './components/TheRhythmBlueprint';
+import FAQScreen from './components/FAQScreen';
 import { Activity, Sparkles } from 'lucide-react';
 
 // Check if running in Chrome Extension environment
@@ -2300,6 +2301,7 @@ const App: React.FC = () => {
           <DailyRhythm />
           <VentingModePromo onRequireLogin={() => setIsLoginModalOpen(true)} />
           <TheRhythmBlueprint />
+          <FAQScreen />
         </>
       )}
 

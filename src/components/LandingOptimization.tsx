@@ -318,21 +318,19 @@ const LandingOptimization: React.FC = () => {
                             {/* Slide 1: All Gateways Full Screen View */}
                             <div className={`absolute inset-0 flex flex-col transition-all duration-700 pt-10 h-full overflow-hidden bg-[#FAFAFA] dark:bg-[#0B0C1A] ${activeBottomSlide === 1 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-12 pointer-events-none z-10'}`}>
                                 <div className="px-8 md:px-16 w-full max-w-6xl mx-auto flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-20">
-                                    <div className="flex justify-between items-start mb-10 w-full">
-                                        <div className="text-left w-full pl-2">
-                                            <div className="inline-block border-2 border-[#E95454] px-6 py-3 bg-white/50 dark:bg-black/20 rounded-lg shadow-sm">
-                                                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Quick Shortcuts</h2>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wider font-medium">Frequently used tools & collections</p>
-                                            </div>
+                                    <div className="flex justify-between items-end mb-6 w-full">
+                                        <div className="text-left pl-2">
+                                            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Quick Shortcuts</h2>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wider font-medium">Frequently used tools & collections</p>
                                         </div>
-                                        <div className="flex gap-3 hidden md:flex pt-2">
+                                        <div className="flex gap-3 hidden md:flex">
                                             <button className="px-5 py-2 text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-full shadow-sm hover:bg-blue-100 transition-colors uppercase tracking-widest">+ New Group</button>
                                             <button className="px-5 py-2 text-xs font-bold text-orange-500 bg-orange-50 dark:bg-orange-500/10 rounded-full shadow-sm hover:bg-orange-100 transition-colors uppercase tracking-widest">+ Add Gateway</button>
                                             <button className="px-6 py-2 text-xs font-bold text-gray-600 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-full shadow-sm uppercase tracking-widest">Edit</button>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-12 w-full flex flex-col items-start px-2">
+                                    <div className="space-y-14 w-full flex flex-col items-start px-2">
                                         {/* Group 1 */}
                                         <div className="w-full text-left">
                                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 justify-items-start">
@@ -341,10 +339,10 @@ const LandingOptimization: React.FC = () => {
                                                     { name: 'Gmail', icon: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=64' },
                                                     { name: 'ChatGPT', icon: 'https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64' },
                                                     { name: 'YouTube', icon: 'https://www.google.com/s2/favicons?domain=youtube.com&sz=64' },
-                                                    { name: 'StartlyTab', icon: 'https://www.google.com/s2/favicons?domain=google.com&sz=64' },
+                                                    { name: 'Spotify', icon: 'https://www.google.com/s2/favicons?domain=spotify.com&sz=64' },
                                                     { name: 'Dribbble', icon: 'https://www.google.com/s2/favicons?domain=dribbble.com&sz=64' },
                                                     { name: 'Pinterest', icon: 'https://www.google.com/s2/favicons?domain=pinterest.com&sz=64' },
-                                                    { name: 'Baidu', icon: 'https://www.google.com/s2/favicons?domain=baidu.com&sz=64' }
+                                                    { name: 'Reddit', icon: 'https://www.google.com/s2/favicons?domain=reddit.com&sz=64' }
                                                 ].map((link, i) => (
                                                     <div key={`a-${i}`} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer w-full max-w-[170px]">
                                                         <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
@@ -358,8 +356,8 @@ const LandingOptimization: React.FC = () => {
 
                                         {/* Group 2 */}
                                         <div className="w-full text-left">
-                                            <div className="inline-block border-2 border-[#E95454] px-6 py-2 bg-white/50 dark:bg-black/20 rounded-lg mb-6 shadow-sm">
-                                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 m-0">Vibe Coding</h3>
+                                            <div className="mb-4 pl-2">
+                                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Vibe Coding</h3>
                                             </div>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 justify-items-start">
                                                 {[
@@ -368,7 +366,7 @@ const LandingOptimization: React.FC = () => {
                                                     { name: 'Vercel', icon: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64' },
                                                     { name: 'AI Studio', icon: 'https://www.google.com/s2/favicons?domain=aistudio.google.com&sz=64' },
                                                     { name: 'Claude', icon: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=64' },
-                                                    { name: 'DS API', icon: 'https://www.google.com/s2/favicons?domain=deepseek.com&sz=64' }
+                                                    { name: 'OpenAI', icon: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64' }
                                                 ].map((link, i) => (
                                                     <div key={`b-${i}`} className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer w-full max-w-[170px]">
                                                         <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-black/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
@@ -382,8 +380,8 @@ const LandingOptimization: React.FC = () => {
 
                                         {/* Group 3 */}
                                         <div className="w-full text-left">
-                                            <div className="inline-block border-2 border-[#E95454] px-8 py-2 bg-white/50 dark:bg-black/20 rounded-lg mb-6 shadow-sm">
-                                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 m-0">Work</h3>
+                                            <div className="mb-4 pl-2">
+                                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Work</h3>
                                             </div>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 justify-items-start">
                                                 {[

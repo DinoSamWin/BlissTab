@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
 
-const EmojiIcon = ({ emoji }: { emoji: string }) => (
-    <span className="text-[26px] hover:scale-125 transition-transform cursor-pointer opacity-60 hover:opacity-100 grayscale-[0.3] hover:grayscale-0 select-none">
-        {emoji}
-    </span>
+const EmotionIcon = ({ type }: { type: string }) => (
+    <div className="w-8 h-8 hover:scale-125 transition-transform cursor-pointer opacity-70 hover:opacity-100 grayscale-[0.2] hover:grayscale-0 select-none drop-shadow-sm">
+        <img src={`/icons/emotions/${type}.png`} alt={type} className="w-full h-full object-contain" />
+    </div>
 );
 
 const TheRhythmBlueprint: React.FC = () => {
     const [currentFrame, setCurrentFrame] = useState(0);
+    const [isHovered, setIsHovered] = useState(false);
 
     // Auto-rotate the frames
     useEffect(() => {
-        const interval = setInterval(() => {
-            setCurrentFrame((prev) => (prev === 0 ? 1 : 0));
-        }, 5500);
-        return () => clearInterval(interval);
-    }, []);
+        let interval: NodeJS.Timeout;
+        if (!isHovered) {
+            interval = setInterval(() => {
+                setCurrentFrame((prev) => (prev === 0 ? 1 : 0));
+            }, 5500);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isHovered]);
 
     const setFrame = (index: number) => {
         setCurrentFrame(index);
@@ -64,33 +70,38 @@ const TheRhythmBlueprint: React.FC = () => {
                 </div>
 
                 {/* Right Side: Mockup Frame */}
-                <div className="flex-1 w-full max-w-2xl relative">
+                <div
+                    className="flex-1 w-full max-w-2xl relative"
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                >
                     <div className="w-full bg-white dark:bg-[#1C1C1E] rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)] dark:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6)] min-h-[460px] flex flex-col relative overflow-hidden transition-all duration-700">
 
                         {/* Frame 1: Emotion Input State */}
                         <div className={`absolute inset-0 px-8 py-10 md:p-14 flex flex-col items-center justify-center transition-all duration-700 delay-100 ${currentFrame === 0 ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
-                            <h3 className="serif text-[28px] md:text-[34px] text-gray-800 dark:text-gray-100 text-center leading-[1.3] mb-16 max-w-[440px]">
-                                The quiet of this hour feels like a held breath, waiting for you to exhale.
+                            <h3 className="serif text-[32px] md:text-[38px] text-gray-800 dark:text-gray-100 text-center leading-[1.3] mb-16 max-w-[440px]">
+                                How are you feeling right now?<br />
+                                <span className="text-xl md:text-2xl text-gray-500 font-light italic mt-2 block">Just shown to you</span>
                             </h3>
 
                             {/* Simulated Emoji Drawer */}
                             <div className="flex items-center justify-center gap-4 md:gap-6 px-8 md:px-10 py-5 bg-[#FAFAFA] dark:bg-[#2A2A2C] rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.2)] border border-gray-100 dark:border-white/5 relative z-20">
-                                <EmojiIcon emoji="🤯" />
-                                <EmojiIcon emoji="🫠" />
-                                <EmojiIcon emoji="🤬" />
+                                <EmotionIcon type="angry" />
+                                <EmotionIcon type="sad" />
+                                <EmotionIcon type="exhausted" />
 
                                 <div className="relative z-10">
                                     <div className="absolute -top-11 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-white text-white dark:text-black text-[9px] px-2.5 py-1 rounded-md uppercase tracking-wider font-bold shadow-lg animate-bounce">
                                         Anxious
                                         <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 dark:bg-white rotate-45"></div>
                                     </div>
-                                    <div className="w-[56px] h-[56px] bg-white dark:bg-[#1C1C1E] rounded-full flex items-center justify-center shadow-md border border-gray-100 dark:border-white/10 scale-110 cursor-pointer">
-                                        <span className="text-[32px] drop-shadow-sm leading-none">😮‍💨</span>
+                                    <div className="w-[64px] h-[64px] bg-white dark:bg-[#1C1C1E] rounded-full flex items-center justify-center shadow-md border border-gray-100 dark:border-white/10 scale-110 cursor-pointer -mt-1 hover:scale-125 transition-transform">
+                                        <img src="/icons/emotions/anxious.png" alt="Anxious" className="w-10 h-10 object-contain drop-shadow-md" />
                                     </div>
                                 </div>
 
-                                <EmojiIcon emoji="🥺" />
-                                <EmojiIcon emoji="😫" />
+                                <EmotionIcon type="neutral" />
+                                <EmotionIcon type="happy" />
                             </div>
                         </div>
 
@@ -98,7 +109,7 @@ const TheRhythmBlueprint: React.FC = () => {
                         <div className={`absolute inset-0 flex flex-col justify-start transition-all duration-700 delay-100 ${currentFrame === 1 ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-8 pointer-events-none'}`}>
 
                             {/* SVG Trend Line */}
-                            <div className="w-full h-[220px] relative mt-16 px-10">
+                            <div className="w-full h-[220px] relative mt-4 px-10">
                                 <svg className="w-full h-full overflow-visible" viewBox="0 0 400 120" preserveAspectRatio="none">
                                     <defs>
                                         <linearGradient id="curveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -145,21 +156,21 @@ const TheRhythmBlueprint: React.FC = () => {
                                             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-black dark:bg-white rotate-45"></div>
                                         </div>
                                         <div className="w-8 h-8 bg-white dark:bg-[#1C1C1E] rounded-full shadow-lg border-2 border-[#38BDF8] flex items-center justify-center cursor-pointer hover:scale-110 transition-transform -mt-1 -ml-1">
-                                            <span className="text-[14px]">🤯</span>
+                                            <img src="/icons/emotions/exhausted.png" alt="Exhausted" className="w-5 h-5 object-contain" />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Current Status Final Point */}
-                                <div className="absolute top-[25%] left-[100%] -translate-x-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white dark:bg-[#1C1C1E] rounded-full shadow-lg border-[2.5px] border-[#FBBF24] flex items-center justify-center -ml-2 hover:scale-110 transition-transform cursor-pointer">
-                                    <span className="text-[14px]">😌</span>
+                                <div className="absolute top-[25%] left-[100%] -translate-x-1/2 -translate-y-1/2 z-10 w-9 h-9 bg-white dark:bg-[#1C1C1E] rounded-full shadow-lg border-[2.5px] border-[#FBBF24] flex items-center justify-center -ml-2 hover:scale-110 transition-transform cursor-pointer">
+                                    <img src="/icons/emotions/happy.png" alt="Happy" className="w-5 h-5 object-contain" />
                                 </div>
                             </div>
 
                             {/* Floating Action Text inside Frame 2 below the curve */}
-                            <div className="px-12 mt-10">
-                                <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-6 border border-blue-100 dark:border-blue-900/30">
-                                    <p className="serif text-[20px] font-medium leading-relaxed text-gray-800 dark:text-gray-100">
+                            <div className="px-12 mt-4 relative z-20">
+                                <div className="bg-white/80 dark:bg-black/40 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-white/10 shadow-lg shadow-black/5 mt-[-10px]">
+                                    <p className="serif text-[18px] md:text-[20px] font-medium leading-relaxed text-gray-800 dark:text-gray-100">
                                         "It looks like you usually feel overwhelmed around 3 PM on Tuesdays. Would you like a 5-minute deep breathing session scheduled for tomorrow?"
                                     </p>
                                 </div>
