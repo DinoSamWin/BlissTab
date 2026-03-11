@@ -196,8 +196,11 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
       // Determine specific productId to send to backend
       let specificProductId: string = planId;
       if (planId === 'pro') {
-        specificProductId = proBillingCycle === 'monthly' ? 'pro_monthly' : 'pro_yearly';
-
+        specificProductId = proBillingCycle === 'monthly'
+          ? (import.meta.env.VITE_CREEM_PRICE_PRO_MONTHLY_ID || 'pro_monthly')
+          : (import.meta.env.VITE_CREEM_PRICE_PRO_YEARLY_ID || 'pro_yearly');
+      } else if (planId === 'lifetime') {
+        specificProductId = import.meta.env.VITE_CREEM_PRODUCT_LIFETIME_ID || 'lifetime';
       }
 
       // Call Creem Service to get checkout URL
@@ -248,9 +251,10 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
       // Reset success message after a delay
       setTimeout(() => setPaymentSuccess(false), 3000);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Subscription] Plan selection failed:', error);
-      alert('Failed to initiate checkout. Please try again.');
+      const errorMsg = error.message || (typeof error === 'string' ? error : 'Unknown error');
+      alert(`Failed to initiate checkout: ${errorMsg}`);
     } finally {
       setLoadingPlan(null);
     }

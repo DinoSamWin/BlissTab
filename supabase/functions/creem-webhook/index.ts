@@ -29,23 +29,28 @@ serve(async (req) => {
         // }
 
         const event = JSON.parse(bodyText);
-        console.log(`Received webhook event: ${event.type}`);
+        const eventType = event.eventType || event.type;
+        const eventObject = event.object || event.data;
+
+        console.log(`Received webhook event: ${eventType}`);
 
         // 2. Handle Events
-        switch (event.type) {
+        switch (eventType) {
             case 'payment.success':
+            case 'checkout.completed':
             case 'subscription.created':
             case 'subscription.renewed':
-                await handleSubscriptionUpdate(event.data);
+            case 'subscription.active':
+                await handleSubscriptionUpdate(eventObject);
                 break;
 
             case 'subscription.canceled':
             case 'subscription.expired':
-                await handleSubscriptionCancellation(event.data);
+                await handleSubscriptionCancellation(eventObject);
                 break;
 
             default:
-                console.log(`Unhandled event type: ${event.type}`);
+                console.log(`Unhandled event type: ${eventType}`);
         }
 
         return new Response(JSON.stringify({ received: true }), {
@@ -66,23 +71,48 @@ serve(async (req) => {
 })
 
 async function handleSubscriptionUpdate(data: any) {
-    const customerEmail = data.customer_email;
-    const productId = data.product_id;
+    const customerEmail = data.customer_email || data.customer?.email;
+    const productId = data.product_id || (data.product && typeof data.product === 'object' ? data.product.id : data.product);
 
     if (!customerEmail) return;
 
-    // Find user by email
-    // Note: Better to store 'creem_customer_id' on user table and lookup by that
-    const { data: user, error: userError } = await supabase
-        .from('auth.users') // Note: accessing auth.users directly needs careful permissions or use a public profile table
+    // Find user by email (mapping email to user_id)
+    // Preference order: 1. public users profile, 2. user_data (frontend saves sub as user_id there), 3. auth.users UUID
+    let userId = null;
+
+    // 1. Check public.users
+    const { data: profile } = await supabase
+        .from('users')
         .select('id')
         .eq('email', customerEmail)
-        .single();
+        .maybeSingle();
 
-    // If you can't access auth.users, rely on your public 'users' table
-    // const { data: user } = await supabase.from('users').select('id').eq('email', customerEmail).single();
+    if (profile?.id) {
+        userId = profile.id;
+    } else {
+        // 2. Check user_data (where frontend saves Google sub)
+        const { data: userData } = await supabase
+            .from('user_data')
+            .select('user_id')
+            .eq('email', customerEmail)
+            .limit(1)
+            .maybeSingle();
 
-    if (!user) {
+        if (userData?.user_id) {
+            userId = userData.user_id;
+        } else {
+            // 3. Fallback to auth.users UUID
+            const { data: authUser } = await supabase
+                .schema('auth')
+                .from('users')
+                .select('id')
+                .eq('email', customerEmail)
+                .maybeSingle();
+            if (authUser) userId = authUser.id;
+        }
+    }
+
+    if (!userId) {
         console.error(`User not found for email: ${customerEmail}`);
         return;
     }
@@ -108,11 +138,11 @@ async function handleSubscriptionUpdate(data: any) {
     const { error } = await supabase
         .from('user_subscriptions')
         .upsert({
-            user_id: user.id,
+            user_id: userId,
             is_subscribed: true,
             subscription_plan: plan,
             subscription_status: 'active',
-            subscription_expires_at: data.current_period_end, // Convert timestamp if needed
+            subscription_expires_at: data.current_period_end || data.currentPeriodEndDate, // Support both snake and camel
             updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
@@ -120,5 +150,67 @@ async function handleSubscriptionUpdate(data: any) {
 }
 
 async function handleSubscriptionCancellation(data: any) {
+    const customerEmail = data.customer_email || data.customer?.email;
+
+    if (!customerEmail) {
+        console.error('No customer email provided in cancellation event');
+        return;
+    }
+
+    // Find user by email (mapping email to user_id)
+    // Preference order: 1. public users profile, 2. user_data (frontend saves sub as user_id there), 3. auth.users UUID
+    let userId = null;
+
+    // 1. Check public.users
+    const { data: profile } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', customerEmail)
+        .maybeSingle();
+
+    if (profile?.id) {
+        userId = profile.id;
+    } else {
+        // 2. Check user_data (where frontend saves Google sub)
+        const { data: userData } = await supabase
+            .from('user_data')
+            .select('user_id')
+            .eq('email', customerEmail)
+            .limit(1)
+            .maybeSingle();
+
+        if (userData?.user_id) {
+            userId = userData.user_id;
+        } else {
+            // 3. Fallback to auth.users UUID
+            const { data: authUser } = await supabase
+                .schema('auth')
+                .from('users')
+                .select('id')
+                .eq('email', customerEmail)
+                .maybeSingle();
+            if (authUser) userId = authUser.id;
+        }
+    }
+
+    if (!userId) {
+        console.error(`User not found for cancellation email: ${customerEmail}`);
+        return;
+    }
+
     // Logic to set is_subscribed = false or status = 'canceled'
+    const { error } = await supabase
+        .from('user_subscriptions')
+        .update({
+            is_subscribed: false,
+            subscription_status: 'canceled',
+            updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId);
+
+    if (error) {
+        console.error('Failed to update subscription cancellation:', error);
+    } else {
+        console.log(`Successfully revoked privileges for user ${userId}`);
+    }
 }

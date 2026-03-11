@@ -502,13 +502,14 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const [elasticY, setElasticY] = useState(0);
 
     // Local state for immediate DnD feedback
-    const [links, setLinks] = useState(propLinks);
+    const [links, setLinks] = useState(Array.isArray(propLinks) ? propLinks : []);
     const linksRef = useRef(links);
 
     // Sync prop changes to local state (e.g. from DB updates)
     useEffect(() => {
-        setLinks(propLinks);
-        linksRef.current = propLinks;
+        const sanitized = Array.isArray(propLinks) ? propLinks : [];
+        setLinks(sanitized);
+        linksRef.current = sanitized;
     }, [propLinks]);
 
     // Keep ref in sync ensuring handleDragEnd has latest data

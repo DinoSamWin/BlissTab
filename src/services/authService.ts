@@ -8,22 +8,10 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const IS_PLACEHOLDER_ID = !CLIENT_ID || CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID') || CLIENT_ID === '';
 
 // Check if running in Chrome Extension environment with Identity permission
+// @ts-ignore
 const IS_EXTENSION = typeof chrome !== 'undefined' && !!chrome.identity && !!chrome.runtime?.id;
 
-// Debug: Log client ID status (remove in production)
-if (typeof window !== 'undefined') {
-  console.log('[Auth] ===== Google OAuth Configuration =====');
-  console.log('[Auth] Environment:', IS_EXTENSION ? 'CHROME_EXTENSION' : 'WEB');
-  console.log('[Auth] Client ID loaded:', CLIENT_ID ? 'Yes' : 'No');
-  // Only log full ID in dev/extension to help user debug redirect URI
-  console.log('[Auth] Client ID:', CLIENT_ID ? CLIENT_ID : 'NOT SET');
-  if (IS_EXTENSION) {
-    try {
-      console.log('[Auth] Extension Redirect URI:', chrome.identity.getRedirectURL());
-    } catch (e) { console.warn('Could not get redirect URI', e); }
-  }
-  console.log('[Auth] ======================================');
-}
+
 
 export async function initGoogleAuthStrict(onUser: (user: User | null) => void) {
   if (typeof window === 'undefined') return;
@@ -46,7 +34,40 @@ export async function initGoogleAuthStrict(onUser: (user: User | null) => void) 
     }
   }
 
-  // If in Extension mode, stop here. We don't have auto-login (One Tap) via GIS script.
+  // 1.5. Check for id_token in URL fragment (Fallback for window.open/redirect flows)
+  if (!hasExistingUser && typeof window !== 'undefined' && window.location.hash) {
+    try {
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const idToken = params.get('id_token');
+      if (idToken) {
+        console.log('[AuthStrict] Found id_token in URL fragment, parsing...');
+        const base64Url = idToken.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(window.atob(base64));
+
+        const incomingUser: User = {
+          id: payload.sub,
+          email: payload.email,
+          name: payload.name,
+          picture: payload.picture
+        };
+
+        console.log('[AuthStrict] Authenticated from URL fragment:', incomingUser.email);
+        localStorage.setItem('focus_tab_user', JSON.stringify(incomingUser));
+        localStorage.removeItem('focus_tab_explicit_signout');
+
+        // Clear the hash to prevent re-parsing on refresh
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+        onUser(incomingUser);
+        hasExistingUser = true;
+      }
+    } catch (e) {
+      console.error('[AuthStrict] URL fragment parse failed', e);
+    }
+  }
+
+  // If in Extension mode, stop here.
   if (IS_EXTENSION) {
     console.log('[AuthStrict] Extension mode: Skipping GIS One Tap initialization.');
     if (!hasExistingUser) onUser(null);
@@ -127,7 +148,7 @@ export async function initGoogleAuthStrict(onUser: (user: User | null) => void) 
         const isExplicitSignOut = localStorage.getItem('focus_tab_explicit_signout') === 'true';
 
         const initConfig: any = {
-          client_id: IS_PLACEHOLDER_ID ? 'MOCK_ID' : CLIENT_ID,
+          client_id: IS_PLACEHOLDER_ID ? '65772780936-6opn1jon0nthab7erht3i6pqgk3o0q1u.apps.googleusercontent.com' : CLIENT_ID, // Force correct ID if placeholder is used
           callback: handleCredentialResponse,
           auto_select: false,
           use_fedcm_for_prompt: false,
@@ -147,8 +168,11 @@ export async function initGoogleAuthStrict(onUser: (user: User | null) => void) 
 
           if (!isSafariBrowser) {
             (window as any).google.accounts.id.prompt((notification: any) => {
+              console.log('[AuthStrict] One Tap prompt notification:', notification.getMomentType());
               if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                onUser(null);
+                // Only Resolve null if we truly have no other options
+                // (SDK might retry or wait for user action)
+                console.log('[AuthStrict] One Tap not displayed or skipped. Checking again later.');
               }
             });
           } else {
@@ -160,10 +184,19 @@ export async function initGoogleAuthStrict(onUser: (user: User | null) => void) 
         console.error('[AuthStrict] Init failed', error);
       }
     }
-  }, 300);
+  }, 1000); // Polling slower to be safe
+
 
   setTimeout(() => {
-    clearInterval(gsiInterval);
+    if (gsiInterval) {
+      clearInterval(gsiInterval);
+      // If we haven't found a user and haven't tried to initialize yet (SDK failed)
+      // We MUST call onUser(null) to let the app proceed
+      if (!hasExistingUser) {
+        console.warn('[AuthStrict] Google SDK load timeout. Proceeding as unauthenticated.');
+        onUser(null);
+      }
+    }
   }, 5000);
 }
 
@@ -287,6 +320,7 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
   // === EXTENSION HANDLING ===
   if (IS_EXTENSION) {
     console.log('[Auth] Starting Extension WebAuthFlow');
+    // @ts-ignore
     const redirectUri = chrome.identity.getRedirectURL();
     console.log('[Auth] Using Redirect URI:', redirectUri);
 
@@ -299,11 +333,14 @@ export function openGoogleSignIn(onUser?: (user: User | null) => void) {
       `&nonce=${nonce}` +
       `&prompt=select_account`;
 
+    // @ts-ignore
     chrome.identity.launchWebAuthFlow({
       url: authUrl,
       interactive: true
     }, (redirectUrl) => {
+      // @ts-ignore
       if (chrome.runtime.lastError) {
+        // @ts-ignore
         console.error('[Auth] WebAuthFlow error:', chrome.runtime.lastError.message);
         return;
       }

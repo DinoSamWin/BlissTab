@@ -43,13 +43,19 @@ export async function createCheckoutSession(productId: string, email?: string): 
                 productId,
                 email,
                 action: 'create_checkout',
-                testMode: import.meta.env.DEV || import.meta.env.VITE_CREEM_TEST_MODE === 'true'
+                testMode: import.meta.env.VITE_CREEM_TEST_MODE === 'true'
             }
         });
+
+        console.log('[CreemService] Backend response data:', data);
 
         if (error) {
             console.error('[CreemService] Function error:', error);
             throw new Error(error.message || 'Failed to initiate checkout');
+        }
+
+        if (data && (data as any).success === false) {
+            throw new Error((data as any).error || 'Failed to initiate checkout (backend error)');
         }
 
         if (!data?.checkout_url) {
@@ -178,6 +184,33 @@ export async function cancelSubscription(subscriptionId: string): Promise<boolea
         return data?.success || false;
     } catch (error) {
         console.error('[CreemService] Failed to cancel subscription:', error);
+        throw error;
+    }
+}
+
+/**
+ * Refund a specific transaction and optionally cancel its associated subscription immediately.
+ */
+export async function refundTransaction(transactionId: string, subscriptionId?: string): Promise<boolean> {
+    const isMock = !import.meta.env.VITE_SUPABASE_URL || (!import.meta.env.VITE_SUPABASE_FUNCTIONS_URL && import.meta.env.DEV);
+
+    if (isMock) {
+        console.log('[CreemService] Mocking refund for transaction:', transactionId);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return true;
+    }
+
+    try {
+        const data = await invokeCreemFunction({
+            action: 'refund_transaction',
+            transactionId,
+            subscriptionId,
+            testMode: import.meta.env.DEV || import.meta.env.VITE_CREEM_TEST_MODE === 'true'
+        });
+
+        return data?.success || false;
+    } catch (error) {
+        console.error('[CreemService] Failed to process refund:', error);
         throw error;
     }
 }

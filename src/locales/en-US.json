@@ -1,0 +1,13 @@
+{
+    "app": {
+        "new_perspective": "NEW PERSPECTIVE",
+        "how_is_this_moment_f": "How is this moment feeling?",
+        "feeling_your_emotion": "Feeling your emotion...",
+        "happy_label": "Syncing your happy energy...",
+        "neutral_label": "Perceiving your calm...",
+        "angry_label": "Captured your anger frequency...",
+        "anxious_label": "Sensing your anxiety...",
+        "sad_label": "Receiving your sadness signals...",
+        "exhausted_label": "Captured your fatigue..."
+    }
+}

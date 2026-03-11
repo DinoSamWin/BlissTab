@@ -54,6 +54,8 @@ export type Theme = 'light' | 'dark';
 
 export type SubscriptionTier = 'unauthenticated' | 'authenticated_free' | 'authenticated_subscribed';
 
+export type PersonaType = 'soulmate' | 'motivator' | 'bestie' | 'mentor';
+
 export interface AppState {
   version: string;
   links: QuickLink[];
@@ -62,6 +64,7 @@ export interface AppState {
   language: string;
   user: User | null;
   theme: Theme;
+  selectedPersona?: PersonaType; // Added for V8.0 dynamic personas
   subscriptionTier?: SubscriptionTier; // Optional for backward compatibility
 }
 
@@ -104,6 +107,7 @@ export interface PerspectiveHistory {
   trackType?: TrackType;
   is_memory_echo?: boolean;
   echo_type?: 'node_2' | 'node_3';
+  dimension?: string;
 }
 
 export interface PerspectiveRouterContext {
@@ -128,6 +132,15 @@ export interface PerspectiveRouterContext {
   historyKeywords?: string[];
   deepObservationMode?: boolean;
   emotionalPatterns?: string[];
+  // V4.0 Digital Context
+  tab_count?: number;
+  audio_playing?: boolean;
+  is_muted?: boolean;
+  is_fullscreen?: boolean;
+  window_state?: 'normal' | 'minimized' | 'maximized' | 'fullscreen';
+  idle_time_seconds?: number;
+  download_active?: boolean;
+  selectedPersona?: PersonaType;
 }
 
 export interface PerspectivePoolItem {
@@ -136,6 +149,7 @@ export interface PerspectivePoolItem {
   track: TrackType | 'A' | 'B';
   is_memory_echo?: boolean;
   echo_type?: 'node_2' | 'node_3';
+  dimension?: string;
 }
 
 export interface PerspectivePlan {

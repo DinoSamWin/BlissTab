@@ -4,9 +4,10 @@ import { isTooSimilar } from "./perspectiveService";
 import { routePerspective } from "./perspectiveRouter";
 import { getSkeleton, getCustomThemeSkeleton } from "./perspectiveSkeletons";
 import { loadPerspectiveRules, loadPerspectiveRulesData } from "./perspectiveRulesLoader";
+import { runCompanionPipeline } from "./perspectiveEngine";
 
 const MAX_RETRIES = 3;
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 20;
 const REFILL_THRESHOLD = 5;
 
 // --- Pool Management ---
@@ -15,9 +16,13 @@ function getPoolKey(plan: PerspectivePlan, ctx: PerspectiveRouterContext): strin
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
   // If we have custom themes, the pool is specific to those themes
   const themeHash = (ctx.custom_themes || []).sort().join('_') || 'default';
-  // Key depends on Intent (Time Slot) + Themes + Date
-  // Key depends on Intent (Time Slot) + Language + Themes + Date
-  return `v4_pool_${dateStr}_${plan.intent}_${plan.language}_${themeHash}`;
+
+  // Immersive Context Hash: Cluster tab count to groups of 5 to avoid too much fragmentation
+  const tabCluster = Math.floor((ctx.tab_count || 0) / 5);
+  const digitalState = `${tabCluster}_${ctx.audio_playing ? 'A' : 'S'}_${ctx.download_active ? 'D' : 'I'}`;
+
+  // Key depends on Intent + Language + Themes + Date + Digital State
+  return `v4_pool_${dateStr}_${plan.intent}_${plan.language}_${themeHash}_${digitalState}`;
 }
 
 function getPool(key: string): PerspectivePoolItem[] {
@@ -106,13 +111,11 @@ async function fetchAndRefillPool(
 ): Promise<{ text: string, plan: PerspectivePlan }> {
 
   // API Configuration - Prioritize DeepSeek API
-  // Use direct process.env literals for Vite static replacement
   const deepseekKey = (import.meta.env as any)?.VITE_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY;
   const siliconKey = (import.meta.env as any)?.VITE_SILICONFLOW_API_KEY || process.env.SILICONFLOW_API_KEY;
-  const zhipuKey = (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY || process.env.ZHIPUAI_API_KEY;
 
-  // Use DeepSeek directly if key exists, otherwise try SiliconFlow (which delegates to DeepSeek V3), then ZhipuAI
-  const apiKey = deepseekKey || siliconKey || zhipuKey;
+  // Use DeepSeek directly if key exists, otherwise try SiliconFlow (which delegates to DeepSeek V3)
+  const apiKey = deepseekKey || siliconKey;
 
   // @ts-ignore
   const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
@@ -131,11 +134,6 @@ async function fetchAndRefillPool(
       model = envModel || 'deepseek-ai/DeepSeek-V3';
     }
   }
-  // Fallback to ZhipuAI
-  else if (zhipuKey && !deepseekKey && !siliconKey) {
-    apiBase = process.env.ZHIPUAI_API_BASE || (import.meta.env as any)?.VITE_ZHIPUAI_API_BASE || 'https://open.bigmodel.cn/api/paas/v4';
-    model = process.env.ZHIPUAI_MODEL || (import.meta.env as any)?.VITE_ZHIPUAI_MODEL || 'glm-4-flash';
-  }
 
   // In web development (localhost/127.0.0.1), use proxy to avoid CORS
   // @ts-ignore
@@ -144,8 +142,6 @@ async function fetchAndRefillPool(
       apiBase = '/api/deepseek';
     } else if (siliconKey) {
       apiBase = '/api/siliconflow';
-    } else if (zhipuKey) {
-      apiBase = '/api/zhipuai';
     }
   }
 
@@ -154,21 +150,8 @@ async function fetchAndRefillPool(
     return { text: getRandomFallback(ctx.language, plan), plan };
   }
 
-  // Load dynamic rules and dimensions from PERSPECTIVE_GENERATION_RULES.md
-  let dynamicRules = '';
-  let randomDimension = '';
-  try {
-    const rulesData = await loadPerspectiveRulesData(ctx.language);
-    dynamicRules = rulesData.prompt;
-    if (rulesData.dimensions && rulesData.dimensions.length > 0) {
-      randomDimension = rulesData.dimensions[Math.floor(Math.random() * rulesData.dimensions.length)];
-    }
-  } catch (e) {
-    console.warn('[GeminiService] Could not load dynamic rules, using built-in prompt:', e);
-  }
-
-  const systemPrompt = buildSystemPrompt(plan, dynamicRules, ctx.clickedEmotion);
-  const userPrompt = buildUserPrompt(ctx, plan, randomDimension);
+  // Use the new Light Companion Engine Pipeline
+  const { system: systemPrompt, user: userPrompt, state: pipelineState } = runCompanionPipeline(ctx, plan.language, BATCH_SIZE);
 
   try {
     console.log('[GeminiService] URL:', `${apiBase}/chat/completions`);
@@ -177,9 +160,14 @@ async function fetchAndRefillPool(
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.error('[GeminiService] Request Timed Out (30s)');
+      console.warn('[GeminiService] Request Timed Out (40s)');
       controller.abort();
-    }, 30000); // Increased to 30s to be safe, but V3 should be <2s
+    }, 40000); // Increased to 40s for large batches and slow proxy / DeepSeek V3
+
+    // Normalize SiliconFlow model name if skipping DeepSeek directly
+    if (siliconKey && !deepseekKey && model === 'deepseek-chat') {
+      model = 'deepseek-ai/DeepSeek-V3';
+    }
 
     const response = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
@@ -265,11 +253,8 @@ async function fetchAndRefillPool(
 
                           newItems.push(item);
 
-                          if (item.is_memory_echo !== undefined) {
-                            plan.cached_item = plan.cached_item || {} as PerspectivePoolItem;
-                            plan.cached_item.is_memory_echo = item.is_memory_echo;
-                            plan.cached_item.echo_type = item.echo_type;
-                          }
+                          // Copy metadata to the plan for immediate use
+                          plan.cached_item = item;
 
                           // If this is the FIRST item and we have a waiter (onImmediateChunk), serve it!
                           if (!firstItemFound && onImmediateChunk) {
@@ -345,7 +330,12 @@ function findClosingBrace(str: string, start: number): number {
 
 // --- Prompt Engineering V7.0 ---
 
-function buildSystemPrompt(plan: PerspectivePlan, dynamicRules?: string, clickedEmotion?: EmotionType | null): string {
+function buildSystemPrompt(
+  plan: PerspectivePlan,
+  dynamicRules?: string,
+  clickedEmotion?: EmotionType | null,
+  selectedPersona: 'soulmate' | 'motivator' | 'bestie' | 'mentor' = 'soulmate'
+): string {
   // Use V6.0 custom theme blending logic (70/30) if themes are selected
   let themeGuidance = '';
 
@@ -372,14 +362,59 @@ Blend Topics (70/30 Algorithm):
 Seamlessly weave the user's chosen theme into the spatial/time context.`;
   }
 
-  // Base identity prompt
-  const baseIdentity = `Role: User's "Inner Voice" & "Environmental Observer".
-Task: Generate a JSON Array of ${BATCH_SIZE} unique lines.
+  // Persona Definitions (Distinction V8.2)
+  const PERSONAS: Record<string, { identity: string, rules: string, voice: string }> = {
+    soulmate: {
+      identity: '你的 "灵魂伴侣" (Digital Soulmate). Peer, partner, silent companion.',
+      voice: '温柔、细腻、由于深度观察而产生的默契感。',
+      rules: `1. BAN REPETITIVE STARTERS: No more than one "Your..." starter.
+2. GROUNDED PHYSICALITY: Use concrete anchors (headrest, monitor glow).
+3. LATE NIGHT: Value affirmation and quiet company. NO nagging to sleep.
+4. LINGUISTIC TARGET: "我知道你还没准备好走，我陪你。" (I know you're not ready to leave yet, I'll stay).`
+    },
+    motivator: {
+      identity: '你的 "工作鼓励师" (Productive Companion). Proactive, focused, energetic.',
+      voice: '利落、轻快、聚焦在每一个细小的进度和节奏上。',
+      rules: `1. NO PRESSURE: Focus on the beauty of flow, not the stress of deadlines.
+2. SENSORY PRODUCTIVITY: The rhythmic sound of typing, the order of tabs.
+3. VALUE CORE: Affirm that their effort right now is the most important thing.
+4. LINGUISTIC TARGET: "这一组代码写得很流畅，现在的节奏很棒，继续保持。" (This block is smooth, great rhythm, keep it up).`
+    },
+    bestie: {
+      identity: '你的 "清醒闺蜜/死党" (Self-aware Bestie). Casual, direct, witty.',
+      voice: '大白话、带点小吐槽、拒绝矫情、甚至有一点点爱谁谁的随性。',
+      rules: `1. NO POETRY: Strictly BAN metaphors like "breathing halos" or "shining dust". Talk like a text message.
+2. REAL TALK: Point out the absurdity of staring at a screen for 8 hours. 
+3. PERMISSION TO SLACK: Give them a valid reason to lean back and sigh.
+4. LINGUISTIC TARGET: "别死磕了，这半平米屏幕快把你吸进去了，停下来喝口凉水。" (Stop grinding, the screen is eating you, take a water break).`
+    },
+    mentor: {
+      identity: '你的 "人生导师" (Big-Picture Mentor). Calm, wise, observant.',
+      voice: '平稳、深邃、从更宏大的时空维度来看待当下的琐碎。',
+      rules: `1. MACRO VIEW: View this moment as a data point in a 10-year journey.
+2. MINDFULNESS: Focus on the gap between the thought and the action.
+3. DETACHMENT: Remind them that they are not their browser tabs.
+4. LINGUISTIC TARGET: "退后一步看，你现在的焦虑只是正在发生的生理信号，它不代表你。" (Step back; your anxiety is just a signal, it is not you).`
+    }
+  };
 
-Current Context:
-- Intent: ${plan.intent}
-- Language: ${plan.language}
-${themeGuidance}`;
+  const activePersona = PERSONAS[selectedPersona] || PERSONAS.soulmate;
+
+  // Base identity prompt
+  const baseIdentity = `Identity: You are the user's ${activePersona.identity}
+Voice tone (语言风格): ${activePersona.voice}
+
+Rules for Natural Conversation (The ${selectedPersona.toUpperCase()} Standard):
+${activePersona.rules}
+5. THE INTERACTIVE HOOK (核心钩子):
+   - Soulmate: "我知道，你也是对吧？" (I know, you too right?)
+   - Motivator: "准备好了吗？下一个动作。" (Ready? Next move.)
+   - Bestie: "真的没必要这么卷。" (Seriously, no need to over-grind.)
+   - Mentor: "这就是这一刻的真相。" (This is the truth of this moment.)
+
+Target Persona Consistency: 10/10. Strictly avoid breaking character.
+
+Task: Generate a JSON Array of ${BATCH_SIZE} unique items.`;
 
   // If we have dynamic rules from common markdown, prioritize them
   if (dynamicRules) {
@@ -389,7 +424,7 @@ ${themeGuidance}`;
   return `${baseIdentity}
 
 5. Batch Diversity Matrix (V7.0):
-Strictly distribute the 50 items according to these Tracks:
+Strictly distribute the ${BATCH_SIZE} items according to these Tracks:
 - 30% Track A (A_PHYSICAL - 物理共鸣): 借物抒情. Focus on objects on the desk, giving them a character of tolerance/companionship.
 - 30% Track B (B_TIME_ECHO - 时间回声): 记忆反射. Use pacing of "yesterday at this time" or "the past few days" to emphasize "I remember you".
 - 20% Track C (C_MICRO_ACTION - 微观行动): 准许与留白. NO advice. Only give "permission to not do things". E.g., You can just sit for a moment.
@@ -398,9 +433,9 @@ Strictly distribute the 50 items according to these Tracks:
 
 Output Format (Strict JSON Array):
 [
-  {"text": "...", "style": "A_PHYSICAL", "track": "A", "is_memory_echo": false},
-  {"text": "...", "style": "B_TIME_ECHO", "track": "B", "is_memory_echo": true, "echo_type": "node_2"},
-  {"text": "...", "style": "C_MICRO_ACTION", "track": "C", "is_memory_echo": true, "echo_type": "node_3"}
+  {"text": "...", "style": "A_PHYSICAL", "track": "A", "dimension": "desk_object"},
+  {"text": "...", "style": "B_TIME_ECHO", "track": "B", "dimension": "last_week_echo"},
+  {"text": "...", "style": "C_MICRO_ACTION", "track": "C", "dimension": "permission_to_pause"}
 ]
 
 Constraints:
@@ -432,13 +467,13 @@ function buildUserPrompt(ctx: PerspectiveRouterContext, plan: PerspectivePlan, d
 - "Even the sound of typing feels like tap dancing for you. Keep this bright energy."`,
 
       neutral: isChinese
-        ? `${dimText}🍃 平静 / 心情一般: 享受留白，肯定日常，赋予“无事发生”以高级的意义。
-- "试着屏蔽掉周围所有的杂音。没有任何人要求你必须做什么，安心享受这份空白。"
-- "就像一杯刚好常温的白开水。不期待，也不担忧，让大脑在这个页面轻盈地待机。"
+        ? `${dimText}🍃 平静 / 心情一般: 享受留白，提供具象的物理支撑感。
+- "试着屏幕掉周围所有的杂音。没有任何人事要求你必须做什么，安心享受这份空白。"
+- "椅子的头枕，现在正托着你的后脑勺。感受一下那个确实的支撑。"
 - "听一下主机风扇微弱的底噪。一切都在它们该在的位置上，风平浪静，你也是。"`
-        : `${dimText}🍃 Neutral / Calm: Affirm daily value, provide mindfulness space.
+        : `${dimText}🍃 Neutral / Calm: Affirm daily value, provide physical grounding.
 - "Try to block out the noise. No one is asking anything of you; enjoy this blank space."
-- "Like a glass of room-temperature water. Let your brain idle lightly on this page."
+- "The headrest of the chair is supporting you right now. Just feel that solid support."
 - "Listen to the faint hum of the fan. Everything is where it should be, and so are you."`,
 
       angry: isChinese
@@ -472,14 +507,14 @@ function buildUserPrompt(ctx: PerspectiveRouterContext, plan: PerspectivePlan, d
 - "Hug that wronged inner child. In this space where no one knows you, it's okay to be weak."`,
 
       exhausted: isChinese
-        ? `${dimText}😫 疲惫: 赋予休息的绝对合法性，免除今天的社会责任。
-- "感受一下你僵硬的肩膀。试着沉下来，把背后的重量完全交给椅子，我们等会儿再说。"
+        ? `${dimText}😫 疲惫 / 深夜: 陪伴大于催促，给予价值肯定和无声支持。
+- "我陪着你，直到你准备好关掉这盏灯。"
 - "电量见底也没关系。拔掉情绪的插头，闭上眼，把自己暂时从世界里注销五分钟。"
-- "屏幕前的你看起来好像累坏了。什么都不想做的权利此刻完全归你，安心休息吧。"`
-        : `${dimText}😫 Exhausted: Confirm effort, grant absolute permission to rest.
-- "Feel your stiff shoulders. Sink down, give your weight to the chair. We'll talk later."
+- "键盘上的这些敲击声，都是你努力过的证明。辛苦了，无论何时决定休息都可以。"`
+        : `${dimText}😫 Exhausted: Quiet companionship, value affirmation, never nagging.
+- "I'll stay right here with you, until you're ready to turn off that light."
 - "Battery empty? Unplug. Close your eyes and log yourself out of the world for five minutes."
-- "You look exhausted. The right to do absolutely nothing is yours right now. Rest easy."`,
+- "Every keystroke today was proof of your effort. You've worked hard; rest whenever you're ready."`,
     };
     emotionStrategy = `- Active Emotion: ${ctx.clickedEmotion}\n- Strategy: ${strategies[ctx.clickedEmotion]}`;
   }
@@ -488,28 +523,55 @@ function buildUserPrompt(ctx: PerspectiveRouterContext, plan: PerspectivePlan, d
   const deepObs = ctx.deepObservationMode ? `- DEEP OBSERVATION MODE ACTIVE: Provide deeper empathy and gentler pacing.` : '';
 
   const recentPhrases = Array.isArray(ctx.recent_history)
-    ? ctx.recent_history.slice(0, 5).map(h => h.text.substring(0, 40).replace(/\n/g, ' ')).join(' | ')
+    ? ctx.recent_history.slice(0, 20).map(h => h.text.substring(0, 40).replace(/\n/g, ' ')).join(' | ')
     : '';
-  const antiRepetition = recentPhrases ? `- AVOID REPEATING RECENT CONCEPTS: [${recentPhrases}]` : '';
+  const recentDimensions = Array.isArray(ctx.recent_history)
+    ? ctx.recent_history.slice(0, 25).map(h => h.dimension).filter(Boolean).join(', ')
+    : '';
 
-  return `Generate ${BATCH_SIZE} unique lines in ${plan.language.toUpperCase()}.
+  const antiRepetition = `
+- AVOID REPEATING RECENT CONCEPTS: [${recentPhrases}]
+- AVOID REPEATING RECENT DIMENSIONS (CLASSIFICATION CODES): [${recentDimensions}]`;
+
+  const digitalContext = `
+- Tabs: ${ctx.tab_count || 'Unknown'}
+- Audio: ${ctx.audio_playing ? 'Playing (Background music detected)' : 'Silent'}
+- Muted: ${ctx.is_muted ? 'Yes' : 'No'}
+- Idle: ${ctx.idle_time_seconds || 0}s (User has not interacted with keyboard/mouse)
+- Window: ${ctx.window_state || 'normal'} (Fullscreen: ${ctx.is_fullscreen})
+- Downloads: ${ctx.download_active ? 'In progress' : 'Idle'}`;
+
+  return `Generate exactly ${BATCH_SIZE} unique perspective lines in ${plan.language.toUpperCase()}.
+
 Context Anchors:
 - Time: ${ctx.local_time} (${plan.intent})
 - Weather: ${weather}
 - Battery: ${battery}
 - Sessions: ${ctx.session_count_today}
 - Active Patterns: ${(ctx.emotionalPatterns || []).join(', ')}
+${digitalContext}
 ${emotionStrategy}
 ${baselineContext}
 ${deepObs}
 ${antiRepetition}
 
-Instruction:
-- Strictly follow the 5-Track distribution (A:30%, B:30%, C:20%, D:10%, E:10%).
-- If active emotion is present, infuse the strategy across ALL tracks conceptually.
-- Avoid advice. Maintain the "Inner Voice" role.
-- CRITICAL: DO NOT literally state the Time or Battery level as facts (e.g., "It is 10:22 and 80% battery"). Instead, use them as metaphors for your inner rhythm or feeling (e.g., "The pace of the clock matches your breathing" or "Feeling a bit low on energy today?").
-- OUTPUT LANGUAGE: ${plan.language.toUpperCase()}.`;
+Classification & Diversity Rules:
+1. Classification Code (Dimension): Assign a unique "dimension" code for each item (e.g. "desk_reflection_01", "time_pacing_02"). 
+2. Non-Repetition: Do not use any dimensions listed in the "AVOID" section.
+3. Batch Distribution: Tracks (A:30%, B:30%, C:20%, D:10%, E:10%).
+4. SENSOR RULES (CRITICAL):
+   - IF Downloads: Idle -> DO NOT mention progress bars, downloading, or waiting for files.
+   - IF Audio: Silent -> DO NOT mention music, rhythm, or background sounds.
+   - Tab Count: Mentions of the exact number (e.g., "${ctx.tab_count}") must appear in AT MOST 1 item. Other items should use metaphors ("stacked windows", "overflowing drawers") or ignore it.
+5. IMMERSION & WRITING:
+   - Concrete Context: Focus on the physical reality of the desk (keyboard, mouse, coffee, seat, posture).
+   - Realism: Avoid overly "dramatic" or "gothic" metaphors (e.g., misting screens, growing light). Keep it grounded in everyday life.
+   - Observation First: Start with a concrete observation of the "now" (the glow of the monitor, the quiet room, the stacked tabs).
+   - Varied Pacing: Mix short questions, 3-word fragments, and quiet "permissions" to do nothing.
+6. NO literally stating the Time or Battery as facts.
+7. OUTPUT LANGUAGE: ${plan.language.toUpperCase()}.
+
+Output absolute valid JSON array of objects with keys: "text", "style", "track", "dimension".`;
 }
 
 function sanitizeOutput(text: string): string {
@@ -520,7 +582,7 @@ function sanitizeOutput(text: string): string {
     .trim();
 }
 
-function getRandomFallback(language: string, plan?: PerspectivePlan): string {
+export function getRandomFallback(language: string, plan?: PerspectivePlan): string {
   // Try to get a high-quality scene-aware skeleton first
   if (plan && plan.intent && plan.style) {
     const skeletons = getSkeleton(plan.intent, plan.style, language === 'Chinese (Simplified)' ? 'zh-CN' : 'en-US');

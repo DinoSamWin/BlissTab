@@ -40,8 +40,8 @@ export async function fetchSubscriptionState(userId: string): Promise<Partial<Us
 
     if (error) {
       // If no subscription record exists, create default free tier
-      if (error.code === 'PGRST116') {
-        console.log('[Subscription] No subscription record found, creating default free tier');
+      if (error.code === 'PGRST116' || (error as any).status === 406) {
+        console.log('[Subscription] No subscription record found or 406 error, creating default free tier');
         const defaultData: SubscriptionData = {
           isSubscribed: false,
           subscriptionPlan: 'free',

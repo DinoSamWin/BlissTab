@@ -14,14 +14,14 @@ export interface ParsedPerspectiveRules {
 export function parseRulesData(markdownContent: string, language: string): ParsedPerspectiveRules {
   // Extract dimensions
   const dimensions: string[] = [];
-  const dimRegex = /\[\d{2}\.\s+(.+?)\]：(.+)/g;
+  const dimRegex = /(?:\*\*)?\[\d{2}\.\s+(.+?)\](?:\*\*)?[:：]\s*(.+)/g;
   let match;
   while ((match = dimRegex.exec(markdownContent)) !== null) {
     dimensions.push(`[${match[1]}] ${match[2]}`);
   }
 
   // Remove developer notes section
-  const notesIndex = markdownContent.indexOf('## 5. Emotion Strategies');
+  const notesIndex = markdownContent.indexOf('## 7. Emotion Matrix & Strategies');
   const rulesContent = notesIndex > 0
     ? markdownContent.substring(0, notesIndex).trim()
     : markdownContent.trim();

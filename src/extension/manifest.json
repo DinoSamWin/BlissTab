@@ -9,7 +9,8 @@
         "activeTab",
         "favicon",
         "contextMenus",
-        "identity"
+        "identity",
+        "downloads"
     ],
     "host_permissions": [
         "<all_urls>"

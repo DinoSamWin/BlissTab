@@ -8,13 +8,14 @@ import { fetchUserGatewayOverrides, upsertUserGatewayOverride, uploadGatewayLogo
 import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG, FEATUREBASE_URL } from '../constants';
 import { canAddGateway, canAddIntention, getSubscriptionTier, SUBSCRIPTION_LIMITS, isSubscribed } from '../services/usageLimitsService';
 import { getEmotionLogs } from '../services/emotionService';
-import { redeemCode, toggleRedeemFeature, RedeemErrorCode, fetchUserMembership, fetchUserSettings } from '../services/redeemService';
-import { determineSubscriptionTier } from '../services/subscriptionService';
+import { redeemCode, toggleRedeemFeature, RedeemErrorCode } from '../services/redeemService';
+import { fetchSubscriptionState, determineSubscriptionTier } from '../services/subscriptionService';
+import { fetchUserMembership, fetchUserSettings } from '../services/redeemService';
 import SubscriptionUpsellModal from './SubscriptionUpsellModal';
 import GatewayEditModal from './GatewayEditModal';
 import { Zap, Diamond, Briefcase, Download, Upload, FileJson, CreditCard, ExternalLink, Settings as SettingsIcon, History, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { exportUserData, parseImportData, parseInfinityImport } from '../services/exportImportService';
-import { getCustomerPortalUrl, getTransactionHistory, cancelSubscription } from '../services/creemService';
+import { getCustomerPortalUrl, getTransactionHistory, cancelSubscription, refundTransaction } from '../services/creemService';
 import { clearAllPerspectivePools } from '../services/geminiService';
 
 interface SettingsProps {
@@ -80,6 +81,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState<string | null>(null);
+  const [isRefunding, setIsRefunding] = useState<string | null>(null);
 
   const handleManageSubscription = async () => {
     if (isPortalLoading) return;
@@ -119,7 +121,11 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       const success = await cancelSubscription(subId);
       if (success) {
         addToast('Subscription cancelled successfully.', 'success');
-        fetchHistory(); // Refresh
+        fetchHistory(); // Refresh history list
+        // Also refresh membership from Supabase to confirm the canceled status
+        setTimeout(() => {
+          refreshMembershipState();
+        }, 3000);
       } else {
         addToast('Failed to cancel subscription.', 'error');
       }
@@ -130,69 +136,91 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
     }
   };
 
+  const handleRefund = async (txId: string, subId?: string) => {
+    if (!txId || !window.confirm('Are you sure you want to request a refund for this transaction? Your subscription privileges will be revoked immediately.')) return;
+    setIsRefunding(txId);
+    try {
+      const success = await refundTransaction(txId, subId);
+      if (success) {
+        // Optimistically update the UI to instantly downgrade privileges and mask the refund button
+        // Optimistically update the UI to instantly downgrade privileges and mask the refund button
+        updateState(prevState => ({ ...prevState, subscriptionTier: 'authenticated_free' })).catch(err => console.error('[Settings] Error revoking privileges optimistically:', err));
+        setTransactions(prev => prev.map(t => t.id === txId ? { ...t, status: 'refunded' } : t));
+
+        addToast('Refund initiated successfully.', 'success');
+
+        // Wait a few seconds for Creem's backend to process the refund and fire webhooks
+        // before we pull the actual truth from the server, so we don't overwrite our 
+        // optimistic "refunded" state with a stale "completed" state.
+        setTimeout(() => {
+          fetchHistory();
+          // Also refresh membership from Supabase to confirm the webhook revoked privileges
+          refreshMembershipState();
+        }, 3000);
+      } else {
+        addToast('Failed to initiate refund. Please contact support.', 'error');
+      }
+    } catch (error) {
+      addToast('An error occurred while requesting a refund.', 'error');
+    } finally {
+      setIsRefunding(null);
+    }
+  };
+
+  const refreshMembershipState = async () => {
+    if (!state.user) return;
+
+    // Fetch history if on account tab
+    if (activeTab === 'account' && state.user?.email) {
+      fetchHistory();
+    }
+
+    try {
+      // Re-fetch everything and settings to get latest state
+      const [subscriptionData, membershipData, settingsData] = await Promise.all([
+        fetchSubscriptionState(state.user.id),
+        fetchUserMembership(state.user.id),
+        fetchUserSettings(state.user.id),
+      ]);
+
+      const userWithAllData = {
+        ...state.user,
+        ...subscriptionData,
+        ...(membershipData && {
+          memberViaRedeem: membershipData.memberViaRedeem,
+          membershipSince: membershipData.membershipSince,
+        }),
+        ...(settingsData && {
+          redeemEnabled: settingsData.redeemEnabled,
+        }),
+      };
+
+      const tier = determineSubscriptionTier(userWithAllData);
+
+      updateState(prevState => ({
+        ...prevState,
+        subscriptionTier: tier
+      }));
+
+      if (settingsData) {
+        updateState(prevState => ({
+          ...prevState,
+          settings: {
+            ...prevState.settings,
+            ...settingsData
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('[Settings] Error refreshing state:', err);
+    }
+  };
+
   // Refresh membership state when switching tabs
   useEffect(() => {
     if (!isOpen || !state.user) return;
-
-    const refreshMembershipState = async () => {
-      // Fetch history if on account tab
-      if (activeTab === 'account' && state.user?.email) {
-        fetchHistory();
-      }
-
-      try {
-        // Re-fetch membership and settings to get latest state
-        const [membershipData, settingsData] = await Promise.all([
-          fetchUserMembership(state.user!.id),
-          fetchUserSettings(state.user!.id),
-        ]);
-
-        if (membershipData || settingsData) {
-          const currentUser = state.user;
-          const updatedUser = {
-            ...currentUser,
-            ...(membershipData && {
-              memberViaRedeem: membershipData.memberViaRedeem,
-              membershipSince: membershipData.membershipSince,
-            }),
-            ...(settingsData && {
-              redeemEnabled: settingsData.redeemEnabled,
-            }),
-          };
-
-          // Recalculate subscription tier based on updated user data
-          const subscriptionTier = determineSubscriptionTier(updatedUser);
-
-          // Update state if user data changed
-          if (
-            updatedUser.memberViaRedeem !== currentUser.memberViaRedeem ||
-            updatedUser.redeemEnabled !== currentUser.redeemEnabled ||
-            subscriptionTier !== state.subscriptionTier
-          ) {
-            updateState(prevState => ({
-              ...prevState,
-              user: updatedUser,
-              subscriptionTier,
-            })).catch(err => console.error('[Settings] Failed to update state:', err));
-
-            console.log('[Settings] Membership state refreshed:', {
-              memberViaRedeem: updatedUser.memberViaRedeem,
-              redeemEnabled: updatedUser.redeemEnabled,
-              subscriptionTier,
-            });
-          }
-        }
-      } catch (error) {
-        console.error('[Settings] Failed to refresh membership state:', error);
-      }
-    };
-
-    // Refresh when switching to links or snippets tabs
-    if (activeTab === 'links' || activeTab === 'snippets') {
-      refreshMembershipState();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, isOpen]);
+    refreshMembershipState();
+  }, [activeTab, isOpen, state.user?.id]);
 
   // Derive categories from links for the edit modal
   const categories = React.useMemo(() => {
@@ -1483,48 +1511,51 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                         {transactions.map((tx) => (
                           <div key={tx.id} className="p-5 bg-white dark:bg-black/20 rounded-3xl border border-black/5 dark:border-white/5 flex items-center justify-between group hover:border-black/10 dark:hover:border-white/10 transition-all">
                             <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.status === 'completed' || tx.status === 'active'
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.status === 'completed' || tx.status === 'active' || tx.status === 'paid'
                                 ? 'bg-green-50 dark:bg-green-900/20 text-green-500'
                                 : tx.status === 'refunded' || tx.status === 'cancelled'
                                   ? 'bg-red-50 dark:bg-red-900/20 text-red-500'
                                   : 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'
                                 }`}>
-                                {tx.status === 'completed' || tx.status === 'active' ? <CheckCircle2 size={18} /> : tx.status === 'cancelled' ? <XCircle size={18} /> : <AlertCircle size={18} />}
+                                {tx.status === 'completed' || tx.status === 'active' || tx.status === 'paid'
+                                  ? (tx.subscription_status === 'canceled' || tx.subscription_status === 'expired' ? <XCircle size={18} /> : <CheckCircle2 size={18} />)
+                                  : tx.status === 'cancelled' || tx.status === 'refunded' ? <XCircle size={18} /> : <AlertCircle size={18} />}
                               </div>
                               <div className="flex flex-col">
-                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{tx.product_name || 'StartlyTab Subscription'}</span>
+                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{tx.product_name || (tx.product && typeof tx.product === 'object' ? tx.product.name : 'StartlyTab Subscription')}</span>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[9px] text-gray-400 font-medium">#{tx.id.slice(-8).toUpperCase()}</span>
                                   <span className="text-[9px] text-gray-300 dark:text-gray-600">•</span>
-                                  <span className="text-[9px] text-gray-400 font-medium">{new Date(tx.created_at).toLocaleDateString()}</span>
+                                  <span className="text-[9px] text-gray-400 font-medium">{new Date(tx.created_at || (typeof tx.createdAt === 'number' && tx.createdAt < 10000000000 ? tx.createdAt * 1000 : tx.createdAt)).toLocaleDateString()}</span>
                                 </div>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-4">
                               <div className="flex flex-col items-end">
-                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{tx.currency === 'USD' ? '$' : tx.currency}{tx.amount}</span>
-                                <span className={`text-[8px] font-bold uppercase tracking-widest ${tx.status === 'completed' || tx.status === 'active' ? 'text-green-500' : 'text-amber-500'
-                                  }`}>{tx.status}</span>
+                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{tx.currency === 'USD' ? '$' : tx.currency}{(tx.amount / 100).toFixed(2)}</span>
+                                <span className={`text-[8px] font-bold uppercase tracking-widest ${tx.status === 'completed' || tx.status === 'active' || tx.status === 'paid' ? (tx.subscription_status === 'canceled' || tx.subscription_status === 'expired' ? 'text-red-500' : 'text-green-500') : 'text-amber-500'
+                                  }`}>{tx.status}{tx.subscription_status && (tx.subscription_status === 'canceled' || tx.subscription_status === 'expired') ? ` (${tx.subscription_status})` : ''}</span>
                               </div>
 
-                              {tx.subscription_id && (tx.status === 'active' || tx.status === 'completed') && (
+                              {(state.subscriptionTier !== 'free' && (tx.subscription_id || tx.subscription) && (tx.status === 'active' || tx.status === 'completed' || tx.status === 'paid') && tx.subscription_status !== 'canceled' && tx.subscription_status !== 'expired') && (
                                 <button
-                                  onClick={() => handleCancel(tx.subscription_id)}
-                                  disabled={isCancelling === tx.subscription_id}
+                                  onClick={() => handleCancel(tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id))}
+                                  disabled={isCancelling === (tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id))}
                                   className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
                                 >
-                                  {isCancelling === tx.subscription_id ? 'Wait...' : 'Cancel'}
+                                  {isCancelling === (tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id)) ? 'Wait...' : 'Cancel'}
                                 </button>
                               )}
 
-                              {(tx.status === 'completed' || tx.status === 'active') && (
-                                <a
-                                  href={`mailto:support@startlytab.com?subject=Refund%20Request%20for%20Order%20${tx.id}&body=Hello%2C%20I%20would%20like%20to%20request%20a%20refund%20for%20my%20order%20%23${tx.id}.%0A%0AReason%3A%20`}
-                                  className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all"
+                              {(state.subscriptionTier !== 'free' && (tx.status === 'completed' || tx.status === 'active' || tx.status === 'paid') && tx.subscription_status !== 'canceled' && tx.subscription_status !== 'expired') && (
+                                <button
+                                  onClick={() => handleRefund(tx.id, tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id))}
+                                  disabled={isRefunding === tx.id}
+                                  className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
                                 >
-                                  Refund
-                                </a>
+                                  {isRefunding === tx.id ? 'Wait...' : 'Refund'}
+                                </button>
                               )}
                             </div>
                           </div>

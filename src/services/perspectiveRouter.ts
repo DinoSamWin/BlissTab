@@ -1,64 +1,71 @@
 import { PerspectiveRouterContext, PerspectivePlan, PerspectivePoolItem, TrackType } from '../types';
 import { getAllTrackAffinitiesSync } from './recommendationEngine';
+import { isTooSimilar } from './perspectiveService';
 
 /**
  * Perspective Strategy Router (v3.0)
  * "Competitive Selection" Logic for Intent, Style, and Topic Source.
  */
 
-// 1. Time Slot -> Base Intent Configuration
+// 1. Time Slot -> Base Intent (8 Micro-Scenes Configuration)
 const TIME_SLOTS = [
-    { range: [6, 9], intent: 'kickstart' },
-    { range: [9, 11], intent: 'focus', endMin: 30 },
-    { range: [11, 13], intent: 'lighten', startMin: 30, endMin: 30 },
-    { range: [13, 15], intent: 'focus', startMin: 30 },
-    { range: [15, 18], intent: 'decompress' },
-    { range: [18, 20], intent: 'celebrate' },
-    { range: [20, 23], intent: 'care' },
-    { range: [23, 6], intent: 'sleep' }, // Wraps around
+    { range: [6, 9], intent: 'buffer_resistance', endMin: 30 },        // 06:00 - 08:30 (Extending the buffer early)
+    { range: [8, 11], intent: 'buffer_resistance', startMin: 30, endMin: 30 }, // 08:30 - 09:30
+    { range: [9, 11], intent: 'noise_deep_water', startMin: 30, endMin: 30 },  // 09:30 - 11:30
+    { range: [11, 13], intent: 'human_return', startMin: 30, endMin: 30 },     // 11:30 - 13:30
+    { range: [13, 15], intent: 'brain_fog', startMin: 30 },                    // 13:30 - 15:00
+    { range: [15, 17], intent: 'last_sprint' },                                // 15:00 - 17:00
+    { range: [17, 19], intent: 'severance_escape' },                           // 17:00 - 19:00
+    { range: [19, 23], intent: 'compensatory_labor' },                         // 19:00 - 23:00
+    { range: [23, 6], intent: 'guard_retreat' },                               // 23:00 - 06:00 (Wraps around)
 ];
 
-// 2. Style Weights Configuration (V3)
+// 2. Style Weights Configuration (V4 based on 8 Micro-Scenes)
 const STYLE_WEIGHTS: Record<string, Record<string, number>> = {
-    // V3.5 Dual-Track Weights (A: Interactive, B: Observational)
-    kickstart: {
+    buffer_resistance: {
         micro_action: 30, // A
         reframe: 20,      // A
         micro_story: 30,  // B
         witty: 20         // B
     },
-    focus: {
+    noise_deep_water: {
         micro_action: 35, // A
         reframe: 25,      // A
-        sensory: 25,      // B (New)
+        sensory: 25,      // B
         gentle_question: 15 // A
     },
-    lighten: {
+    human_return: {
         witty: 30,       // B
         micro_story: 25, // B
         permission: 25,  // A
         reframe: 20      // A
     },
-    decompress: {
-        permission: 30,  // A
+    brain_fog: {
+        permission: 40,  // A
+        sensory: 20,     // B
+        gentle_question: 20, // A
+        micro_story: 20  // B
+    },
+    last_sprint: {
+        micro_action: 35, // A
+        reframe: 25,      // A
+        sensory: 25,      // B
+        gentle_question: 15 // A
+    },
+    severance_escape: {
+        permission: 35,  // A
         reframe: 20,     // A
-        sensory: 25,     // B (New)
-        micro_story: 25  // B
+        sensory: 25,     // B
+        micro_story: 20  // B
     },
-    celebrate: {
-        witty: 35,       // B
-        micro_story: 25, // B
-        permission: 20,  // A
-        reframe: 20      // A
-    },
-    care: {
+    compensatory_labor: {
         permission: 40,   // A
         micro_story: 30,  // B
         reframe: 30       // A
     },
-    sleep: {
+    guard_retreat: {
         permission: 40,   // A
-        sensory: 35,      // B (New)
+        sensory: 35,      // B 
         gentle_question: 25 // A
     },
     weekend: {
@@ -120,11 +127,21 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
     let intent = getTimeSlot(ctx.local_time);
     const hours = parseInt(ctx.local_time.split(':')[0]);
 
-    // ... (Existing Overrides) ...
-    // Note: I will need to re-include the existing overrides here or splice carefully.
-    // To avoid deleting the overrides, I will target the function start and end carefully.
-    // Actually, I should use multi_replace or view the file again to be safe.
-    // But I have the file content in history.
+    // --- New User Onboarding (The 8 Micro-Scenes Tour) ---
+    // For the first 15 generations, ensure the user experiences different scenes.
+    if (ctx.recent_history && ctx.recent_history.length < 15) {
+        const seenIntents = new Set(ctx.recent_history.map(h => h.intent));
+        if (seenIntents.has(intent) && seenIntents.size < TIME_SLOTS.length) {
+            // Find intents the user hasn't seen yet
+            const unseenIntents = TIME_SLOTS.map(t => t.intent).filter(i => !seenIntents.has(i));
+            // Prefer adjacent or any randomly, to showcase the engine's capability
+            if (unseenIntents.length > 0) {
+                intent = unseenIntents[Math.floor(Math.random() * unseenIntents.length)];
+            }
+        }
+    }
+
+    // --- Overrides ---
 
     // 1. Weekend Override
     if (ctx.is_weekend && (hours >= 6 && hours < 20)) {
@@ -132,16 +149,16 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
     }
 
     // 2. Work Mode Disabled Override
-    if (ctx.work_mode_disabled && ['focus', 'decompress', 'care'].includes(intent)) {
-        intent = 'lighten';
+    if (ctx.work_mode_disabled && ['noise_deep_water', 'last_sprint', 'compensatory_labor'].includes(intent)) {
+        intent = 'human_return';
     }
 
     // 3. Late Night Streak Override
     if (ctx.late_night_streak >= 2) {
         if (hours >= 20 && hours < 23) {
-            intent = 'care';
+            intent = 'compensatory_labor';
         } else if (hours >= 23 || hours < 6) {
-            intent = 'sleep';
+            intent = 'guard_retreat';
         }
     }
 
@@ -153,8 +170,8 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
     }
 
     // 4. Session Count Override
-    if (ctx.session_count_today >= 6 && intent !== 'sleep' && intent !== 'care') {
-        const intentShiftWeights: Record<string, number> = { [intent]: 40, lighten: 30, decompress: 30 };
+    if (ctx.session_count_today >= 6 && intent !== 'guard_retreat' && intent !== 'compensatory_labor') {
+        const intentShiftWeights: Record<string, number> = { [intent]: 40, human_return: 30, severance_escape: 30 };
         intent = weightedPick(intentShiftWeights);
     }
 
@@ -167,7 +184,7 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
     } else if (customThemes.length > 0) {
         let pCustom = 0.55 + 0.05 * customThemes.length;
         pCustom = Math.max(0.55, Math.min(0.85, pCustom));
-        if (['sleep', 'care'].includes(intent)) pCustom -= 0.15;
+        if (['guard_retreat', 'compensatory_labor'].includes(intent)) pCustom -= 0.15;
         if (ctx.session_count_today >= 6) pCustom += 0.10;
         pCustom = Math.max(0, Math.min(1, pCustom));
 
@@ -243,15 +260,41 @@ export function routePerspective(ctx: PerspectiveRouterContext, pool?: Perspecti
             }
 
             if (targetTrack) {
-                const matchingIndices = pool
+                // 1. Get recent dimensions (last 5) for thematic variety
+                const historyDimensions = new Set(ctx.recent_history.slice(0, 5).map(h => h.dimension).filter(Boolean));
+
+                // 2. Get recent texts (last 15) for exact string deduplication
+                const recentHistoryForDedupe = ctx.recent_history.slice(0, 15);
+
+                const matchingItems = pool
                     .map((item, idx) => ({ item, idx }))
                     .filter(x => x.item.track === targetTrack);
 
-                if (matchingIndices.length > 0) {
-                    // Random pick among matches for variety
-                    const randomMatch = matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
-                    cached_item = randomMatch.item;
-                    pool.splice(randomMatch.idx, 1);
+                if (matchingItems.length > 0) {
+                    // Filter 1: Strictly remove anything too similar in text to recently seen items
+                    let textUniqueMatches = matchingItems.filter(x => !isTooSimilar(x.item.text, recentHistoryForDedupe, 0.6));
+
+                    // If everything in this track is a repeat, just use whatever is text-unique from anywhere in the pool
+                    if (textUniqueMatches.length === 0) {
+                        textUniqueMatches = pool
+                            .map((item, idx) => ({ item, idx }))
+                            .filter(x => !isTooSimilar(x.item.text, recentHistoryForDedupe, 0.6));
+                    }
+
+                    // Filter 2: Try to avoid recently seen dimensions (classification codes)
+                    let finalMatches = textUniqueMatches;
+                    if (textUniqueMatches.length > 0) {
+                        const dimensionUniqueMatches = textUniqueMatches.filter(x => !x.item.dimension || !historyDimensions.has(x.item.dimension));
+                        if (dimensionUniqueMatches.length > 0) {
+                            finalMatches = dimensionUniqueMatches;
+                        }
+                    }
+
+                    if (finalMatches.length > 0) {
+                        const randomMatch = finalMatches[Math.floor(Math.random() * finalMatches.length)];
+                        cached_item = randomMatch.item;
+                        pool.splice(randomMatch.idx, 1);
+                    }
                 }
             }
         }

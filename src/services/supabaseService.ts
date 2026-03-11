@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { AppState } from '../types';
+import { AppState, PerspectiveHistory } from '../types';
 import { canonicalizeUrl, extractHostname } from './urlCanonicalService';
 
 const supabaseUrl = (import.meta.env as any).VITE_SUPABASE_URL;
@@ -464,7 +464,37 @@ export async function fetchFromCloud(userId: string): Promise<SyncResult> {
 }
 
 /**
- * Submit user feedback to Supabase
+ * Submit user feedback for AI perspectives to Supabase (Dev only)
  */
+export async function submitPerspectiveFeedback(record: {
+  userId: string | null;
+  text: string;
+  isGood: boolean;
+  reason: string;
+  metadata: PerspectiveHistory;
+  timestamp: number;
+}): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
 
+  try {
+    const { error } = await client
+      .from('perspective_feedback')
+      .insert({
+        user_id: record.userId,
+        text: record.text,
+        is_good: record.isGood,
+        reason: record.reason,
+        metadata: record.metadata,
+        created_at: new Date(record.timestamp).toISOString()
+      });
 
+    if (error) {
+      console.warn('[Supabase] Feedback submission failed:', error);
+    } else {
+      console.log('[Supabase] Feedback synced to cloud successfully');
+    }
+  } catch (e) {
+    console.warn('[Supabase] Feedback submission exception:', e);
+  }
+}

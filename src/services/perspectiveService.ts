@@ -68,18 +68,26 @@ export function addToHistory(
     text: string,
     promptId: string,
     history: PerspectiveHistory[] = [],
-    metadata?: { intent?: string; style?: string; theme?: string; trackType?: TrackType }
+    metadata?: { intent?: string; style?: string; theme?: string; trackType?: TrackType; dimension?: string }
 ): PerspectiveHistory[] {
     const filtered = filterRecentHistory(history);
+    // Synthetic Dimension (Classification Code) for deduplication if missing
+    let finalMetadata = { ...metadata };
+    if (!finalMetadata.dimension) {
+        // Fallback code format: inferred_[intent]_[style]
+        const fallbackId = `${metadata?.intent || 'unknown'}_${metadata?.style || 'generic'}`;
+        finalMetadata.dimension = `inferred_${fallbackId}`;
+    }
+
     return [
         {
             text,
             timestamp: Date.now(),
             promptId,
-            ...metadata
+            ...finalMetadata
         },
         ...filtered
-    ].slice(0, 50); // Keep max 50 entries
+    ].slice(0, 100); // Keep max 100 entries
 }
 
 /**

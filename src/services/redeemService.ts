@@ -278,7 +278,7 @@ export async function fetchUserMembership(userId: string): Promise<{
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116' || error.status === 406) {
+      if (error.code === 'PGRST116' || (error as any).status === 406) {
         // Table doesn't exist or no membership record, return defaults silent
         return {
           isSubscribed: false,
@@ -340,7 +340,7 @@ export async function fetchUserSettings(userId: string): Promise<{
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
+      if (error.code === 'PGRST116' || (error as any).status === 406) {
         // No settings record, check localStorage fallback
         try {
           const settingsKey = `user_settings_${userId}`;

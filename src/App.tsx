@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
 import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
 import { generateSnippet, clearAllPerspectivePools } from './services/geminiService';
@@ -14,15 +15,16 @@ import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabase
 import { EmotionType, TrackType } from './types';
 import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns, getEmotionLogs } from './services/emotionService';
 import { updateTrackAffinity } from './services/recommendationEngine';
+import { useUser } from './contexts/UserContext';
 import Settings from './components/Settings';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
 import IntegrationGateways from './components/IntegrationGateways';
-import DebugInfo from './components/DebugInfo';
 import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
+import { DevFeedbackUI } from './components/DevFeedbackUI';
+import DebugInfo from './components/DebugInfo';
 import SocialProof from './components/SocialProof';
 import LandingOptimization from './components/LandingOptimization';
-import TrendHub from './components/TrendHub';
 import DailyRhythm from './components/DailyRhythm';
 import VentingModePromo from './components/VentingModePromo';
 import TheRhythmBlueprint from './components/TheRhythmBlueprint';
@@ -73,6 +75,68 @@ const Typewriter: React.FC<{ text: string; onComplete?: () => void }> = ({ text,
   }, [index, text, onComplete]);
 
   return <span ref={containerRef}>{renderSnippet(displayedText)}</span>;
+};
+
+const JumpStarLoading: React.FC<{ caption?: string; captionClassName?: string }> = ({
+  caption = 'Reflecting…',
+  captionClassName = "mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide"
+}) => {
+  return (
+    <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true" style={{ minHeight: '120px' }}>
+      <style>{`
+          @keyframes st-jump {
+            0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+            18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
+            50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
+            80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
+            100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
+          }
+          @keyframes st-shadow {
+            0%   { transform: scaleX(1); opacity: 0.22; }
+            50%  { transform: scaleX(0.62); opacity: 0.10; }
+            100% { transform: scaleX(1); opacity: 0.22; }
+          }
+          @keyframes st-glow {
+            0%, 100% { opacity: 0.18; filter: blur(26px); }
+            50% { opacity: 0.28; filter: blur(34px); }
+          }
+        `}</style>
+
+      {/* soft glow behind the star */}
+      <div
+        className="pointer-events-none absolute -inset-x-16 -inset-y-20 rounded-[4rem]"
+        style={{
+          animation: 'st-glow 1.15s ease-in-out infinite',
+          background:
+            'radial-gradient(circle at 50% 45%, rgba(236,72,153,0.14), rgba(168,85,247,0.10), rgba(99,102,241,0.08), rgba(0,0,0,0))',
+        }}
+      />
+
+      <div className="relative flex flex-col items-center justify-center py-10">
+        <div className="relative">
+          {/* shadow */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 top-[56px] w-[42px] h-[10px] rounded-full bg-black/20 dark:bg-white/10"
+            style={{ animation: 'st-shadow 1.15s ease-in-out infinite' }}
+          />
+
+          {/* star */}
+          <div style={{ animation: 'st-jump 1.15s cubic-bezier(.22,.9,.3,1) infinite', transformOrigin: '50% 70%' }}>
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 2.3l2.6 6.1 6.6.6-5 4.3 1.5 6.4L12 16.9 6.3 19.7l1.5-6.4-5-4.3 6.6-.6L12 2.3z"
+                fill="rgba(239,68,68,0.92)"
+              />
+            </svg>
+          </div>
+        </div>
+
+        <div className={captionClassName}>
+          {caption}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const EmotionalPulsePerceiver: React.FC<{ emotion: EmotionType | null; currentLang: string }> = ({ emotion, currentLang }) => {
@@ -149,52 +213,10 @@ const EmotionalPulsePerceiver: React.FC<{ emotion: EmotionType | null; currentLa
   );
 };
 
-const JumpStarLoading: React.FC<{ caption?: string; captionClassName?: string }> = ({
-  caption = 'Reflecting…',
-  captionClassName = "mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide"
-}) => {
-  return (
-    <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
-      <style>{`
-        @keyframes st-jump {
-          0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-          18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
-          50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
-          80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
-          100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-        }
-        @keyframes st-shadow {
-          0%   { transform: scaleX(1); opacity: 0.22; }
-          50%  { transform: scaleX(0.62); opacity: 0.10; }
-          100% { transform: scaleX(1); opacity: 0.22; }
-        }
-        @keyframes st-glow {
-          0%   { filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.2)); }
-          50%  { filter: drop-shadow(0 0 16px rgba(99, 102, 241, 0.45)); }
-          100% { filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.2)); }
-        }
-      `}</style>
-      <div
-        className="w-10 h-10 flex items-center justify-center relative z-10"
-        style={{ animation: 'st-jump 1.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite, st-glow 1.6s ease-in-out infinite' }}
-      >
-        <svg viewBox="0 0 24 24" strokeWidth="1.5" className="w-7 h-7 text-indigo-500 dark:text-indigo-400 stroke-current opacity-80" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2v6M12 16v6M2 12h6M16 12h6" opacity="0.4" />
-          <path fill="currentColor" fillOpacity="0.2" d="M12 5.5l1.5 5 5 1.5-5 1.5-1.5 5-1.5-5-5-1.5 5-1.5z" />
-        </svg>
-      </div>
-      <div
-        className="mt-6 w-8 h-1.5 bg-black dark:bg-white rounded-[100%] blur-[2px] z-0"
-        style={{ animation: 'st-shadow 1.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite' }}
-      />
-      {caption && (
-        <div className={captionClassName}>{caption}</div>
-      )}
-    </div>
-  );
-};
+// --- App Component ---
 
 const App: React.FC = () => {
+  const navigate = useNavigate();
   const [appState, setAppState] = useState<AppState>(() => {
     const saved = localStorage.getItem('focus_tab_state');
     const systemTheme: Theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -230,12 +252,17 @@ const App: React.FC = () => {
             language: parsed.language || 'English',
             user: savedUser,
             theme: parsed.theme || systemTheme,
+            selectedPersona: parsed.selectedPersona || 'soulmate',
           };
         }
 
         if (parsed.version === APP_VERSION) {
           // Use saved user from authService if available, otherwise null
-          return { ...parsed, user: savedUser };
+          return {
+            ...parsed,
+            user: savedUser,
+            selectedPersona: parsed.selectedPersona || 'soulmate'
+          };
         }
       } catch (e) { console.error("Restore failed", e); }
     }
@@ -246,7 +273,8 @@ const App: React.FC = () => {
       pinnedSnippetId: null,
       language: 'English',
       user: savedUser, // Use saved user if available
-      theme: systemTheme
+      theme: systemTheme,
+      selectedPersona: 'soulmate'
     };
   });
 
@@ -255,7 +283,6 @@ const App: React.FC = () => {
   const [currentSnippetEchoType, setCurrentSnippetEchoType] = useState<'node_2' | 'node_3' | undefined>();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isTrendHubOpen, setIsTrendHubOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [revealKey, setRevealKey] = useState(0);
@@ -264,7 +291,8 @@ const App: React.FC = () => {
   const [showInlineGuidance, setShowInlineGuidance] = useState(false);
   const [hasLocalPreference, setHasLocalPreference] = useState(false);
   const [shouldShakeHelper, setShouldShakeHelper] = useState(false);
-  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // Track auth check status
+  const { user: contextUser, isAuthChecking: isUserContextChecking } = useUser();
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
 
   const isAuthenticated = !!appState.user;
@@ -322,6 +350,25 @@ const App: React.FC = () => {
 
   // Track if cloud sync is safe (prevent overwriting cloud data if fetch failed)
   const isCloudSyncSafeRef = useRef<boolean>(true);
+  const hasAttemptedCloudSyncRef = useRef<boolean>(false);
+  const lastActivityTimeRef = useRef<number>(Date.now());
+
+  // Activity Tracking
+  useEffect(() => {
+    const updateActivity = () => {
+      lastActivityTimeRef.current = Date.now();
+    };
+    window.addEventListener('mousedown', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('touchstart', updateActivity);
+    return () => {
+      window.removeEventListener('mousedown', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('touchstart', updateActivity);
+    };
+  }, []);
 
   // Handle reporting Dwell Time
   const reportDwellTime = useCallback((exitReason: 'REFRESH' | 'NAVIGATE' | 'EMOTION_CLICK' | 'HIDDEN') => {
@@ -606,8 +653,8 @@ const App: React.FC = () => {
             version: cloudData.version || prevState.version,
             pinnedSnippetId: cloudData.pinnedSnippetId || prevState.pinnedSnippetId,
           };
-          // Save state asynchronously without blocking (will sync migrated preference)
-          saveState(mergedState, true).catch(err => console.error('[App] Failed to save state:', err));
+          // Save state immediately to localStorage (synced logic moved out of functional update)
+          localStorage.setItem('focus_tab_state', JSON.stringify({ ...mergedState, user: null }));
 
           // If preference was migrated, trigger immediate refresh
           if (preferenceToMigrate) {
@@ -742,13 +789,49 @@ const App: React.FC = () => {
       }
     }
 
-    if (activeRequests.length === 0) return;
+    // --- CASE 1: Empty Intentions Fallback ---
+    // User deleted everything? We give them the defaults so they aren't staring at a blank engine.
+    if (activeRequests.length === 0) {
+      activeRequests = DEFAULT_REQUESTS;
+    }
 
-    const eligible = activeRequests.length > 1 && lastPromptIdRef.current
-      ? activeRequests.filter(r => r.id !== lastPromptIdRef.current)
-      : activeRequests;
+    // --- CASE 2: Balanced Intention Selection Algorithm ---
+    // Objective: Avoid repetitive "vibes" if a user has 5 intentions.
+    // Calculate fatigue factors based on history.
+    const history = loadHistory();
+    const promptHistory = history.slice(0, 15).map(h => h.promptId);
 
-    const randomReq = eligible[Math.floor(Math.random() * eligible.length)];
+    // Weighting logic:
+    // Start with 100 points per request.
+    // - Minus 80 if it was the very last one.
+    // - Minus 40 for every other occurrence in the last 15 items.
+    const eligibleWithWeights = activeRequests.map(req => {
+      let weight = 100;
+
+      // 1. Immediate repetition penalty
+      if (req.id === lastPromptIdRef.current) weight -= 90;
+
+      // 2. Frequency fatigue penalty
+      const occurrences = promptHistory.filter(id => id === req.id).length;
+      weight -= occurrences * 30;
+
+      return { req, weight: Math.max(5, weight) };
+    });
+
+    // Simple weighted pick
+    const totalWeight = eligibleWithWeights.reduce((sum, item) => sum + item.weight, 0);
+    let randomValue = Math.random() * totalWeight;
+    let selectedReq = activeRequests[0];
+
+    for (const item of eligibleWithWeights) {
+      randomValue -= item.weight;
+      if (randomValue <= 0) {
+        selectedReq = item.req;
+        break;
+      }
+    }
+
+    const randomReq = selectedReq;
     lastPromptIdRef.current = randomReq.id;
 
     const requestId = ++snippetRequestIdRef.current;
@@ -789,6 +872,36 @@ const App: React.FC = () => {
         }
       }
 
+      // Enhanced Context Detection (V4.0)
+      let tabCount: number | undefined;
+      let audioPlaying: boolean | undefined;
+      let isMuted: boolean | undefined;
+      let isFullscreen: boolean | undefined;
+      let windowState: 'normal' | 'minimized' | 'maximized' | 'fullscreen' | undefined;
+      let downloadActive: boolean | undefined;
+
+      // Detect browser state if in chrome extension
+      const _chrome = (window as any).chrome;
+      if (typeof _chrome !== 'undefined' && _chrome.tabs) {
+        try {
+          const tabs = await _chrome.tabs.query({});
+          tabCount = tabs.length;
+          audioPlaying = tabs.some((t: any) => t.audible);
+          isMuted = tabs.every((t: any) => t.mutedInfo?.muted);
+
+          const lastWindow = await _chrome.windows.getLastFocused();
+          windowState = lastWindow.state;
+          isFullscreen = lastWindow.state === 'fullscreen';
+
+          const downloads = await _chrome.downloads.search({ state: 'in_progress' });
+          downloadActive = downloads.length > 0;
+        } catch (e) {
+          console.warn('[App] Browser extension API access failed', e);
+        }
+      }
+
+      const idleTimeSeconds = Math.floor((Date.now() - lastActivityTimeRef.current) / 1000);
+
       // Calculate Router Context
       const now = new Date();
       const context: any = {
@@ -798,7 +911,7 @@ const App: React.FC = () => {
         session_count_today: getSessionCountToday(history),
         minutes_since_last: getMinutesSinceLast(history),
         late_night_streak: getLateNightStreak(history),
-        work_mode_disabled: false, // Could be linked to settings later
+        work_mode_disabled: false,
         custom_themes: appState.requests.filter(r => r.active).map(r => r.prompt),
         language: appState.language,
         recent_history: history,
@@ -807,8 +920,17 @@ const App: React.FC = () => {
         clickedEmotion: clickedEmotion,
         emotionalBaseline: calculateEmotionalBaseline(),
         emotionalPatterns: analyzeEmotionalPatterns(),
-        bypassPool: !!clickedEmotion || bypassLimit,
-        deepObservationMode: getTodayEmotionClickCount() > 3,
+        bypassPool: !!clickedEmotion, // Only bypass pool for emotion clicks
+        deepObservationMode: getTodayEmotionClickCount() > 5,
+        // V4.0 Digital Context
+        tab_count: tabCount,
+        audio_playing: audioPlaying,
+        is_muted: isMuted,
+        is_fullscreen: isFullscreen,
+        window_state: windowState,
+        idle_time_seconds: idleTimeSeconds,
+        download_active: downloadActive,
+        selectedPersona: appState.selectedPersona || 'soulmate',
       };
 
       // --- NORMAL MODE: Real AI Generation ---
@@ -825,8 +947,9 @@ const App: React.FC = () => {
         intent: plan?.intent,
         style: plan?.style,
         theme: plan?.selected_theme,
+        dimension: plan?.cached_item?.dimension,
         // Hack: infer track from style mapping if backend isn't sending it directly yet
-        trackType: (plan?.cached_item?.track as TrackType) || 'A_PHYSICAL' // We will fix backend to return track soon
+        trackType: (plan?.cached_item?.track as TrackType) || 'A_PHYSICAL'
       });
       saveHistory(updatedHistory);
 
@@ -868,68 +991,7 @@ const App: React.FC = () => {
   };
 
   // Jump loading (inspired by the reference): a soft "jumping star" with squash + shadow
-  const JumpStarLoading: React.FC<{ caption?: string; captionClassName?: string }> = ({
-    caption = 'Reflecting…',
-    captionClassName = "mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide"
-  }) => {
-    return (
-      <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true">
-        <style>{`
-          @keyframes st-jump {
-            0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-            18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
-            50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
-            80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
-            100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-          }
-          @keyframes st-shadow {
-            0%   { transform: scaleX(1); opacity: 0.22; }
-            50%  { transform: scaleX(0.62); opacity: 0.10; }
-            100% { transform: scaleX(1); opacity: 0.22; }
-          }
-          @keyframes st-glow {
-            0%, 100% { opacity: 0.18; filter: blur(26px); }
-            50% { opacity: 0.28; filter: blur(34px); }
-          }
-        `}</style>
-
-        {/* soft glow behind the star */}
-        <div
-          className="pointer-events-none absolute -inset-x-16 -inset-y-20 rounded-[4rem]"
-          style={{
-            animation: 'st-glow 1.15s ease-in-out infinite',
-            background:
-              'radial-gradient(circle at 50% 45%, rgba(236,72,153,0.14), rgba(168,85,247,0.10), rgba(99,102,241,0.08), rgba(0,0,0,0))',
-          }}
-        />
-
-        <div className="relative flex flex-col items-center justify-center py-10">
-          <div className="relative">
-            {/* shadow */}
-            <div
-              className="absolute left-1/2 -translate-x-1/2 top-[56px] w-[42px] h-[10px] rounded-full bg-black/20 dark:bg-white/10"
-              style={{ animation: 'st-shadow 1.15s ease-in-out infinite' }}
-            />
-
-            {/* star */}
-            <div style={{ animation: 'st-jump 1.15s cubic-bezier(.22,.9,.3,1) infinite', transformOrigin: '50% 70%' }}>
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 2.3l2.6 6.1 6.6.6-5 4.3 1.5 6.4L12 16.9 6.3 19.7l1.5-6.4-5-4.3 6.6-.6L12 2.3z"
-                  fill="rgba(239,68,68,0.92)"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <div className={captionClassName}>
-            {caption}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
+  // Theme sync effect
   useEffect(() => {
     if (appState.theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -1634,29 +1696,22 @@ const App: React.FC = () => {
   }, [currentSnippet, revealKey]);
 
   useEffect(() => {
-    console.log('[App] Initializing Google Auth...');
-    setIsAuthChecking(true);
+    // Rely exclusively on UserContext to manage the overall authentication flow
+    // and just render the Google Button when we know the user is completely logged out.
 
-    // Initialize Google Auth (Strict V2)
-    initGoogleAuthStrict(async (user) => {
-      setIsAuthChecking(false); // Auth check complete
-
-      if (user) {
-        await handleUserLogin(user);
-      } else {
-        console.log('[App] No user, rendering Google button');
-        // Delay button rendering to ensure SDK is loaded
-        // Use ref to get latest theme without dependency
-        setTimeout(() => {
-          renderGoogleButton('google-login-btn', appStateRef.current.theme);
-        }, 500);
-      }
-    });
-    if (!didInitialSnippetFetchRef.current) {
+    if (didInitialSnippetFetchRef.current === false) {
       didInitialSnippetFetchRef.current = true;
       fetchRandomSnippet();
     }
-  }, [handleUserLogin]); // Removed appState.theme dependency
+
+    if (!isUserContextChecking && !appState.user) {
+      console.log('[App] No user, rendering Google button');
+      // Delay button rendering slightly to ensure container is in DOM
+      setTimeout(() => {
+        renderGoogleButton('google-login-btn', appStateRef.current.theme);
+      }, 300);
+    }
+  }, [isUserContextChecking, appState.user]);
 
   // Listen for cross-tab storage changes (when user logs in/out in another tab)
   useEffect(() => {
@@ -1815,7 +1870,28 @@ const App: React.FC = () => {
         setShowInlineGuidance(true);
       }
     }
-  }, [isAuthenticated, appState.user]); // Re-check when user state changes
+  }, [isAuthenticated, appState.user]);
+
+  // 1. Sync UserContext to AppState
+  useEffect(() => {
+    if (contextUser) {
+      // If we haven't attempted a sync yet (first load) or if the user changed, sync from cloud.
+      if (!hasAttemptedCloudSyncRef.current || (appState.user && appState.user.id !== contextUser.id)) {
+        console.log('[App] Auth context detected user session, fetching latest cloud data...');
+        hasAttemptedCloudSyncRef.current = true;
+        handleUserLogin(contextUser);
+      }
+    }
+  }, [contextUser, appState.user, handleUserLogin]);
+
+  // 2. Global Loading Overlay (Prevents blank screens/flashes)
+  if (isUserContextChecking && !appState.user) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#FBFBFE] dark:bg-[#0A0A0B] z-[1000]">
+        <JumpStarLoading caption="Starting your day softly..." />
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center selection:bg-indigo-100 dark:selection:bg-indigo-900/40 clip-path-bounds">
@@ -1923,7 +1999,7 @@ const App: React.FC = () => {
           )} */}
 
           <button
-            onClick={() => setIsTrendHubOpen(true)}
+            onClick={() => navigate('/echo-land')}
             className="relative p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
             aria-label="Trend Hub"
           >
@@ -2003,12 +2079,20 @@ const App: React.FC = () => {
                           <EmotionalPulsePerceiver emotion={lastClickedEmotion} currentLang={appState.language || 'English'} />
                         </div>
                       ) : currentSnippet ? (
-                        <div className="relative group inline-block editorial-title">
-                          {useTypewriter ? (
-                            <Typewriter text={currentSnippet} onComplete={() => setUseTypewriter(false)} />
-                          ) : (
-                            renderSnippet(currentSnippet)
-                          )}
+                        <div className="relative group inline-block">
+                          <div className="editorial-title">
+                            {useTypewriter ? (
+                              <Typewriter text={currentSnippet} onComplete={() => setUseTypewriter(false)} />
+                            ) : (
+                              renderSnippet(currentSnippet)
+                            )}
+                          </div>
+
+                          {/* <DevFeedbackUI
+                            currentSnippet={currentSnippet}
+                            selectedPersona={appState.selectedPersona || 'soulmate'}
+                            setAppState={setAppState}
+                          /> */}
 
                           {currentSnippetIsMemoryEcho && (
                             <span className="absolute -right-10 -top-4 cursor-help inline-block no-editorial-title" style={{ WebkitTextFillColor: 'initial', background: 'none' }}>
@@ -2338,11 +2422,6 @@ const App: React.FC = () => {
         onSignOut={handleSignOut}
       />
 
-      <TrendHub
-        isOpen={isTrendHubOpen}
-        onClose={() => setIsTrendHubOpen(false)}
-        state={appState}
-      />
 
 
       <LoginPromptModal

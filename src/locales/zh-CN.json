@@ -1,0 +1,13 @@
+{
+    "app": {
+        "new_perspective": "NEW PERSPECTIVE",
+        "how_is_this_moment_f": "How is this moment feeling?",
+        "feeling_your_emotion": "Feeling your emotion...",
+        "happy_label": "正在同步你的快乐能量...",
+        "neutral_label": "正在感知你的平静...",
+        "angry_label": "捕捉到了你的愤怒频率...",
+        "anxious_label": "感应到了你的焦虑状态...",
+        "sad_label": "正在接收你的伤感信号...",
+        "exhausted_label": "捕捉到了你的疲惫状态..."
+    }
+}
