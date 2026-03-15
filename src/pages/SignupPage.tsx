@@ -61,6 +61,7 @@ const SignupPage: React.FC = () => {
       invalid_email: 'Invalid email format.',
       cancelled: '',
       popup_blocked: 'Popup blocked. Please allow popups and try again.',
+      firebase_not_configured: 'Auth Service not configured. Please check environment variables.',
       unknown: 'Signup failed. Please try again later.',
     };
     let msg = messages[code] ?? 'Signup failed';
