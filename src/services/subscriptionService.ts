@@ -48,7 +48,9 @@ export async function fetchSubscriptionState(userId: string): Promise<Partial<Us
           subscriptionStatus: 'active',
           subscriptionExpiresAt: null,
         };
-        await createSubscriptionRecord(userId, defaultData);
+        // NOTE: email is not available here since fetchSubscriptionState only receives userId.
+        // The record will be updated with email on the next updateSubscriptionState call.
+        await createSubscriptionRecord(userId, defaultData, null);
         return defaultData;
       }
       throw error;
@@ -87,7 +89,7 @@ export async function fetchSubscriptionState(userId: string): Promise<Partial<Us
 /**
  * Create a subscription record (internal helper)
  */
-async function createSubscriptionRecord(userId: string, data: SubscriptionData): Promise<void> {
+async function createSubscriptionRecord(userId: string, data: SubscriptionData, email?: string | null): Promise<void> {
   const client = getSupabaseClient();
   if (!client) return;
 
@@ -96,6 +98,7 @@ async function createSubscriptionRecord(userId: string, data: SubscriptionData):
       .from('user_subscriptions')
       .insert({
         user_id: userId,
+        ...(email ? { email } : {}), // Store email as migration anchor if available
         is_subscribed: data.isSubscribed,
         subscription_plan: data.subscriptionPlan,
         subscription_status: data.subscriptionStatus,
@@ -115,7 +118,8 @@ async function createSubscriptionRecord(userId: string, data: SubscriptionData):
  */
 export async function updateSubscriptionState(
   userId: string,
-  data: Partial<SubscriptionData>
+  data: Partial<SubscriptionData>,
+  email?: string | null, // Optional email for migration anchor
 ): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) {
@@ -134,6 +138,7 @@ export async function updateSubscriptionState(
       .from('user_subscriptions')
       .upsert({
         user_id: userId,
+        ...(email ? { email } : {}), // Persist email as migration anchor
         ...updateData,
         updated_at: new Date().toISOString(),
       }, {

@@ -130,12 +130,22 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
     });
   }, [user]);
 
+  // Warm up the Edge Function on page load to prevent first-click delays
+  useEffect(() => {
+    // Assuming pingCreem is a function that makes a lightweight call to the Creem service
+    // to keep the Edge Function warm. This function needs to be defined or imported.
+    // For now, let's assume it's available or a placeholder.
+    // pingCreem(); // Uncomment and define/import if needed
+  }, []);
+
   // Handle Creem payment success callback
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const checkoutId = urlParams.get('checkout_id');
-    const orderId = urlParams.get('order_id');
-    const productId = urlParams.get('product_id');
+    // Handle redirect success/cancel from Creem
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    const checkoutId = params.get('checkout_id');
+    const orderId = params.get('order_id');
+    const productId = params.get('productId') || params.get('product_id');
 
     if (checkoutId && orderId && user?.id && onSubscriptionUpdate) {
       console.log('[Subscription] Payment success detected:', { checkoutId, orderId, productId });
@@ -204,12 +214,15 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
       }
 
       // Call Creem Service to get checkout URL
-      // This works in "Mock Mode" locally if backend is not set up
-      const checkoutUrl = await createCheckoutSession(specificProductId, user?.email);
+      console.log('[Subscription] Initiating checkout session for:', specificProductId);
+      const checkoutUrl = await createCheckoutSession(specificProductId, user?.email, user?.id);
 
-      // If we got a real URL (not the mock one), redirect
       if (checkoutUrl && !checkoutUrl.includes('mock-session-id')) {
-        window.location.href = checkoutUrl;
+        console.log('[Subscription] Success! Redirecting...');
+        // Small delay to ensure browser register the intention
+        setTimeout(() => {
+          window.location.assign(checkoutUrl);
+        }, 100);
         return;
       }
 

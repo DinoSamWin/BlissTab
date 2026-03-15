@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { auth } from '../services/firebaseService';
 import { User } from '../types';
 import { fetchSubscriptionState } from '../services/subscriptionService';
 import { fetchUserMembership, fetchUserSettings } from '../services/redeemService';
-import { initGoogleAuthStrict } from '../services/authService';
+import { firebaseUserToAppUser } from '../services/authService';
 
 interface UserContextType {
     user: User | null;
@@ -22,99 +24,103 @@ export const useUser = () => {
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isAuthChecking, setIsAuthChecking] = useState(true);
-    const [user, setUser] = useState<User | null>(() => {
+    const [user, setUserState] = useState<User | null>(() => {
+        // Optimistic pre-load from localStorage for instant UI render
         try {
             const savedUser = localStorage.getItem('focus_tab_user');
-            console.log('[UserContext] Initializing state from localStorage:', savedUser ? 'found' : 'null');
             return savedUser ? JSON.parse(savedUser) : null;
         } catch {
             return null;
         }
     });
 
-    // 1. Unified Google Auth Initialization
+    // PERSISTENT VERIFICATION FLAG: Prevents rollback during synchronization races
+    const verifiedRef = React.useRef<boolean>(!!user?.emailVerified);
+    
+    // Keep ref in sync with current state
+    React.useEffect(() => {
+        if (user?.emailVerified) verifiedRef.current = true;
+    }, [user?.emailVerified]);
+
+    // 1. Firebase Auth State Listener (single source of truth)
     useEffect(() => {
-        let isMounted = true;
-
-        const explicitSignout = localStorage.getItem('focus_tab_explicit_signout') === 'true';
-        if (explicitSignout) {
-            console.log('[UserContext] Explicit signout detected, skipping auto-login check.');
-            setIsAuthChecking(false);
-            return;
-        }
-
-        console.log('[UserContext] Initializing Google Auth Strict...');
-
-        // Safety timeout for auth checking (2s max)
-        const timer = setTimeout(() => {
-            if (isMounted) {
-                console.log('[UserContext] Auth safety timer fired.');
-                setIsAuthChecking(false);
-            }
-        }, 2000);
-
-        // initGoogleAuthStrict may return a cleanup function or be void
-        const result = initGoogleAuthStrict((incomingUser) => {
-            if (!isMounted) return;
-            console.log('[UserContext] Google Auth callback received:', incomingUser?.email || 'null');
-
-            if (incomingUser) {
-                setUser(incomingUser);
-                localStorage.setItem('focus_tab_user', JSON.stringify(incomingUser));
+        const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
+            if (fbUser) {
+                const appUser = firebaseUserToAppUser(fbUser);
+                
+                // Get pre-auth storage check to see if we already verified this guy
+                const existingRaw = localStorage.getItem('focus_tab_user');
+                let merged = appUser;
+                
+                if (existingRaw) {
+                    try {
+                        const existing = JSON.parse(existingRaw);
+                        if (existing.id === appUser.id) {
+                            // STICKY VERIFICATION: Trust local state/ref over Firebase (Firebase token can be stale)
+                            const finalEmailVerified = appUser.emailVerified || existing.emailVerified || verifiedRef.current;
+                            if (finalEmailVerified) verifiedRef.current = true;
+                            
+                            merged = { ...existing, ...appUser, emailVerified: finalEmailVerified };
+                        }
+                    } catch (e) {
+                        console.error('[UserContext] Failed to merge previous user state', e);
+                    }
+                }
+                
+                setUserState(merged);
+                localStorage.setItem('focus_tab_user', JSON.stringify(merged));
+                localStorage.removeItem('focus_tab_explicit_signout');
+                console.log('[UserContext] Auth update:', merged.email, 'Verified:', merged.emailVerified);
             } else {
-                // If SDK says null, we only clear if we don't have a local session
-                const savedLocal = localStorage.getItem('focus_tab_user');
-                if (!savedLocal) {
-                    setUser(null);
+                // Firebase says no user. 
+                const explicitSignout = localStorage.getItem('focus_tab_explicit_signout') === 'true';
+                const hasLocalUser = !!localStorage.getItem('focus_tab_user');
+                
+                if (explicitSignout || !hasLocalUser) {
+                    console.log('[UserContext] Clearing user state (explicit logout or missing session)');
+                    setUserState(null);
+                    localStorage.removeItem('focus_tab_user');
+                } else {
+                    // Possible transient null (refreshing token)
+                    console.log('[UserContext] Firebase auth returned null but local session exists. Preserving for stability.');
                 }
             }
-
-            // Always resolve checking state once we get any response
             setIsAuthChecking(false);
-            clearTimeout(timer);
         });
 
+        // Safety: if Firebase doesn't respond within 3s, stop blocking UI
+        const timer = setTimeout(() => setIsAuthChecking(false), 3000);
+
         return () => {
-            isMounted = false;
+            unsubscribe();
             clearTimeout(timer);
-            // If initGoogleAuthStrict returned a cleanup function, call it
-            if (typeof result === 'function') {
-                (result as Function)();
-            } else if (result && typeof (result as any).then === 'function') {
-                // It's a Promise - check if it resolved to a function
-                (result as Promise<any>).then((cleanup: any) => {
-                    if (typeof cleanup === 'function') cleanup();
-                }).catch(() => { });
-            }
         };
     }, []);
 
-    // 2. Sync with localStorage changes (cross-tab)
+    // 2. Cross-tab sync (storage event)
     useEffect(() => {
         const handleStorageChange = (e: StorageEvent) => {
             if (e.key === 'focus_tab_user') {
                 if (!e.newValue) {
-                    setUser(null);
+                    setUserState(null);
                 } else {
                     try {
-                        setUser(JSON.parse(e.newValue));
+                        setUserState(JSON.parse(e.newValue));
                     } catch (error) {
                         console.error('[UserContext] Failed to parse user from storage event', error);
                     }
                 }
             }
         };
-
         window.addEventListener('storage', handleStorageChange);
         return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
-    // 3. Silent background subscription & settings sync (Ported from legacy AppRouter)
+    // 3. Silent background subscription & settings sync
     useEffect(() => {
         if (!user?.id) return;
 
         const checkSubscription = async () => {
-            // Only sync if we have a valid local session to prevent "Zombie Resurrection"
             const storedUser = localStorage.getItem('focus_tab_user');
             if (!storedUser) return;
 
@@ -126,7 +132,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ]);
 
                 const updatedUser: User = {
-                    ...user,
+                    ...user!,
                     ...subscriptionData,
                     ...(membershipData && {
                         memberViaRedeem: membershipData.memberViaRedeem,
@@ -137,10 +143,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }),
                 };
 
-                // Double check if we are still logged in before writing
-                if (localStorage.getItem('focus_tab_user')) {
-                    setUser(updatedUser);
-                    localStorage.setItem('focus_tab_user', JSON.stringify(updatedUser));
+                // CRITICAL INTEGRITY CHECK: Ensure background sync doesn't overwrite verification
+                if (verifiedRef.current && !updatedUser.emailVerified) {
+                    console.log('[UserContext] Preventing verification rollback during background sync');
+                    updatedUser.emailVerified = true;
+                }
+
+                const currentLocal = localStorage.getItem('focus_tab_user');
+                if (currentLocal) {
+                    const parsed = JSON.parse(currentLocal);
+                    if (parsed.id === user.id) {
+                        setUserState(updatedUser);
+                        localStorage.setItem('focus_tab_user', JSON.stringify(updatedUser));
+                    }
                 }
             } catch (error) {
                 console.error('[UserContext] Background sync failed:', error);
@@ -154,8 +169,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         window.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('focus', handleFocus);
-
-        // Initial check on mount if authenticated
         checkSubscription();
 
         return () => {
@@ -164,17 +177,26 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [user?.id]);
 
+    // Manual setUser — used after login actions to immediately update state
     const handleSetUser = useCallback((newUser: User | null) => {
-        console.log('[UserContext] Manual setUser called:', newUser?.email || 'null');
-        setUser(newUser);
-        if (newUser) {
-            localStorage.setItem('focus_tab_user', JSON.stringify(newUser));
+        console.log('[UserContext] Manual setUser called:', newUser?.email || 'null', 'Verified:', newUser?.emailVerified);
+        
+        let finalUser = newUser;
+        if (newUser && verifiedRef.current && !newUser.emailVerified) {
+            console.log('[UserContext] Forcing verification state on manual setUser');
+            finalUser = { ...newUser, emailVerified: true };
+        }
+
+        setUserState(finalUser);
+        if (finalUser) {
+            if (finalUser.emailVerified) verifiedRef.current = true;
+            localStorage.setItem('focus_tab_user', JSON.stringify(finalUser));
             localStorage.removeItem('focus_tab_explicit_signout');
         } else {
+            verifiedRef.current = false;
             localStorage.removeItem('focus_tab_user');
             localStorage.setItem('focus_tab_explicit_signout', 'true');
         }
-        setIsAuthChecking(false);
     }, []);
 
     const contextValue = React.useMemo(() => ({

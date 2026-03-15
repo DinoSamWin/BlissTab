@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppState, ToastMessage, User, Theme, SubscriptionTier } from './types';
-import { APP_VERSION, DEFAULT_LINKS, DEFAULT_REQUESTS, SEARCH_ENGINES, DEFAULT_SEARCH_ENGINE, SearchEngine } from './constants';
+import { APP_VERSION, DEFAULT_REQUESTS, SearchEngine } from './constants';
+import { REGIONAL_SEARCH_ENGINES, REGIONAL_DEFAULT_LINKS, isChinaRegion } from './services/environmentService';
 import { generateSnippet, clearAllPerspectivePools } from './services/geminiService';
-import { initGoogleAuthStrict, signOutUser, openGoogleSignIn, renderGoogleButton } from './services/authService';
+import { signOutUser } from './services/authService';
 import { syncToCloud, fetchFromCloud } from './services/syncService';
 import { loadHistory, saveHistory, addToHistory, getSessionCountToday, getMinutesSinceLast, getLateNightStreak } from './services/perspectiveService';
 import { canGeneratePerspective, resetPerspectiveCount, incrementPerspectiveCount, getSubscriptionTier, getPerspectiveCount, isSubscribed } from './services/usageLimitsService';
@@ -29,6 +30,7 @@ import DailyRhythm from './components/DailyRhythm';
 import VentingModePromo from './components/VentingModePromo';
 import TheRhythmBlueprint from './components/TheRhythmBlueprint';
 import FAQScreen from './components/FAQScreen';
+import JumpStarLoading from './components/common/JumpStarLoading';
 import SemanticFooter from './components/SemanticFooter';
 import { Activity, Sparkles } from 'lucide-react';
 
@@ -77,67 +79,6 @@ const Typewriter: React.FC<{ text: string; onComplete?: () => void }> = ({ text,
   return <span ref={containerRef}>{renderSnippet(displayedText)}</span>;
 };
 
-const JumpStarLoading: React.FC<{ caption?: string; captionClassName?: string }> = ({
-  caption = 'Reflecting…',
-  captionClassName = "mt-10 text-sm text-gray-400 dark:text-gray-500 tracking-wide"
-}) => {
-  return (
-    <div className="relative w-full flex flex-col items-center justify-center" role="status" aria-live="polite" aria-busy="true" style={{ minHeight: '120px' }}>
-      <style>{`
-          @keyframes st-jump {
-            0%   { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-            18%  { transform: translateY(0) scaleX(1.08) scaleY(0.92) rotate(-2deg); }
-            50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.04) rotate(2deg); }
-            80%  { transform: translateY(0) scaleX(1.06) scaleY(0.94) rotate(-1deg); }
-            100% { transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg); }
-          }
-          @keyframes st-shadow {
-            0%   { transform: scaleX(1); opacity: 0.22; }
-            50%  { transform: scaleX(0.62); opacity: 0.10; }
-            100% { transform: scaleX(1); opacity: 0.22; }
-          }
-          @keyframes st-glow {
-            0%, 100% { opacity: 0.18; filter: blur(26px); }
-            50% { opacity: 0.28; filter: blur(34px); }
-          }
-        `}</style>
-
-      {/* soft glow behind the star */}
-      <div
-        className="pointer-events-none absolute -inset-x-16 -inset-y-20 rounded-[4rem]"
-        style={{
-          animation: 'st-glow 1.15s ease-in-out infinite',
-          background:
-            'radial-gradient(circle at 50% 45%, rgba(236,72,153,0.14), rgba(168,85,247,0.10), rgba(99,102,241,0.08), rgba(0,0,0,0))',
-        }}
-      />
-
-      <div className="relative flex flex-col items-center justify-center py-10">
-        <div className="relative">
-          {/* shadow */}
-          <div
-            className="absolute left-1/2 -translate-x-1/2 top-[56px] w-[42px] h-[10px] rounded-full bg-black/20 dark:bg-white/10"
-            style={{ animation: 'st-shadow 1.15s ease-in-out infinite' }}
-          />
-
-          {/* star */}
-          <div style={{ animation: 'st-jump 1.15s cubic-bezier(.22,.9,.3,1) infinite', transformOrigin: '50% 70%' }}>
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 2.3l2.6 6.1 6.6.6-5 4.3 1.5 6.4L12 16.9 6.3 19.7l1.5-6.4-5-4.3 6.6-.6L12 2.3z"
-                fill="rgba(239,68,68,0.92)"
-              />
-            </svg>
-          </div>
-        </div>
-
-        <div className={captionClassName}>
-          {caption}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const EmotionalPulsePerceiver: React.FC<{ emotion: EmotionType | null; currentLang: string }> = ({ emotion, currentLang }) => {
   const labels: Record<string, string> = {
@@ -246,7 +187,7 @@ const App: React.FC = () => {
           // Return clean state with current user, preserving only theme/language preferences
           return {
             version: APP_VERSION,
-            links: DEFAULT_LINKS,
+            links: REGIONAL_DEFAULT_LINKS['GLOBAL'], // Temporary default, updated in useEffect
             requests: DEFAULT_REQUESTS,
             pinnedSnippetId: null,
             language: parsed.language || 'English',
@@ -268,7 +209,7 @@ const App: React.FC = () => {
     }
     return {
       version: APP_VERSION,
-      links: DEFAULT_LINKS,
+      links: REGIONAL_DEFAULT_LINKS['GLOBAL'], // Temporary default, updated in useEffect
       requests: DEFAULT_REQUESTS,
       pinnedSnippetId: null,
       language: 'English',
@@ -277,6 +218,34 @@ const App: React.FC = () => {
       selectedPersona: 'soulmate'
     };
   });
+
+  const [region, setRegion] = useState<'CN' | 'GLOBAL'>('GLOBAL');
+
+  const searchEngines = useMemo(() => REGIONAL_SEARCH_ENGINES[region], [region]);
+  const defaultLinks = useMemo(() => REGIONAL_DEFAULT_LINKS[region], [region]);
+
+  // Sync region on mount
+  useEffect(() => {
+    isChinaRegion().then(isCN => {
+      const detectedRegion = isCN ? 'CN' : 'GLOBAL';
+      setRegion(detectedRegion);
+
+      // If it's the very first run (no saved state), update links
+      const hasSavedState = !!localStorage.getItem('focus_tab_state');
+      if (!hasSavedState) {
+        setAppState(prev => ({
+          ...prev,
+          links: REGIONAL_DEFAULT_LINKS[detectedRegion]
+        }));
+      }
+
+      // Update default search engine if not saved
+      const savedEngine = localStorage.getItem('focus_tab_search_engine');
+      if (!savedEngine) {
+        setSelectedEngine(detectedRegion === 'CN' ? 'baidu' : 'google');
+      }
+    });
+  }, []);
 
   const [currentSnippet, setCurrentSnippet] = useState<string | null>(null);
   const [currentSnippetIsMemoryEcho, setCurrentSnippetIsMemoryEcho] = useState<boolean>(false);
@@ -291,7 +260,7 @@ const App: React.FC = () => {
   const [showInlineGuidance, setShowInlineGuidance] = useState(false);
   const [hasLocalPreference, setHasLocalPreference] = useState(false);
   const [shouldShakeHelper, setShouldShakeHelper] = useState(false);
-  const { user: contextUser, isAuthChecking: isUserContextChecking } = useUser();
+  const { user: contextUser, setUser: setContextUser, isAuthChecking: isUserContextChecking } = useUser();
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
 
@@ -301,7 +270,8 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedEngine, setSelectedEngine] = useState<string>(() => {
     const saved = localStorage.getItem('focus_tab_search_engine');
-    return saved || DEFAULT_SEARCH_ENGINE;
+    // If not saved, it will be set by the region effect
+    return saved || 'google'; 
   });
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState<boolean>(false);
   const [isComposing, setIsComposing] = useState<boolean>(false); // 输入法组合状态
@@ -530,61 +500,37 @@ const App: React.FC = () => {
 
       // Use functional update to get latest state without dependency
       setAppState(prevState => {
-        // IMPORTANT: Start with a clean base state or the current state if it's already reset
-        // To prevent leaking previous user's data if cloud data is empty, we act carefully.
-
         let requests = DEFAULT_REQUESTS;
         let cloudData: AppState | null = null;
 
         if (cloudResult.status === 'success') {
           cloudData = cloudResult.data as AppState;
           requests = cloudData.requests || DEFAULT_REQUESTS;
-          // Mark sync as safe since we successfully loaded data
           isCloudSyncSafeRef.current = true;
-          console.log('[App] Cloud data loaded successfully. Sync enabled.');
-        } else if (cloudResult.status === 'not_found') {
-          // Valid "New User" scenario.
-          // Mark sync as safe because there is nothing to overwrite.
-          isCloudSyncSafeRef.current = true;
-          console.log('[App] No cloud data found (new user). Sync enabled.');
-        } else {
-          // ERROR SCENARIO
-          console.error('[App] Critical: Failed to load cloud data. Disabling cloud sync to prevent data loss.');
-          addToast('Failed to load your data. Cloud sync disabled. Please refresh.', 'error');
-          isCloudSyncSafeRef.current = false;
-          // We will fall back to defaults locally, but sync is blocked.
+          console.log('[App] Cloud data loaded successfully.');
+        } else if (cloudResult.status === 'not_found' || cloudResult.status === 'error') {
+          // If error (like 406), we still consider it "safe" to sync LATER, 
+          // but we won't overwrite anything now.
+          isCloudSyncSafeRef.current = cloudResult.status === 'not_found';
+          console.log('[App] Cloud data status:', cloudResult.status);
         }
 
-        // Migrate local preference to cloud if exists
+        // Migrate local preference
         if (preferenceToMigrate) {
-          const newIntention = {
-            id: `intention_${Date.now()}`,
-            prompt: preferenceToMigrate,
-            active: true
-          };
-
-          // Add to requests if not already exists (don't overwrite existing)
-          const exists = requests.some(r => r.prompt === preferenceToMigrate);
-          if (!exists) {
+          const newIntention = { id: `intention_${Date.now()}`, prompt: preferenceToMigrate, active: true };
+          if (!requests.some(r => r.prompt === preferenceToMigrate)) {
             requests = [...requests, newIntention];
           }
-
-          // Clear local storage
           localStorage.removeItem('startly_intention_pending');
           localStorage.removeItem('startly_intention_local');
         }
 
         if (cloudData) {
-          console.log('[App] Cloud data fetched:', {
-            links: cloudData.links?.length || 0,
-            requests: requests.length
-          });
-          // Use cloud data as source of truth
           const linksWithOverrides = (cloudData.links || []).map((l: any) => {
             let canonicalUrl = l.canonicalUrl || l.url;
             try { canonicalUrl = l.canonicalUrl || canonicalizeUrl(l.url); } catch { }
             const ov = overridesByCanonical[canonicalUrl];
-            const linkWithOverride = {
+            return {
               ...l,
               canonicalUrl,
               customTitle: ov?.custom_title ?? l.customTitle ?? null,
@@ -593,125 +539,75 @@ const App: React.FC = () => {
               customLogoSignedUrl: ov?.custom_logo_signed_url ?? l.customLogoSignedUrl ?? null,
               customLogoHash: ov?.custom_logo_hash ?? l.customLogoHash ?? null,
             };
-
-            // Download logo from cloud to local cache if needed (async, non-blocking)
-            if (linkWithOverride.customLogoHash) {
-              const hasLocalCache = getLocalLogoDataUrl(canonicalUrl, linkWithOverride.customLogoHash);
-              if (!hasLocalCache) {
-                // Try to download: prefer publicUrl, fallback to signedUrl, or regenerate signedUrl
-                const logoUrlToDownload = linkWithOverride.customLogoUrl || linkWithOverride.customLogoSignedUrl;
-
-                if (logoUrlToDownload) {
-                  // Fix URL if it doesn't have .webp extension (for backward compatibility)
-                  let fixedUrl = logoUrlToDownload;
-                  if (linkWithOverride.customLogoPath && !logoUrlToDownload.includes('.webp')) {
-                    const pathParts = linkWithOverride.customLogoPath.split('/');
-                    const fileName = pathParts[pathParts.length - 1];
-                    if (!fileName.includes('.')) {
-                      fixedUrl = logoUrlToDownload.replace(/([^/]+)$/, '$1.webp');
-                    }
-                  }
-
-                  downloadAndCacheLogo(
-                    canonicalUrl,
-                    fixedUrl,
-                    linkWithOverride.customLogoHash,
-                    linkWithOverride.customLogoPath || undefined
-                  ).then(success => {
-                    if (success) setAppState(prev => ({ ...prev }));
-                  }).catch(console.warn);
-                } else if (linkWithOverride.customLogoPath) {
-                  getLogoSignedUrl(linkWithOverride.customLogoPath)
-                    .then(signedUrl => {
-                      if (signedUrl && linkWithOverride.customLogoHash) {
-                        downloadAndCacheLogo(
-                          canonicalUrl,
-                          signedUrl,
-                          linkWithOverride.customLogoHash,
-                          linkWithOverride.customLogoPath || undefined
-                        ).then(success => {
-                          if (success) setAppState(prev => ({ ...prev }));
-                        });
-                      }
-                    }).catch(console.warn);
-                }
-              }
-            }
-
-            return linkWithOverride;
           });
 
           const mergedState = {
             ...prevState,
-            // Cloud data takes precedence
             links: linksWithOverrides,
-            requests: requests, // Use migrated requests
+            requests: requests,
             language: cloudData.language || prevState.language,
             theme: cloudData.theme || prevState.theme,
-            user: userWithAllData, // Ensure user with all data is set
-            subscriptionTier, // Set subscription tier
+            user: userWithAllData,
+            subscriptionTier,
             version: cloudData.version || prevState.version,
             pinnedSnippetId: cloudData.pinnedSnippetId || prevState.pinnedSnippetId,
           };
-          // Save state immediately to localStorage (synced logic moved out of functional update)
           localStorage.setItem('focus_tab_state', JSON.stringify({ ...mergedState, user: null }));
 
-          // If preference was migrated, trigger immediate refresh
+          // ONLY update context if data truly changed to prevent infinite loops
+          const contextNeedsUpdate = !contextUser || 
+            contextUser.id !== userWithAllData.id || 
+            contextUser.isSubscribed !== userWithAllData.isSubscribed ||
+            (!contextUser.emailVerified && userWithAllData.emailVerified);
+
+          if (contextNeedsUpdate) {
+            console.log('[App] Updating UserContext with fresh user data');
+            setContextUser(userWithAllData);
+          }
+
           if (preferenceToMigrate) {
-            setTimeout(() => {
-              fetchRandomSnippet(true); // Bypass limit for immediate refresh
-            }, 500);
+            setTimeout(() => { fetchRandomSnippet(true); }, 500);
           }
 
           return mergedState;
         } else {
-          console.log('[App] No cloud data found (or error), using defaults + migrated prefs');
-
-          // No cloud data: Use defaults + migrated data. Do NOT inherit from prevState (which might be stale A user data)
-          // We preserve theme/language from prevState as they might be guest preferences
-          const stateWithUser = {
+          // Fallback for new user or load error
+          const stateWithUser: AppState = {
             ...prevState,
-            links: DEFAULT_LINKS,     // Reset to defaults
-            requests: requests,       // Use migrated requests or defaults
+            links: REGIONAL_DEFAULT_LINKS[region],
+            requests: requests,
             user: userWithAllData,
             subscriptionTier,
           };
 
-          // Sync current state to cloud for first-time users - BUT ONLY IF SAFE
           if (isCloudSyncSafeRef.current) {
-            syncToCloud(stateWithUser).catch(err => console.error('[App] Failed to sync to cloud:', err));
-          } else {
-            console.warn('[App] Skipping initial sync because sync is not safe (error mode)');
+            syncToCloud(stateWithUser).catch(err => console.error('[App] Initial sync failed:', err));
           }
 
-          if (preferenceToMigrate) {
-            setTimeout(() => {
-              fetchRandomSnippet(true);
-            }, 500);
+          // Sync if mismatch
+          if (!contextUser || contextUser.id !== userWithAllData.id || (!contextUser.emailVerified && userWithAllData.emailVerified)) {
+            setContextUser(userWithAllData);
           }
 
           return stateWithUser;
         }
       });
+    } catch (err) {
+      console.error('[App] handleUserLogin failed:', err);
     } finally {
       setIsSyncing(false);
     }
   }, [saveState]); // Removed appState dependency
 
   const handleSignIn = () => {
-    setIsSyncing(true);
-    openGoogleSignIn(async (user) => {
-      if (user) {
-        await handleUserLogin(user);
-      } else {
-        setIsSyncing(false);
-      }
-    });
+    // Navigate to the dedicated login page (Firebase Auth)
+    navigate('/login');
   };
 
   const handleSignOut = useCallback(() => {
     // 1. Clear auth token/session
     signOutUser();
+    setContextUser(null); // Sync with UserContext
 
     // Set explicit signout flag to prevent auto-login on refresh
     localStorage.setItem('focus_tab_explicit_signout', 'true');
@@ -720,12 +616,15 @@ const App: React.FC = () => {
     // We keep theme and language as they are device-specific preferences
     setAppState(prev => {
       const resetState: AppState = {
-        ...prev,
+        version: prev.version,
         user: null,
-        links: DEFAULT_LINKS,
+        links: REGIONAL_DEFAULT_LINKS[region],
         requests: DEFAULT_REQUESTS,
-        subscriptionTier: 'free' as SubscriptionTier, // Reset tier
-        // Keep theme, language, version
+        pinnedSnippetId: null,
+        language: prev.language,
+        theme: prev.theme,
+        selectedPersona: prev.selectedPersona,
+        subscriptionTier: 'authenticated_free', // Reset tier
       };
 
       // 3. Immediately update localStorage with the reset state to ensure
@@ -1001,7 +900,7 @@ const App: React.FC = () => {
       document.body.classList.remove('dark');
     }
     if (!isAuthenticated && !isSettingsOpen) {
-      setTimeout(() => renderGoogleButton('google-login-btn', appState.theme), 150);
+      // Login is now handled via the /login page
     }
   }, [appState.theme, isAuthenticated, isSettingsOpen]);
 
@@ -1027,7 +926,7 @@ const App: React.FC = () => {
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
 
-    const engine = SEARCH_ENGINES.find(e => e.id === selectedEngine) || SEARCH_ENGINES[0];
+    const engine = searchEngines.find(e => e.id === selectedEngine) || searchEngines[0];
     const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
     window.open(searchUrl, '_blank', 'noopener,noreferrer');
     setSearchQuery(''); // 搜索后清空输入框
@@ -1595,7 +1494,7 @@ const App: React.FC = () => {
     });
   };
 
-  const currentEngine = SEARCH_ENGINES.find(e => e.id === selectedEngine) || SEARCH_ENGINES[0];
+  const currentEngine = searchEngines.find(e => e.id === selectedEngine) || searchEngines[0];
   const [isSharing, setIsSharing] = useState(false);
   const visibleLinks = appState.links.slice(0, 10);
   const remainingLinks = Math.max(0, appState.links.length - visibleLinks.length);
@@ -1705,11 +1604,7 @@ const App: React.FC = () => {
     }
 
     if (!isUserContextChecking && !appState.user) {
-      console.log('[App] No user, rendering Google button');
-      // Delay button rendering slightly to ensure container is in DOM
-      setTimeout(() => {
-        renderGoogleButton('google-login-btn', appStateRef.current.theme);
-      }, 300);
+      console.log('[App] No user, directing to /login page for authentication');
     }
   }, [isUserContextChecking, appState.user]);
 
@@ -1748,11 +1643,19 @@ const App: React.FC = () => {
           const currentUserId = currentUser?.id || null;
           const newUserId = newUser?.id || null;
 
-          // Only update if user state actually changed
-          if (currentUserId !== newUserId) {
-            console.log('[App] User state changed:', {
-              from: currentUserId ? 'logged in' : 'logged out',
-              to: newUserId ? 'logged in' : 'logged out'
+          // Only update if user state actually changed (including verification status)
+          // We only care about: logout, login, or unverified -> verified transition.
+          // We STERNLY ignore verified -> unverified transitions to prevent stale state loops.
+          const currentIsVerified = !!currentUser?.emailVerified;
+          const newIsVerified = !!newUser?.emailVerified;
+          
+          const hasUserIdChanged = currentUserId !== newUserId;
+          const verificationStatusImproved = !currentIsVerified && newIsVerified;
+          
+          if (hasUserIdChanged || verificationStatusImproved) {
+            console.log('[App] User state change significant, syncing...', {
+              idChanged: hasUserIdChanged,
+              verificationImproved: verificationStatusImproved
             });
 
             if (newUser) {
@@ -1771,7 +1674,7 @@ const App: React.FC = () => {
                   ...prevState,
                   user: null,
                   subscriptionTier: undefined,
-                  links: DEFAULT_LINKS,
+                  links: REGIONAL_DEFAULT_LINKS[region],
                   requests: DEFAULT_REQUESTS
                 };
                 // Save state asynchronously without blocking
@@ -1875,14 +1778,25 @@ const App: React.FC = () => {
   // 1. Sync UserContext to AppState
   useEffect(() => {
     if (contextUser) {
-      // If we haven't attempted a sync yet (first load) or if the user changed, sync from cloud.
-      if (!hasAttemptedCloudSyncRef.current || (appState.user && appState.user.id !== contextUser.id)) {
-        console.log('[App] Auth context detected user session, fetching latest cloud data...');
+      const currentAppUser = appState.user;
+      
+      // Determine if we truly need to trigger the full login/sync flow
+      const idChanged = !currentAppUser || currentAppUser.id !== contextUser.id;
+      const verificationFixed = contextUser.emailVerified && (!currentAppUser || !currentAppUser.emailVerified);
+      const initialSyncNeeded = !hasAttemptedCloudSyncRef.current;
+
+      if (idChanged || verificationFixed || initialSyncNeeded) {
+        console.log('[App] Auth state change requires sync:', { 
+          idExists: !!currentAppUser, 
+          idChanged, 
+          verificationFixed, 
+          initialSyncNeeded 
+        });
         hasAttemptedCloudSyncRef.current = true;
         handleUserLogin(contextUser);
       }
     }
-  }, [contextUser, appState.user, handleUserLogin]);
+  }, [contextUser?.id, contextUser?.emailVerified, !!appState.user, handleUserLogin]);
 
   // 2. Global Loading Overlay (Prevents blank screens/flashes)
   if (isUserContextChecking && !appState.user) {
@@ -1969,11 +1883,12 @@ const App: React.FC = () => {
             {/* Search Engine Dropdown */}
             {isSearchDropdownOpen && (
               <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 border border-black/5 dark:border-white/5 rounded-2xl shadow-lg overflow-hidden z-30 min-w-[200px]">
-                {SEARCH_ENGINES.map((engine) => (
+                {searchEngines.map((engine) => (
                   <button
                     key={engine.id}
                     onClick={() => {
                       setSelectedEngine(engine.id);
+                      localStorage.setItem('focus_tab_search_engine', engine.id);
                       setIsSearchDropdownOpen(false);
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors ${selectedEngine === engine.id ? 'bg-gray-50 dark:bg-white/5' : ''
@@ -2351,21 +2266,29 @@ const App: React.FC = () => {
                     </button>
                   ) : (
                     <div className="relative inline-block group">
-                      {/* Native Google SDK Button Container */}
-                      <div id="google-login-btn" className={`transition-all ${isSyncing ? 'opacity-20 pointer-events-none scale-95' : 'hover:scale-[1.02] active:scale-[0.98]'}`}></div>
-
-                      {/* Animated Loading Overlay for Web */}
-                      {isSyncing && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="flex items-center gap-3 bg-white/80 dark:bg-black/80 px-4 py-2 rounded-full shadow-lg border border-indigo-500/20">
-                            <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest">Signing in...</span>
-                          </div>
-                        </div>
-                      )}
+                      {/* New Firebase Auth login button */}
+                      <button
+                        onClick={handleSignIn}
+                        disabled={isSyncing}
+                        className={`flex items-center gap-3 bg-white dark:bg-[#1a1a2e] border border-gray-200 dark:border-white/10 rounded-full px-6 py-3 shadow-sm transition-all ${isSyncing ? 'opacity-40 pointer-events-none scale-95' : 'hover:scale-[1.02] hover:shadow-md active:scale-[0.98]'}`}
+                      >
+                        {isSyncing ? (
+                          <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <svg width="18" height="18" viewBox="0 0 24 24">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                          </svg>
+                        )}
+                        <span className="font-bold tracking-tight text-gray-700 dark:text-gray-200 text-sm">
+                          {isSyncing ? 'Signing in...' : 'Sign in'}
+                        </span>
+                      </button>
                     </div>
                   )}
                   <div className="flex items-center justify-center gap-3 mt-4 opacity-60">

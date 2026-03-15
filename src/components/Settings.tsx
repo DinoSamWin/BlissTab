@@ -29,36 +29,45 @@ interface SettingsProps {
 }
 
 const PlanBadge = ({ user }: { user: AppState['user'] }) => {
+  const navigateToSubscription = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const subscriptionUrl = window.location.origin + '/subscription';
+    window.open(subscriptionUrl, '_blank');
+  };
+
   const plan = user?.subscriptionPlan || 'free';
   const isSubscribed = user?.isSubscribed;
 
   // Determine effective plan for display
   const effectivePlan = isSubscribed ? (plan === 'lifetime' ? 'lifetime' : 'pro') : 'free';
 
+  const commonClasses = "flex items-center gap-1.5 px-2.5 py-1 rounded-full border shadow-sm ml-3 self-center transition-all hover:scale-105 active:scale-95 cursor-pointer group";
+
   if (effectivePlan === 'lifetime') {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1a1a1a] text-[#FFD700] rounded-full border border-[#FFD700]/30 shadow-sm ml-3 self-center">
+      <button onClick={navigateToSubscription} className={`${commonClasses} bg-[#1a1a1a] text-[#FFD700] border-[#FFD700]/30`}>
         <Briefcase size={14} className="fill-[#FFD700]/10" strokeWidth={2.5} />
         <span className="text-[10px] font-bold tracking-wider uppercase">Lifetime</span>
-      </div>
+      </button>
     );
   }
 
   if (effectivePlan === 'pro') {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-700/50 shadow-sm ml-3 self-center">
+      <button onClick={navigateToSubscription} className={`${commonClasses} bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700/50`}>
         <Diamond size={14} className="fill-amber-400/20" strokeWidth={2.5} />
         <span className="text-[10px] font-bold tracking-wider uppercase">Pro</span>
-      </div>
+      </button>
     );
   }
 
   // Free
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full border border-gray-200 dark:border-gray-700 ml-3 self-center">
+    <button onClick={navigateToSubscription} className={`${commonClasses} bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-indigo-500/30 dark:hover:border-indigo-500/30`}>
       <Zap size={14} className="fill-gray-400/20" strokeWidth={2.5} />
       <span className="text-[10px] font-bold tracking-wider uppercase">Free</span>
-    </div>
+    </button>
   );
 };
 
@@ -537,6 +546,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
       if (changed) {
         await upsertUserGatewayOverride({
           user_id: userId,
+          email: state.user?.email ?? null, // Migration anchor
           canonical_url: canonicalUrl,
           custom_title: after.customTitle,
           custom_logo_path: after.customLogoPath,
@@ -611,9 +621,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   };
 
   const handleUpgrade = () => {
-    // For now, just show a message that subscription is coming soon
-    // In the future, this would redirect to a payment/subscription page
-    addToast('Subscription coming soon', 'info');
+    const subscriptionUrl = window.location.origin + '/subscription';
+    window.open(subscriptionUrl, '_blank');
   };
 
   const toggleSnippetActive = async (id: string) => {
@@ -1534,13 +1543,27 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                             <div className="flex items-center gap-4">
                               <div className="flex flex-col items-end">
                                 <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{tx.currency === 'USD' ? '$' : tx.currency}{(tx.amount / 100).toFixed(2)}</span>
-                                <span className={`text-[8px] font-bold uppercase tracking-widest ${tx.status === 'completed' || tx.status === 'active' || tx.status === 'paid' ? (tx.subscription_status === 'canceled' || tx.subscription_status === 'expired' ? 'text-red-500' : 'text-green-500') : 'text-amber-500'
-                                  }`}>{tx.status}{tx.subscription_status && (tx.subscription_status === 'canceled' || tx.subscription_status === 'expired') ? ` (${tx.subscription_status})` : ''}</span>
+                                <span className={`text-[8px] font-bold uppercase tracking-widest ${
+                                  tx.status === 'refunded' || tx.status === 'pending_refund' || tx.subscription_status === 'canceled' || tx.subscription_status === 'expired' 
+                                  ? 'text-red-400' 
+                                  : 'text-green-500'
+                                }`}>
+                                  {tx.status === 'pending_refund' ? 'Refunding' 
+                                   : tx.status === 'refunded' ? 'Refunded'
+                                   : tx.subscription_status === 'active' ? 'Subscribed'
+                                   : (tx.status === 'paid' || tx.status === 'completed') ? 'Lifetime'
+                                   : tx.status}
+                                  {tx.subscription_status && tx.subscription_status !== 'active' && tx.status !== 'refunded' && tx.status !== 'pending_refund' ? ` (${tx.subscription_status})` : ''}
+                                </span>
                               </div>
 
-                              {(state.subscriptionTier !== 'free' && (tx.subscription_id || tx.subscription) && (tx.status === 'active' || tx.status === 'completed' || tx.status === 'paid') && tx.subscription_status !== 'canceled' && tx.subscription_status !== 'expired') && (
+                              {(state.subscriptionTier === 'authenticated_subscribed' && (tx.subscription_id || tx.subscription) && (tx.status === 'active' || tx.status === 'completed' || tx.status === 'paid') && tx.status !== 'refunded' && tx.status !== 'pending_refund' && tx.subscription_status !== 'canceled' && tx.subscription_status !== 'expired') && (
                                 <button
-                                  onClick={() => handleCancel(tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id))}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleCancel(tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id));
+                                  }}
                                   disabled={isCancelling === (tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id))}
                                   className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
                                 >
@@ -1548,9 +1571,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                                 </button>
                               )}
 
-                              {(state.subscriptionTier !== 'free' && (tx.status === 'completed' || tx.status === 'active' || tx.status === 'paid') && tx.subscription_status !== 'canceled' && tx.subscription_status !== 'expired') && (
+                              {(state.subscriptionTier === 'authenticated_subscribed' && (tx.status === 'completed' || tx.status === 'active' || tx.status === 'paid') && tx.status !== 'refunded' && tx.status !== 'pending_refund' && tx.subscription_status !== 'canceled' && tx.subscription_status !== 'expired') && (
                                 <button
-                                  onClick={() => handleRefund(tx.id, tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id))}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleRefund(tx.id, tx.subscription_id || (typeof tx.subscription === 'string' ? tx.subscription : tx.subscription?.id));
+                                  }}
                                   disabled={isRefunding === tx.id}
                                   className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
                                 >

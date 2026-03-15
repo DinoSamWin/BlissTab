@@ -202,6 +202,7 @@ export async function redeemCode(user: User, code: string): Promise<RedeemRespon
         .from('user_membership')
         .insert({
           user_id: user.id,
+          email: user.email, // Migration anchor — used to re-key records if Auth provider changes
           is_subscribed: false,
           member_via_redeem: true,
           redeem_code_id: redeemCodeData.id,

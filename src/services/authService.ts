@@ -1,445 +1,515 @@
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  signOut,
+  signInWithCredential,
+  signInWithPopup,
+  fetchSignInMethodsForEmail,
+  linkWithCredential,
+  GoogleAuthProvider,
+  FacebookAuthProvider,
+  TwitterAuthProvider,
+  OAuthCredential,
+  AuthError,
+  AuthErrorCodes,
+  updateProfile,
+} from 'firebase/auth';
+import { auth } from './firebaseService';
 import { User } from '../types';
 
-/**
- * Google OAuth Client ID from environment variable
- */
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
-const IS_PLACEHOLDER_ID = !CLIENT_ID || CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID') || CLIENT_ID === '';
-
-// Check if running in Chrome Extension environment with Identity permission
+// Check if we're in a Chrome Extension environment
 // @ts-ignore
-const IS_EXTENSION = typeof chrome !== 'undefined' && !!chrome.identity && !!chrome.runtime?.id;
+const IS_EXTENSION = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+// ─────────────────────────────────────────────
+// Rate Limiter (front-end, session-level)
+// ─────────────────────────────────────────────
 
-export async function initGoogleAuthStrict(onUser: (user: User | null) => void) {
-  if (typeof window === 'undefined') return;
+const RATE_LIMIT_KEY = 'ft_login_attempts';
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 60 seconds
 
-  console.log('[AuthStrict] Initializing Strict Auth V2');
-  console.log('[AuthStrict] explicit_signout status:', localStorage.getItem('focus_tab_explicit_signout'));
+interface RateLimitState {
+  count: number;
+  lockedUntil: number | null;
+}
 
-  // 1. Check local storage first
-  const savedUser = localStorage.getItem('focus_tab_user');
-  let hasExistingUser = false;
+export function getRateLimitState(): RateLimitState {
+  try {
+    const raw = sessionStorage.getItem(RATE_LIMIT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { count: 0, lockedUntil: null };
+}
 
-  if (savedUser) {
+export function recordFailedAttempt(): RateLimitState {
+  const state = getRateLimitState();
+  const newCount = state.count + 1;
+  const lockedUntil = newCount >= RATE_LIMIT_MAX ? Date.now() + RATE_LIMIT_WINDOW_MS : null;
+  const next: RateLimitState = { count: newCount, lockedUntil };
+  sessionStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function resetRateLimit(): void {
+  sessionStorage.removeItem(RATE_LIMIT_KEY);
+}
+
+export function isRateLimited(): { limited: boolean; secondsLeft: number } {
+  const state = getRateLimitState();
+  if (state.lockedUntil && Date.now() < state.lockedUntil) {
+    const secondsLeft = Math.ceil((state.lockedUntil - Date.now()) / 1000);
+    return { limited: true, secondsLeft };
+  }
+  if (state.lockedUntil && Date.now() >= state.lockedUntil) {
+    resetRateLimit();
+  }
+  return { limited: false, secondsLeft: 0 };
+}
+
+// ─────────────────────────────────────────────
+// Firebase User → App User mapper
+// ─────────────────────────────────────────────
+
+export function firebaseUserToAppUser(fbUser: any): User {
+  const isSocialUser = fbUser.providerData && fbUser.providerData.some(
+    (p: any) => p.providerId !== 'password'
+  );
+
+  // X (Twitter) specific: Email is often nested in providerData
+  let email = fbUser.email;
+  if (!email && fbUser.providerData) {
+    const xProvider = fbUser.providerData.find((p: any) => p.providerId === 'twitter.com');
+    if (xProvider && xProvider.email) {
+      email = xProvider.email;
+    }
+  }
+
+  return {
+    id: fbUser.uid,
+    email: email || '',
+    // Trust social providers or Firebase's own flag
+    emailVerified: fbUser.emailVerified || isSocialUser,
+    name: fbUser.displayName || email?.split('@')[0] || 'User',
+    picture: fbUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(fbUser.displayName || fbUser.email || 'U')}&background=6366f1&color=fff`,
+  };
+}
+
+// ─────────────────────────────────────────────
+// Email / Password Auth
+// ─────────────────────────────────────────────
+
+export interface AuthResult {
+  user?: User;
+  error?: string;
+  /** For account-exists-with-different-credential: existing methods on that email */
+  existingMethods?: string[];
+  /** When the email was found via a social provider, pending credential to link */
+  pendingCredential?: OAuthCredential;
+  /** True when signup succeeded but email verification is pending */
+  needsEmailVerification?: boolean;
+}
+
+/** 
+ * Call custom Supabase Edge Function to generate verification link and send branded email via Resend
+ */
+async function triggerCustomVerificationEmail(email: string, displayName?: string) {
+  const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
+  if (!functionsUrl) {
+    console.error('[Auth] VITE_SUPABASE_FUNCTIONS_URL not configured');
+    return { success: false };
+  }
+
+  try {
+    const lang = 'en'; 
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const response = await fetch(`${functionsUrl}/send-verification-email`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey || ''
+      },
+      body: JSON.stringify({ email, displayName, lang }),
+    });
+    
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to trigger cloud function');
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error('[Auth] Custom notification trigger failed:', err);
+    throw err; // Propagate error so UI can show it
+  }
+}
+
+/** Force-reload the current user's data from Firebase server */
+export async function reloadUser(): Promise<User | null> {
+  if (!auth?.currentUser) return null;
+  try {
+    await auth.currentUser.reload();
+    return firebaseUserToAppUser(auth.currentUser);
+  } catch (e) {
+    console.warn('[Auth] reloadUser error:', e);
+    return null;
+  }
+}
+
+/** Re-send verification email to the currently signed-in (unverified) user */
+export async function resendVerificationEmail(): Promise<{ success: boolean }> {
+  if (!auth?.currentUser) return { success: false };
+  try {
+    const user = auth.currentUser;
+    return await triggerCustomVerificationEmail(user.email || '', user.displayName || '');
+  } catch (e) {
+    console.warn('[Auth] resendVerificationEmail error:', e);
+    return { success: false };
+  }
+}
+
+export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
+  if (!auth) return { error: 'firebase_not_configured' };
+  const rateLimitCheck = isRateLimited();
+  if (rateLimitCheck.limited) {
+    return { error: `rate_limited:${rateLimitCheck.secondsLeft}` };
+  }
+
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    resetRateLimit();
+    return { user: firebaseUserToAppUser(result.user) };
+  } catch (e) {
+    const err = e as AuthError;
+    recordFailedAttempt();
+
+    switch (err.code) {
+      case AuthErrorCodes.INVALID_PASSWORD:
+      case 'auth/wrong-password':
+      case 'auth/invalid-credential': {
+        const state = getRateLimitState();
+        const attemptsLeft = RATE_LIMIT_MAX - state.count;
+        return { error: `wrong_password:${Math.max(0, attemptsLeft)}` };
+      }
+      case AuthErrorCodes.USER_DELETED:
+      case 'auth/user-not-found':
+        return { error: 'user_not_found' };
+      case 'auth/too-many-requests':
+        return { error: 'rate_limited:60' };
+      case 'auth/invalid-email':
+        return { error: 'invalid_email' };
+      default:
+        console.error('[Auth] signInWithEmail error:', err.code, err.message);
+        return { error: 'unknown' };
+    }
+  }
+}
+
+export async function signUpWithEmail(email: string, password: string, displayName?: string): Promise<AuthResult> {
+  if (!auth) return { error: 'firebase_not_configured' };
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    if (displayName) {
+      await updateProfile(result.user, { displayName });
+    }
+    // Send verification email — now using custom Supabase + Resend flow
     try {
-      const user = JSON.parse(savedUser);
-      onUser(user);
-      hasExistingUser = true;
-      console.log('[AuthStrict] Restored user:', user.email);
-    } catch (e) {
-      console.error('[AuthStrict] Restore failed', e);
+      await triggerCustomVerificationEmail(email, displayName);
+    } catch (verifyErr: any) {
+      console.warn('[Auth] Verification email failed:', verifyErr);
+      return { error: `email_delivery_failed:${verifyErr.message}` };
     }
-  }
+    resetRateLimit();
+    // Return needsEmailVerification so UI shows the pending screen instead of logging in
+    return { user: firebaseUserToAppUser(result.user), needsEmailVerification: true };
+  } catch (e) {
+    const err = e as AuthError;
 
-  // 1.5. Check for id_token in URL fragment (Fallback for window.open/redirect flows)
-  if (!hasExistingUser && typeof window !== 'undefined' && window.location.hash) {
-    try {
-      const params = new URLSearchParams(window.location.hash.substring(1));
-      const idToken = params.get('id_token');
-      if (idToken) {
-        console.log('[AuthStrict] Found id_token in URL fragment, parsing...');
-        const base64Url = idToken.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const payload = JSON.parse(window.atob(base64));
-
-        const incomingUser: User = {
-          id: payload.sub,
-          email: payload.email,
-          name: payload.name,
-          picture: payload.picture
-        };
-
-        console.log('[AuthStrict] Authenticated from URL fragment:', incomingUser.email);
-        localStorage.setItem('focus_tab_user', JSON.stringify(incomingUser));
-        localStorage.removeItem('focus_tab_explicit_signout');
-
-        // Clear the hash to prevent re-parsing on refresh
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-
-        onUser(incomingUser);
-        hasExistingUser = true;
-      }
-    } catch (e) {
-      console.error('[AuthStrict] URL fragment parse failed', e);
-    }
-  }
-
-  // If in Extension mode, stop here.
-  if (IS_EXTENSION) {
-    console.log('[AuthStrict] Extension mode: Skipping GIS One Tap initialization.');
-    if (!hasExistingUser) onUser(null);
-    return;
-  }
-
-  // 2. Poll for Google SDK (Web Mode Only)
-  const gsiInterval = setInterval(() => {
-    if ((window as any).google?.accounts?.id) {
-      clearInterval(gsiInterval);
-      console.log('[AuthStrict] Google SDK loaded.');
-
-      const handleCredentialResponse = (response: any) => {
-        try {
-          console.log('[AuthStrict] RESPONSE RECEIVED', response);
-          const base64Url = response.credential.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const payload = JSON.parse(window.atob(base64));
-
-          const incomingUser: User = {
-            id: payload.sub,
-            email: payload.email,
-            name: payload.name,
-            picture: payload.picture
-          };
-
-          // 1. TIMESTAMP CHECK
-          const lastLogoutTs = localStorage.getItem('focus_tab_last_logout_ts');
-          const tokenIat = payload.iat; // Seconds
-          if (lastLogoutTs && tokenIat) {
-            const logoutTime = parseInt(lastLogoutTs, 10);
-            if (tokenIat * 1000 < logoutTime) {
-              console.error('[AuthStrict] BLOCKING STALE CREDENTIAL. Issued before logout.');
-              return;
-            }
-          }
-
-          // 2. EXPLICIT SIGNOUT CHECK
-          const isExplicitSignOut = localStorage.getItem('focus_tab_explicit_signout') === 'true';
-          const selectBy = response.select_by;
-
-          if (isExplicitSignOut) {
-            if (selectBy === 'auto' || !selectBy) {
-              console.error('[AuthStrict] BLOCKING AUTO-LOGIN due to Explicit SignOut.');
-              (window as any).google.accounts.id.disableAutoSelect();
-              return;
-            }
-          }
-
-          // 3. EXISTING USER CHECK
-          const existingUserStr = localStorage.getItem('focus_tab_user');
-          if (existingUserStr) {
-            const existing = JSON.parse(existingUserStr);
-            if (existing.email !== incomingUser.email) {
-              console.error('[AuthStrict] BLOCKING MISMATCH:', existing.email, '!=', incomingUser.email);
-              return;
-            }
-            if (selectBy === 'auto') {
-              console.warn('[AuthStrict] Blocking redundant auto-login for existing user');
-              return;
-            }
-          }
-
-          console.log('[AuthStrict] Authenticated successfully:', incomingUser.email);
-          localStorage.setItem('focus_tab_user', JSON.stringify(incomingUser));
-          localStorage.removeItem('focus_tab_explicit_signout');
-
-          onUser(incomingUser);
-
-        } catch (e) {
-          console.error('[AuthStrict] Credential handling failed', e);
-        }
-      };
-
-      const isSafariBrowser = isSafari();
-
+    if (err.code === 'auth/email-already-in-use') {
+      // Detect which sign-in methods are associated with this email
       try {
-        const isExplicitSignOut = localStorage.getItem('focus_tab_explicit_signout') === 'true';
-
-        const initConfig: any = {
-          client_id: IS_PLACEHOLDER_ID ? '65772780936-6opn1jon0nthab7erht3i6pqgk3o0q1u.apps.googleusercontent.com' : CLIENT_ID, // Force correct ID if placeholder is used
-          callback: handleCredentialResponse,
-          auto_select: false,
-          use_fedcm_for_prompt: false,
-          cancel_on_tap_outside: true
-        };
-
-        console.log('[AuthStrict] Initializing GSI with:', initConfig);
-        (window as any).google.accounts.id.initialize(initConfig);
-
-        // Prompt Logic (Web Mode Only)
-        if (!hasExistingUser) {
-          if (isExplicitSignOut) {
-            console.log('[AuthStrict] Explicit sign-out detected. Suppressing One Tap prompt.');
-            onUser(null);
-            return;
-          }
-
-          if (!isSafariBrowser) {
-            (window as any).google.accounts.id.prompt((notification: any) => {
-              console.log('[AuthStrict] One Tap prompt notification:', notification.getMomentType());
-              if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                // Only Resolve null if we truly have no other options
-                // (SDK might retry or wait for user action)
-                console.log('[AuthStrict] One Tap not displayed or skipped. Checking again later.');
-              }
-            });
-          } else {
-            console.log('[AuthStrict] Safari: Skipping prompt');
-            onUser(null);
-          }
-        }
-      } catch (error) {
-        console.error('[AuthStrict] Init failed', error);
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+        return { error: 'email_in_use', existingMethods: methods };
+      } catch {
+        return { error: 'email_in_use', existingMethods: [] };
       }
     }
-  }, 1000); // Polling slower to be safe
 
-
-  setTimeout(() => {
-    if (gsiInterval) {
-      clearInterval(gsiInterval);
-      // If we haven't found a user and haven't tried to initialize yet (SDK failed)
-      // We MUST call onUser(null) to let the app proceed
-      if (!hasExistingUser) {
-        console.warn('[AuthStrict] Google SDK load timeout. Proceeding as unauthenticated.');
-        onUser(null);
-      }
+    switch (err.code) {
+      case 'auth/weak-password':
+        return { error: 'weak_password' };
+      case 'auth/invalid-email':
+        return { error: 'invalid_email' };
+      default:
+        console.error('[Auth] signUpWithEmail error:', err.code, err.message);
+        return { error: 'unknown' };
     }
-  }, 5000);
+  }
 }
 
-/**
- * Detect if browser is Safari
- */
-function isSafari(): boolean {
-  if (typeof window === 'undefined') return false;
-  const userAgent = window.navigator.userAgent.toLowerCase();
-  const isSafariUA = /safari/.test(userAgent) && !/chrome/.test(userAgent) && !/chromium/.test(userAgent);
-  const isSafariVendor = /^((?!chrome|android).)*safari/i.test(window.navigator.userAgent);
-  return isSafariUA || isSafariVendor || /^((?!chrome|android).)*safari/i.test(window.navigator.vendor);
+export async function sendPasswordReset(email: string): Promise<{ success: boolean }> {
+  if (!auth) return { success: false };
+  try {
+    // We now use our custom branded email via Supabase Edge Function
+    return await triggerCustomPasswordResetEmail(email);
+  } catch (e) {
+    // Always return success to prevent email enumeration in UI
+    console.error('[Auth] sendPasswordReset error:', (e as AuthError).code);
+    return { success: true };
+  }
 }
 
-/**
- * Renders the Google Sign-In button.
- * - Web: Uses GSI SDK.
- * - Extension: Renders a custom button triggering chrome.identity.
- */
-export function renderGoogleButton(containerId: string, theme: 'light' | 'dark' = 'light') {
-  if (typeof window === 'undefined') return;
+// ─────────────────────────────────────────────
+// Google Sign In
+// ─────────────────────────────────────────────
 
-  console.log('[Auth] renderGoogleButton called for:', containerId);
-
-  // === EXTENSION HANDLING ===
+export async function signInWithGoogle(): Promise<AuthResult> {
   if (IS_EXTENSION) {
-    const container = document.getElementById(containerId);
-    if (container) {
-      // Render a custom button that matches Google's style
-      container.innerHTML = `
-              <button id="ext-google-login-btn" style="
-                  display: flex; 
-                  align-items: center; 
-                  justify-content: center; 
-                  background: ${theme === 'dark' ? '#131314' : '#FFFFFF'}; 
-                  color: ${theme === 'dark' ? '#E3E3E3' : '#1F1F1F'}; 
-                  border: 1px solid ${theme === 'dark' ? '#747775' : '#747775'}; 
-                  border-radius: 20px; 
-                  height: 40px; 
-                  padding: 0 12px; 
-                  font-family: 'Roboto', sans-serif; 
-                  font-size: 14px; 
-                  font-weight: 500; 
-                  cursor: pointer; 
-                  width: 280px;
-                  transition: background-color 0.2s;
-              ">
-                  <span style="margin-right: 12px; display: flex;">
-                      <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
-                  </span>
-                  Sign in with Google
-              </button>
-          `;
-
-      const btn = document.getElementById('ext-google-login-btn');
-      if (btn) {
-        btn.onmouseenter = () => { btn.style.backgroundColor = theme === 'dark' ? '#2D2E30' : '#F7F8F8'; };
-        btn.onmouseleave = () => { btn.style.backgroundColor = theme === 'dark' ? '#131314' : '#FFFFFF'; };
-        btn.onclick = () => openGoogleSignIn();
-      }
-      console.log('[Auth] Extension button rendered manually.');
-    }
-    return;
+    return signInWithGoogleExtension();
   }
+  return signInWithGoogleWeb();
+}
 
-  // === WEB HANDLING ===
-  if ((window as any).google?.accounts?.id) {
-    const container = document.getElementById(containerId);
-    if (container) {
-      try {
-        console.log('[Auth] Rendering Google button...');
-        const buttonConfig: any = {
-          theme: theme === 'dark' ? 'filled_black' : 'outline',
-          size: 'large',
-          shape: 'pill',
-          text: 'signin_with',
-          width: 280
-        };
+async function signInWithGoogleWeb(): Promise<AuthResult> {
+  if (!auth) return { error: 'firebase_not_configured' };
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('email');
+    provider.addScope('profile');
+    provider.setCustomParameters({ prompt: 'select_account' });
 
-        (window as any).google.accounts.id.renderButton(container, buttonConfig);
-        console.log('[Auth] Google button rendered successfully');
-      } catch (error) {
-        console.error('[Auth] Failed to render Google button:', error);
-      }
-    } else {
-      console.warn('[Auth] Container not found:', containerId);
-    }
-  } else {
-    console.warn('[Auth] Google SDK not loaded yet, button will be rendered when SDK is ready');
-    setTimeout(() => {
-      if ((window as any).google?.accounts?.id) {
-        renderGoogleButton(containerId, theme);
-      }
-    }, 1000);
+    const result = await signInWithPopup(auth, provider);
+    return { user: firebaseUserToAppUser(result.user) };
+  } catch (e) {
+    return handleSocialAuthError(e as AuthError, 'google.com');
   }
 }
 
-/**
- * Manual trigger for the sign-in flow.
- * - Web: Triggers prompt() or clicks hidden button.
- * - Extension: Calls chrome.identity.launchWebAuthFlow.
- */
-export function openGoogleSignIn(onUser?: (user: User | null) => void) {
-  if (typeof window === 'undefined') return;
-
-  if (IS_PLACEHOLDER_ID) {
-    console.info("StartlyTab: Simulating login (No Client ID provided).");
-    setTimeout(() => {
-      const mockUser: User = {
-        id: 'mock-' + Math.random().toString(36).substr(2, 9),
-        email: 'workspace.pro@example.com',
-        name: 'Design Professional',
-        picture: `https://ui-avatars.com/api/?name=Design+Professional&background=6366f1&color=fff`
-      };
-      localStorage.setItem('focus_tab_user', JSON.stringify(mockUser));
-      if (onUser) onUser(mockUser);
-    }, 600);
-    return;
-  }
-
-  // === EXTENSION HANDLING ===
-  if (IS_EXTENSION) {
-    console.log('[Auth] Starting Extension WebAuthFlow');
+async function signInWithGoogleExtension(): Promise<AuthResult> {
+  try {
+    const clientId = GOOGLE_CLIENT_ID || '4260709449-hvmd55u8rt4vrfrh8sduqkcjr3f35gar.apps.googleusercontent.com';
     // @ts-ignore
     const redirectUri = chrome.identity.getRedirectURL();
-    console.log('[Auth] Using Redirect URI:', redirectUri);
-
     const nonce = Math.random().toString(36).substring(7);
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${CLIENT_ID}` +
-      `&response_type=id_token` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&scope=email%20profile%20openid` +
-      `&nonce=${nonce}` +
-      `&prompt=select_account`;
 
-    // @ts-ignore
-    chrome.identity.launchWebAuthFlow({
-      url: authUrl,
-      interactive: true
-    }, (redirectUrl) => {
+    const authUrl = [
+      'https://accounts.google.com/o/oauth2/v2/auth',
+      `?client_id=${clientId}`,
+      `&response_type=id_token`,
+      `&redirect_uri=${encodeURIComponent(redirectUri)}`,
+      `&scope=email%20profile%20openid`,
+      `&nonce=${nonce}`,
+      `&prompt=select_account`,
+    ].join('');
+
+    const redirectUrl: string = await new Promise((resolve, reject) => {
       // @ts-ignore
-      if (chrome.runtime.lastError) {
+      chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (url: string | undefined) => {
         // @ts-ignore
-        console.error('[Auth] WebAuthFlow error:', chrome.runtime.lastError.message);
-        return;
-      }
-      if (redirectUrl) {
-        console.log('[Auth] WebAuthFlow success. Parsing token...');
-        // Parse id_token from URL fragment
-        const url = new URL(redirectUrl);
-        const params = new URLSearchParams(url.hash.substring(1)); // hash contains id_token
-        const idToken = params.get('id_token');
-
-        if (idToken) {
-          try {
-            const base64Url = idToken.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const payload = JSON.parse(window.atob(base64));
-
-            const user: User = {
-              id: payload.sub,
-              email: payload.email,
-              name: payload.name,
-              picture: payload.picture
-            };
-
-            localStorage.setItem('focus_tab_user', JSON.stringify(user));
-            localStorage.removeItem('focus_tab_explicit_signout');
-
-            if (onUser) {
-              onUser(user);
-            } else {
-              // If no callback, we can reload to pick up state, or expose a global event
-              window.location.reload();
-            }
-          } catch (e) {
-            console.error('[Auth] Token parse error', e);
-          }
+        if (chrome.runtime.lastError) {
+          // @ts-ignore
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (url) {
+          resolve(url);
         } else {
-          console.warn('[Auth] No id_token found in redirect URL');
+          reject(new Error('No redirect URL returned'));
         }
-      }
+      });
     });
-    return;
-  }
 
-  // === WEB HANDLING ===
-  if ((window as any).google?.accounts?.id && !IS_EXTENSION) {
-    console.log('[Auth] Web mode: Opening Google Sign-In in a new tab');
+    const hash = new URL(redirectUrl).hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const idToken = params.get('id_token');
 
-    // To strictly use a "New Tab" instead of a popup, we construct the OAuth URL manually
-    // This allows us to use target="_blank" logic
-    const redirectUri = window.location.origin;
-    const nonce = Math.random().toString(36).substring(7);
+    if (!idToken) throw new Error('No id_token in redirect');
 
-    // Use the standard Google OAuth 2.0 endpoint for a full-page/tab experience
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${CLIENT_ID}` +
-      `&response_type=id_token` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&scope=email%20profile%20openid` +
-      `&nonce=${nonce}` +
-      `&prompt=select_account`;
-
-    // Open in a new tab
-    const newWindow = window.open(authUrl, '_blank');
-
-    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-      // Pop-up blocker might have triggered, fallback to GSI prompt
-      console.warn('[Auth] New tab blocked or failed, falling back to SDK prompt');
-      (window as any).google.accounts.id.prompt();
-    }
-    return;
+    const credential = GoogleAuthProvider.credential(idToken);
+    const result = await signInWithCredential(auth, credential);
+    return { user: firebaseUserToAppUser(result.user) };
+  } catch (e) {
+    console.error('[Auth] Google Extension sign-in error:', e);
+    return { error: 'cancelled' };
   }
 }
 
-export const signOutUser = () => {
-  const currentUserEmail = localStorage.getItem('focus_tab_user');
-  let userEmail: string | null = null;
-  try {
-    if (currentUserEmail) {
-      const parsed = JSON.parse(currentUserEmail);
-      userEmail = parsed.email;
-    }
-  } catch (e) { }
+// ─────────────────────────────────────────────
+// Facebook Sign In
+// ─────────────────────────────────────────────
 
+export async function signInWithFacebook(): Promise<AuthResult> {
+  if (!auth) return { error: 'firebase_not_configured' };
+  try {
+    const provider = new FacebookAuthProvider();
+    provider.addScope('email');
+    provider.addScope('public_profile');
+
+    const result = await signInWithPopup(auth, provider);
+    return { user: firebaseUserToAppUser(result.user) };
+  } catch (e) {
+    return handleSocialAuthError(e as AuthError, 'facebook.com');
+  }
+}
+
+// ─────────────────────────────────────────────
+// X (Twitter) Sign In
+// ─────────────────────────────────────────────
+
+export async function signInWithX(): Promise<AuthResult> {
+  if (!auth) return { error: 'firebase_not_configured' };
+  try {
+    const provider = new TwitterAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    return { user: firebaseUserToAppUser(result.user) };
+  } catch (e) {
+    return handleSocialAuthError(e as AuthError, 'twitter.com');
+  }
+}
+
+// ─────────────────────────────────────────────
+// Account Linking (after conflict resolution)
+// ─────────────────────────────────────────────
+
+export async function linkPendingCredential(pendingCredential: OAuthCredential): Promise<AuthResult> {
+  if (!auth) return { error: 'firebase_not_configured' };
+  const currentUser = auth.currentUser;
+  if (!currentUser) return { error: 'not_logged_in' };
+
+  try {
+    const result = await linkWithCredential(currentUser, pendingCredential);
+    return { user: firebaseUserToAppUser(result.user) };
+  } catch (e) {
+    console.error('[Auth] linkWithCredential error:', e);
+    return { error: 'link_failed' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// Sign Out
+// ─────────────────────────────────────────────
+
+export async function signOutUser(): Promise<void> {
+  if (auth) {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error('[Auth] signOut error:', e);
+    }
+  }
+  // Synchronously clear local cache
   localStorage.removeItem('focus_tab_user');
   localStorage.removeItem('focus_tab_token');
   localStorage.setItem('focus_tab_last_logout_ts', Date.now().toString());
+  localStorage.setItem('focus_tab_explicit_signout', 'true');
+}
 
-  // Web Revoke
-  if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+// ─────────────────────────────────────────────
+// Shared Error Handler for Social Providers
+// ─────────────────────────────────────────────
+
+async function handleSocialAuthError(err: AuthError, _provider: string): Promise<AuthResult> {
+  if (err.code === 'auth/account-exists-with-different-credential') {
+    const email = (err as any).customData?.email || '';
+    let existingMethods: string[] = [];
+    let pendingCredential: OAuthCredential | undefined;
+
     try {
-      (window as any).google.accounts.id.disableAutoSelect();
-      (window as any).google.accounts.id.cancel();
-      if (userEmail) {
-        (window as any).google.accounts.id.revoke(userEmail, () => { });
+      if (email) {
+        existingMethods = await fetchSignInMethodsForEmail(auth, email);
       }
-    } catch (e) {
-      console.warn('[Auth] Failed to revoke/cancel', e);
-    }
+      // Extract the pending credential to link later
+      if (_provider === 'facebook.com') {
+        pendingCredential = FacebookAuthProvider.credentialFromError(err) ?? undefined;
+      } else if (_provider === 'twitter.com') {
+        pendingCredential = TwitterAuthProvider.credentialFromError(err) ?? undefined;
+      } else if (_provider === 'google.com') {
+        pendingCredential = GoogleAuthProvider.credentialFromError(err) ?? undefined;
+      }
+    } catch { /* ignore */ }
+
+    return {
+      error: 'account_exists_different_credential',
+      existingMethods,
+      pendingCredential,
+    };
   }
 
-  // Extension Revoke (Optional: Remove cached token if using getAuthToken, but we use WebAuthFlow so just clear local state)
-};
+  if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+    return { error: 'cancelled' };
+  }
+
+  if (err.code === 'auth/popup-blocked') {
+    return { error: 'popup_blocked' };
+  }
+
+  console.error('[Auth] Social auth error:', err.code, err.message);
+  return { error: 'unknown' };
+}
+
+// ─────────────────────────────────────────────
+// Get existing sign-in methods for an email
+// ─────────────────────────────────────────────
+
+export async function getSignInMethodsForEmail(email: string): Promise<string[]> {
+  try {
+    return await fetchSignInMethodsForEmail(auth, email);
+  } catch {
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────
+// Legacy compatibility: keep renderGoogleButton
+// (no longer renders via GSI, will be replaced by LoginPage UI)
+// ─────────────────────────────────────────────
+export function renderGoogleButton(_containerId: string, _theme: 'light' | 'dark' = 'light') {
+  // This function is kept for backwards compatibility.
+  // New UI components in LoginPage.tsx handle button rendering directly.
+  console.warn('[Auth] renderGoogleButton is deprecated. Use LoginPage.tsx Google button instead.');
+}
+
+// ─────────────────────────────────────────────
+// Legacy Google Init (kept for any remaining usage)
+// Will be phased out in favour of onAuthStateChanged in UserContext
+// ─────────────────────────────────────────────
+export async function initGoogleAuthStrict(_onUser: (user: User | null) => void) {
+  // No-op: auth state is now managed via onAuthStateChanged in UserContext.tsx
+  // This shim prevents import errors from components still referencing it.
+}
+
+/**
+ * Call custom Supabase Edge Function to generate password reset link and send branded email
+ */
+async function triggerCustomPasswordResetEmail(email: string) {
+  const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
+  if (!functionsUrl) {
+    console.error('[Auth] VITE_SUPABASE_FUNCTIONS_URL not configured');
+    return { success: false };
+  }
+
+  try {
+    const lang = 'en';
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const response = await fetch(`${functionsUrl}/send-password-reset-email`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey || ''
+      },
+      body: JSON.stringify({ email, lang }),
+    });
+    
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to trigger reset function');
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error('[Auth] Custom reset trigger failed:', err);
+    return { success: false };
+  }
+}

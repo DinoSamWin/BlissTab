@@ -1,4 +1,11 @@
 
+export interface SearchEngine {
+  id: string;
+  name: string;
+  icon: string;
+  searchUrl: string;
+}
+
 export interface QuickLink {
   id: string;
   url: string;
@@ -36,6 +43,7 @@ export type SubscriptionStatus = 'active' | 'expired' | 'canceled';
 export interface User {
   id: string;
   email: string;
+  emailVerified?: boolean;
   name?: string;
   picture?: string;
   // Subscription fields (from backend)

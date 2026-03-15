@@ -40,6 +40,7 @@ export interface GatewayMetadataRow {
 
 export interface UserGatewayOverrideRow {
   user_id: string;
+  email?: string | null; // Migration anchor — lets us re-key by email if Auth provider changes
   canonical_url: string;
   custom_title: string | null;
   custom_logo_path: string | null;

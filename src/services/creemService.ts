@@ -21,8 +21,9 @@ interface PortalSessionResponse {
  * Create a checkout session for a specific product
  * @param productId The Creem product ID to subscribe to
  * @param email User's email (optional, for pre-filling)
+ * @param userId User's UUID (required for account binding)
  */
-export async function createCheckoutSession(productId: string, email?: string): Promise<string> {
+export async function createCheckoutSession(productId: string, email?: string, userId?: string): Promise<string> {
     const client = getSupabaseClient();
 
     // MOCK MODE: If Supabase CLI/Edge Functions are not set up locally or client is missing,
@@ -42,6 +43,7 @@ export async function createCheckoutSession(productId: string, email?: string): 
             body: {
                 productId,
                 email,
+                userId,
                 action: 'create_checkout',
                 testMode: import.meta.env.VITE_CREEM_TEST_MODE === 'true'
             }
@@ -103,32 +105,34 @@ export async function getCustomerPortalUrl(email?: string): Promise<string> {
  */
 async function invokeCreemFunction(body: any): Promise<any> {
     const client = getSupabaseClient();
-    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/creem-checkout`;
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!client) throw new Error('Supabase client not initialized');
 
     try {
-        // Try to get current session to pass as Bearer token
-        const { data: { session } } = await client.auth.getSession();
-
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': anonKey
-            },
-            body: JSON.stringify(body)
+        const { data, error } = await client.functions.invoke('creem-checkout', {
+            body: body
         });
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || `Function returned ${response.status}`);
+        if (error) {
+            console.error('[CreemService] Function error:', error);
+            throw new Error(error.message || 'Function invocation failed');
         }
 
-        return result;
+        return data;
     } catch (error) {
         console.error('[CreemService] Function invocation failed:', error);
         throw error;
+    }
+}
+
+/**
+ * Wake up the edge function to avoid first-click cold start
+ */
+export async function pingCreem(): Promise<void> {
+    try {
+        await invokeCreemFunction({ action: 'ping' });
+        console.log('[CreemService] Function warmed up');
+    } catch (e) {
+        // Ignore ping errors
     }
 }
 

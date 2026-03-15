@@ -49,6 +49,16 @@ serve(async (req) => {
                 await handleSubscriptionCancellation(eventObject);
                 break;
 
+            case 'refund.created':
+            case 'refund.succeeded':
+                await handleRefundEvent(eventObject, eventType);
+                break;
+
+            case 'payout.created':
+            case 'payout.paid':
+                // Optional: track payouts if needed
+                break;
+
             default:
                 console.log(`Unhandled event type: ${eventType}`);
         }
@@ -76,39 +86,41 @@ async function handleSubscriptionUpdate(data: any) {
 
     if (!customerEmail) return;
 
-    // Find user by email (mapping email to user_id)
-    // Preference order: 1. public users profile, 2. user_data (frontend saves sub as user_id there), 3. auth.users UUID
-    let userId = null;
+    // Find user
+    // Priority 1: Metadata userId (most reliable for cross-email payments)
+    let userId = data.metadata?.userId || (data.metadata && typeof data.metadata === 'string' ? JSON.parse(data.metadata).userId : null);
 
-    // 1. Check public.users
-    const { data: profile } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', customerEmail)
-        .maybeSingle();
-
-    if (profile?.id) {
-        userId = profile.id;
-    } else {
-        // 2. Check user_data (where frontend saves Google sub)
-        const { data: userData } = await supabase
-            .from('user_data')
-            .select('user_id')
+    if (!userId) {
+        // Priority 2: public.users
+        const { data: profile } = await supabase
+            .from('users')
+            .select('id')
             .eq('email', customerEmail)
-            .limit(1)
             .maybeSingle();
-
-        if (userData?.user_id) {
-            userId = userData.user_id;
+        
+        if (profile?.id) {
+            userId = profile.id;
         } else {
-            // 3. Fallback to auth.users UUID
-            const { data: authUser } = await supabase
-                .schema('auth')
-                .from('users')
-                .select('id')
+            // Priority 3: user_data (Google sub mapping)
+            const { data: userData } = await supabase
+                .from('user_data')
+                .select('user_id')
                 .eq('email', customerEmail)
+                .limit(1)
                 .maybeSingle();
-            if (authUser) userId = authUser.id;
+
+            if (userData?.user_id) {
+                userId = userData.user_id;
+            } else {
+                // Priority 4: auth.users (Fallback)
+                const { data: authUser } = await supabase
+                    .schema('auth')
+                    .from('users')
+                    .select('id')
+                    .eq('email', customerEmail)
+                    .maybeSingle();
+                if (authUser) userId = authUser.id;
+            }
         }
     }
 
@@ -157,39 +169,38 @@ async function handleSubscriptionCancellation(data: any) {
         return;
     }
 
-    // Find user by email (mapping email to user_id)
-    // Preference order: 1. public users profile, 2. user_data (frontend saves sub as user_id there), 3. auth.users UUID
-    let userId = null;
+    // Find user
+    // Priority 1: Metadata
+    let userId = data.metadata?.userId || (data.metadata && typeof data.metadata === 'string' ? JSON.parse(data.metadata).userId : null);
 
-    // 1. Check public.users
-    const { data: profile } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', customerEmail)
-        .maybeSingle();
-
-    if (profile?.id) {
-        userId = profile.id;
-    } else {
-        // 2. Check user_data (where frontend saves Google sub)
-        const { data: userData } = await supabase
-            .from('user_data')
-            .select('user_id')
+    if (!userId) {
+        const { data: profile } = await supabase
+            .from('users')
+            .select('id')
             .eq('email', customerEmail)
-            .limit(1)
             .maybeSingle();
-
-        if (userData?.user_id) {
-            userId = userData.user_id;
+        
+        if (profile?.id) {
+            userId = profile.id;
         } else {
-            // 3. Fallback to auth.users UUID
-            const { data: authUser } = await supabase
-                .schema('auth')
-                .from('users')
-                .select('id')
+            const { data: userData } = await supabase
+                .from('user_data')
+                .select('user_id')
                 .eq('email', customerEmail)
+                .limit(1)
                 .maybeSingle();
-            if (authUser) userId = authUser.id;
+
+            if (userData?.user_id) {
+                userId = userData.user_id;
+            } else {
+                const { data: authUser } = await supabase
+                    .schema('auth')
+                    .from('users')
+                    .select('id')
+                    .eq('email', customerEmail)
+                    .maybeSingle();
+                if (authUser) userId = authUser.id;
+            }
         }
     }
 
@@ -213,4 +224,102 @@ async function handleSubscriptionCancellation(data: any) {
     } else {
         console.log(`Successfully revoked privileges for user ${userId}`);
     }
+}
+
+async function handleRefundEvent(data: any, type: string) {
+    const customerEmail = data.customer_email || data.customer?.email;
+    const orderId = data.order_id || data.id;
+    const amount = data.amount_total || data.amount;
+    const currency = data.currency;
+
+    console.log(`Processing refund event: ${type} for ${customerEmail}`);
+
+    // Find User (Robust search)
+    let userId = null;
+    const { data: profile } = await supabase.from('users').select('id').eq('email', customerEmail).maybeSingle();
+    if (profile?.id) {
+        userId = profile.id;
+    } else {
+        const { data: userData } = await supabase.from('user_data').select('user_id').eq('email', customerEmail).limit(1).maybeSingle();
+        if (userData?.user_id) {
+            userId = userData.user_id;
+        } else {
+            const { data: authUser } = await supabase.schema('auth').from('users').select('id').eq('email', customerEmail).maybeSingle();
+            if (authUser) userId = authUser.id;
+        }
+    }
+
+    // 1. Record in refund_requests table
+    const { error: insertError } = await supabase
+        .from('refund_requests')
+        .upsert({
+            user_id: userId,
+            email: customerEmail,
+            order_id: orderId.toString(),
+            amount_total: amount ? (amount / 100) : 0, // Assume amount is in cents
+            currency: currency,
+            status: type === 'refund.succeeded' ? 'completed' : 'pending',
+            creem_refund_id: data.id?.toString(),
+            reason: data.reason || 'Requested via support',
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'order_id' });
+
+    if (insertError) console.error('Failed to log refund request:', insertError);
+
+    // 2. If refund is successful, revoke subscription
+    if (type === 'refund.succeeded' && userId) {
+        await supabase
+            .from('user_subscriptions')
+            .update({
+                is_subscribed: false,
+                subscription_status: 'refunded',
+                updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', userId);
+        
+        console.log(`Revoking access for refunded user: ${userId}`);
+    }
+
+    // 3. Email Notification using Resend
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    if (resendApiKey) {
+        try {
+            const res = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${resendApiKey}`,
+                },
+                body: JSON.stringify({
+                    from: 'StartlyTab Payments <onboarding@resend.dev>', // Resend trial domain
+                    to: 'support@startlytab.com',
+                    subject: `[Refund Action Required] ${type}: ${customerEmail}`,
+                    html: `
+                        <h2>Refund Event Detected</h2>
+                        <p><strong>Type:</strong> ${type}</p>
+                        <p><strong>Customer:</strong> ${customerEmail}</p>
+                        <p><strong>Order ID:</strong> ${orderId}</p>
+                        <p><strong>Amount:</strong> ${amount ? amount / 100 : 0} ${currency}</p>
+                        <p><strong>Reason:</strong> ${data.reason || 'Not specified'}</p>
+                        <hr />
+                        <p>Status recorded in database as: ${type === 'refund.succeeded' ? 'completed' : 'pending'}</p>
+                        <p>Please log in to your Creem/Stripe dashboard to manage this if needed.</p>
+                    `,
+                }),
+            });
+
+            if (res.ok) {
+                console.log('Refund notification email sent successfully');
+            } else {
+                const errorData = await res.json();
+                console.error('Failed to send email via Resend:', errorData);
+            }
+        } catch (emailError) {
+            console.error('Error calling Resend API:', emailError);
+        }
+    } else {
+        console.warn('RESEND_API_KEY not found in environment, skipping email.');
+    }
+
+    console.log(`NOTIFICATION: Refund ${type} for ${customerEmail} - Amount: ${amount} ${currency}`);
 }
