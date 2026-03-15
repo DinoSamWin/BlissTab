@@ -44,6 +44,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 1. Firebase Auth State Listener (single source of truth)
     useEffect(() => {
+        if (!auth) {
+            console.warn('[UserContext] Firebase Auth not initialized. Skipping listener.');
+            setIsAuthChecking(false);
+            return;
+        }
+
         const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
             if (fbUser) {
                 const appUser = firebaseUserToAppUser(fbUser);

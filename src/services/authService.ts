@@ -328,6 +328,7 @@ async function signInWithGoogleExtension(): Promise<AuthResult> {
     if (!idToken) throw new Error('No id_token in redirect');
 
     const credential = GoogleAuthProvider.credential(idToken);
+    if (!auth) throw new Error('Firebase not configured');
     const result = await signInWithCredential(auth, credential);
     return { user: firebaseUserToAppUser(result.user) };
   } catch (e) {
@@ -454,6 +455,7 @@ async function handleSocialAuthError(err: AuthError, _provider: string): Promise
 // ─────────────────────────────────────────────
 
 export async function getSignInMethodsForEmail(email: string): Promise<string[]> {
+  if (!auth) return [];
   try {
     return await fetchSignInMethodsForEmail(auth, email);
   } catch {
