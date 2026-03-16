@@ -1,4 +1,4 @@
-import { getSupabaseClient, supabaseAnonKey } from './supabaseService';
+import { getSupabaseClient } from './supabaseService';
 
 // Service for handling Creem payment integration
 
@@ -39,32 +39,31 @@ export async function createCheckoutSession(productId: string, email?: string, u
     }
 
     try {
-        const baseUrl = (import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || '').replace(/\/$/, '');
+        const urlEnv = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
+        const fallbackUrl = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1` : '';
+        const baseUrl = (urlEnv || fallbackUrl || '').replace(/\/$/, '');
         const functionsUrl = `${baseUrl}/creem-checkout`;
+        
+        const localAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-        console.log('[CreemService] Requesting checkout for:', productId, {
-            functionsUrl,
-            hasKey: !!supabaseAnonKey,
-            keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 10) + '...' : 'none'
+        console.log('[CreemService] Requesting checkout:', {
+            target: functionsUrl,
+            keyPrefix: localAnonKey ? localAnonKey.substring(0, 10) + '...' : 'NONE',
+            keySuffix: localAnonKey ? '...' + localAnonKey.substring(localAnonKey.length - 10) : 'NONE',
+            keyLength: localAnonKey.length
         });
 
-        if (!supabaseAnonKey) {
-            console.error('[CreemService] Supabase Anon Key is undefined. Request aborted.');
-            throw new Error('Supabase configuration missing (Anon Key)');
+        if (!localAnonKey) {
+            console.error('[CreemService] CRITICAL: VITE_SUPABASE_ANON_KEY is missing in production env!');
+            throw new Error('Supabase Anon Key configuration missing');
         }
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            'apikey': supabaseAnonKey,
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-            'x-client-info': 'focustab-client'
+            'apikey': localAnonKey,
+            'Authorization': `Bearer ${localAnonKey}`,
+            'x-client-info': 'focustab-client/direct-fetch'
         };
-
-        console.log('[CreemService] Attempting request with headers:', {
-            hasApikey: !!headers['apikey'],
-            hasAuth: !!headers['Authorization'],
-            keyLength: supabaseAnonKey.length
-        });
 
         const makeRequest = async (currentHeaders: Record<string, string>) => {
             return await fetch(functionsUrl, {
@@ -157,14 +156,17 @@ export async function getCustomerPortalUrl(email?: string): Promise<string> {
  */
 async function invokeCreemFunction(body: any): Promise<any> {
     try {
-        const baseUrl = (import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || '').replace(/\/$/, '');
+        const urlEnv = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
+        const fallbackUrl = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1` : '';
+        const baseUrl = (urlEnv || fallbackUrl || '').replace(/\/$/, '');
         const functionsUrl = `${baseUrl}/creem-checkout`;
+        const localAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            'apikey': supabaseAnonKey,
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-            'x-client-info': 'focustab-client'
+            'apikey': localAnonKey,
+            'Authorization': `Bearer ${localAnonKey}`,
+            'x-client-info': 'focustab-client/helper'
         };
 
         const makeRequest = async (currentHeaders: Record<string, string>) => {
@@ -178,7 +180,7 @@ async function invokeCreemFunction(body: any): Promise<any> {
         let response = await makeRequest(headers);
 
         if (response.status === 401) {
-            console.warn('[CreemService] 401 in helper, trying fallback without Authorization...');
+            console.warn('[CreemService] 401 in helper, attempting key-only fallback...');
             const fallbackHeaders = { ...headers };
             delete fallbackHeaders['Authorization'];
             const fallbackResponse = await makeRequest(fallbackHeaders);
