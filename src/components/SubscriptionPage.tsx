@@ -130,12 +130,13 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
     });
   }, [user]);
 
-  // Warm up the Edge Function on page load to prevent first-click delays
+  // Diagnostic log for environment variables in production
   useEffect(() => {
-    // Assuming pingCreem is a function that makes a lightweight call to the Creem service
-    // to keep the Edge Function warm. This function needs to be defined or imported.
-    // For now, let's assume it's available or a placeholder.
-    // pingCreem(); // Uncomment and define/import if needed
+    console.log('[Subscription] Config Check:', {
+      monthly: !!(import.meta as any).env["VITE_CREEM_PRICE_PRO_MONTHLY_ID"],
+      yearly: !!(import.meta as any).env["VITE_CREEM_PRICE_PRO_YEARLY_ID"],
+      lifetime: !!(import.meta as any).env["VITE_CREEM_PRODUCT_LIFETIME_ID"]
+    });
   }, []);
 
   // Handle Creem payment success callback
