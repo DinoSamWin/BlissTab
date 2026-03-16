@@ -32,48 +32,42 @@ export async function fetchSubscriptionState(userId: string): Promise<Partial<Us
   }
 
   try {
-    const { data, error } = await client
+    const { data: list, error } = await client
       .from('user_subscriptions')
       .select('is_subscribed, subscription_plan, subscription_status, subscription_expires_at')
       .eq('user_id', userId)
-      .single();
+      .limit(1);
 
     if (error) {
-      // If no subscription record exists, create default free tier
-      if (error.code === 'PGRST116' || (error as any).status === 406) {
-        console.log('[Subscription] No subscription record found or 406 error, creating default free tier');
-        const defaultData: SubscriptionData = {
-          isSubscribed: false,
-          subscriptionPlan: 'free',
-          subscriptionStatus: 'active',
-          subscriptionExpiresAt: null,
-        };
-        // NOTE: email is not available here since fetchSubscriptionState only receives userId.
-        // The record will be updated with email on the next updateSubscriptionState call.
-        await createSubscriptionRecord(userId, defaultData, null);
-        return defaultData;
-      }
       throw error;
     }
 
-    if (data) {
-      const subscriptionData: Partial<User> = {
-        isSubscribed: data.is_subscribed || false,
-        subscriptionPlan: (data.subscription_plan as SubscriptionPlan) || 'free',
-        subscriptionStatus: (data.subscription_status as SubscriptionStatus) || 'active',
-        subscriptionExpiresAt: data.subscription_expires_at || null,
-      };
+    const data = list && list.length > 0 ? list[0] : null;
 
-      console.log('[Subscription] Fetched subscription state:', subscriptionData);
-      return subscriptionData;
+    if (!data) {
+      // If no subscription record exists, create default free tier
+      console.log('[Subscription] No subscription record found, creating default free tier');
+      const defaultData: SubscriptionData = {
+        isSubscribed: false,
+        subscriptionPlan: 'free',
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: null,
+      };
+      // NOTE: email is not available here since fetchSubscriptionState only receives userId.
+      // The record will be updated with email on the next updateSubscriptionState call.
+      await createSubscriptionRecord(userId, defaultData, null);
+      return defaultData;
     }
 
-    return {
-      isSubscribed: false,
-      subscriptionPlan: 'free',
-      subscriptionStatus: 'active',
-      subscriptionExpiresAt: null,
+    const subscriptionData: Partial<User> = {
+      isSubscribed: data.is_subscribed || false,
+      subscriptionPlan: (data.subscription_plan as SubscriptionPlan) || 'free',
+      subscriptionStatus: (data.subscription_status as SubscriptionStatus) || 'active',
+      subscriptionExpiresAt: data.subscription_expires_at || null,
     };
+
+    console.log('[Subscription] Fetched subscription state:', subscriptionData);
+    return subscriptionData;
   } catch (error) {
     console.error('[Subscription] Failed to fetch subscription state:', error);
     // Fallback to free tier on error

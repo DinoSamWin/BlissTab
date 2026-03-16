@@ -2,8 +2,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppState, PerspectiveHistory } from '../types';
 import { canonicalizeUrl, extractHostname } from './urlCanonicalService';
 
-const supabaseUrl = (import.meta.env as any).VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta.env as any).VITE_SUPABASE_ANON_KEY;
+export const supabaseUrl = (import.meta.env as any).VITE_SUPABASE_URL;
+export const supabaseAnonKey = (import.meta.env as any).VITE_SUPABASE_ANON_KEY;
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -420,19 +420,21 @@ export async function fetchFromCloud(userId: string): Promise<SyncResult> {
   }
 
   try {
-    const { data, error } = await client
+    const { data: list, error } = await client
       .from('user_data')
       .select('data, updated_at')
       .eq('user_id', userId)
-      .single();
+      .limit(1);
 
     if (error) {
-      // If no data found (first time user), return distinct status
-      if (error.code === 'PGRST116') {
-        console.log('[Sync] No existing data for user (PGRST116), will create on first sync');
-        return { status: 'not_found' };
-      }
       throw error;
+    }
+
+    const data = list && list.length > 0 ? list[0] : null;
+
+    if (!data) {
+      console.log('[Sync] No existing data for user, will create on first sync');
+      return { status: 'not_found' };
     }
 
     if (data && data.data) {

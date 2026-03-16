@@ -1,4 +1,4 @@
-import { getSupabaseClient } from './supabaseService';
+import { getSupabaseClient, supabaseAnonKey } from './supabaseService';
 
 // Service for handling Creem payment integration
 
@@ -39,25 +39,33 @@ export async function createCheckoutSession(productId: string, email?: string, u
     }
 
     try {
-        const { data, error } = await client.functions.invoke<CheckoutSessionResponse>('creem-checkout', {
-            body: {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/creem-checkout`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': supabaseAnonKey,
+                'Authorization': `Bearer ${supabaseAnonKey}`
+            },
+            body: JSON.stringify({
                 productId,
                 email,
                 userId,
                 action: 'create_checkout',
                 testMode: import.meta.env.VITE_CREEM_TEST_MODE === 'true'
-            }
+            })
         });
 
-        console.log('[CreemService] Backend response data:', data);
-
-        if (error) {
-            console.error('[CreemService] Function error:', error);
-            throw new Error(error.message || 'Failed to initiate checkout');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('[CreemService] Function error status:', response.status, errorData);
+            throw new Error(errorData.error || `Edge Function returned a ${response.status} status code`);
         }
 
-        if (data && (data as any).success === false) {
-            throw new Error((data as any).error || 'Failed to initiate checkout (backend error)');
+        const data = await response.json();
+        console.log('[CreemService] Backend response data:', data);
+
+        if (data && data.success === false) {
+            throw new Error(data.error || 'Failed to initiate checkout (backend error)');
         }
 
         if (!data?.checkout_url) {
@@ -104,20 +112,24 @@ export async function getCustomerPortalUrl(email?: string): Promise<string> {
  * Helper to call the creem-checkout Edge Function
  */
 async function invokeCreemFunction(body: any): Promise<any> {
-    const client = getSupabaseClient();
-    if (!client) throw new Error('Supabase client not initialized');
-
     try {
-        const { data, error } = await client.functions.invoke('creem-checkout', {
-            body: body
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/creem-checkout`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': supabaseAnonKey,
+                'Authorization': `Bearer ${supabaseAnonKey}`
+            },
+            body: JSON.stringify(body)
         });
 
-        if (error) {
-            console.error('[CreemService] Function error:', error);
-            throw new Error(error.message || 'Function invocation failed');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('[CreemService] Function error status:', response.status, errorData);
+            throw new Error(errorData.error || `Function invocation failed with status ${response.status}`);
         }
 
-        return data;
+        return await response.json();
     } catch (error) {
         console.error('[CreemService] Function invocation failed:', error);
         throw error;

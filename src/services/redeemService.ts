@@ -272,22 +272,25 @@ export async function fetchUserMembership(userId: string): Promise<{
   }
 
   try {
-    const { data, error } = await client
+    const { data: list, error } = await client
       .from('user_membership')
       .select('is_subscribed, member_via_redeem, membership_since')
       .eq('user_id', userId)
-      .single();
+      .limit(1);
 
     if (error) {
-      if (error.code === 'PGRST116' || (error as any).status === 406) {
-        // Table doesn't exist or no membership record, return defaults silent
-        return {
-          isSubscribed: false,
-          memberViaRedeem: false,
-          membershipSince: null,
-        };
-      }
       throw error;
+    }
+
+    const data = list && list.length > 0 ? list[0] : null;
+
+    if (!data) {
+      // No membership record, return defaults
+      return {
+        isSubscribed: false,
+        memberViaRedeem: false,
+        membershipSince: null,
+      };
     }
 
     return {
@@ -334,33 +337,36 @@ export async function fetchUserSettings(userId: string): Promise<{
   }
 
   try {
-    const { data, error } = await client
+    const { data: list, error } = await client
       .from('user_settings')
       .select('redeem_enabled')
       .eq('user_id', userId)
-      .single();
+      .limit(1);
 
     if (error) {
-      if (error.code === 'PGRST116' || (error as any).status === 406) {
-        // No settings record, check localStorage fallback
-        try {
-          const settingsKey = `user_settings_${userId}`;
-          const stored = localStorage.getItem(settingsKey);
-          if (stored) {
-            const settings = JSON.parse(stored);
-            return {
-              redeemEnabled: settings.redeem_enabled !== false,
-            };
-          }
-        } catch (localError) {
-          console.warn('[Redeem] localStorage fallback failed:', localError);
-        }
-        // Return defaults
-        return {
-          redeemEnabled: true, // Default to enabled
-        };
-      }
       throw error;
+    }
+
+    const data = list && list.length > 0 ? list[0] : null;
+
+    if (!data) {
+      // No settings record, check localStorage fallback
+      try {
+        const settingsKey = `user_settings_${userId}`;
+        const stored = localStorage.getItem(settingsKey);
+        if (stored) {
+          const settings = JSON.parse(stored);
+          return {
+            redeemEnabled: settings.redeem_enabled !== false,
+          };
+        }
+      } catch (localError) {
+        console.warn('[Redeem] localStorage fallback failed:', localError);
+      }
+      // Return defaults
+      return {
+        redeemEnabled: true, // Default to enabled
+      };
     }
 
     return {
