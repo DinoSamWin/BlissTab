@@ -204,13 +204,18 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
       setLoadingPlan(planId);
 
       // Determine specific productId to send to backend
-      let specificProductId: string = planId;
+      let specificProductId: string = '';
       if (planId === 'pro') {
         specificProductId = proBillingCycle === 'monthly'
-          ? (import.meta.env.VITE_CREEM_PRICE_PRO_MONTHLY_ID || 'pro_monthly')
-          : (import.meta.env.VITE_CREEM_PRICE_PRO_YEARLY_ID || 'pro_yearly');
+          ? import.meta.env.VITE_CREEM_PRICE_PRO_MONTHLY_ID
+          : import.meta.env.VITE_CREEM_PRICE_PRO_YEARLY_ID;
       } else if (planId === 'lifetime') {
-        specificProductId = import.meta.env.VITE_CREEM_PRODUCT_LIFETIME_ID || 'lifetime';
+        specificProductId = import.meta.env.VITE_CREEM_PRODUCT_LIFETIME_ID;
+      }
+
+      if (!specificProductId) {
+        console.error('[Subscription] Product ID is missing for plan:', planId);
+        throw new Error(`Technical configuration error: Product ID for ${planId} is not defined in environment variables.`);
       }
 
       // Call Creem Service to get checkout URL
