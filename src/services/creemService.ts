@@ -48,12 +48,23 @@ export async function createCheckoutSession(productId: string, email?: string, u
             keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 10) + '...' : 'none'
         });
 
+        if (!supabaseAnonKey) {
+            console.error('[CreemService] Supabase Anon Key is undefined. Request aborted.');
+            throw new Error('Supabase configuration missing (Anon Key)');
+        }
+
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             'apikey': supabaseAnonKey,
             'Authorization': `Bearer ${supabaseAnonKey}`,
             'x-client-info': 'focustab-client'
         };
+
+        console.log('[CreemService] Attempting request with headers:', {
+            hasApikey: !!headers['apikey'],
+            hasAuth: !!headers['Authorization'],
+            keyLength: supabaseAnonKey.length
+        });
 
         const makeRequest = async (currentHeaders: Record<string, string>) => {
             return await fetch(functionsUrl, {

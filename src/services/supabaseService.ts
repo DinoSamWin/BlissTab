@@ -2,8 +2,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppState, PerspectiveHistory } from '../types';
 import { canonicalizeUrl, extractHostname } from './urlCanonicalService';
 
-export const supabaseUrl = (import.meta.env as any).VITE_SUPABASE_URL;
-export const supabaseAnonKey = (import.meta.env as any).VITE_SUPABASE_ANON_KEY;
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -16,16 +16,16 @@ export function getSupabaseClient(): SupabaseClient | null {
   console.log('[Supabase] Initializing client...', { url: supabaseUrl, hasKey: !!supabaseAnonKey });
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase not configured. Falling back to localStorage.');
+    console.error('[Supabase] CRITICAL: Supabase URL or Anon Key is missing. Check your environment variables.');
     return null;
   }
 
   try {
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-    console.log('[Supabase] Client initialized successfully');
+    console.log('[Supabase] Client initialized successfully for:', supabaseUrl);
     return supabaseClient;
   } catch (e) {
-    console.error('Failed to initialize Supabase:', e);
+    console.error('[Supabase] Failed to initialize Supabase client:', e);
     return null;
   }
 }
