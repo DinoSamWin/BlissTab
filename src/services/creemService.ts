@@ -39,30 +39,30 @@ export async function createCheckoutSession(productId: string, email?: string, u
     }
 
     try {
-        const urlEnv = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
-        const fallbackUrl = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1` : '';
+        const urlEnv = (import.meta as any).env["VITE_SUPABASE_FUNCTIONS_URL"];
+        const supUrl = (import.meta as any).env["VITE_SUPABASE_URL"];
+        const fallbackUrl = supUrl ? `${supUrl}/functions/v1` : '';
         const baseUrl = (urlEnv || fallbackUrl || '').replace(/\/$/, '');
         const functionsUrl = `${baseUrl}/creem-checkout`;
         
-        const localAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        const localAnonKey = (import.meta as any).env["VITE_SUPABASE_ANON_KEY"] || '';
 
-        console.log('[CreemService] Requesting checkout:', {
-            target: functionsUrl,
-            keyPrefix: localAnonKey ? localAnonKey.substring(0, 10) + '...' : 'NONE',
-            keySuffix: localAnonKey ? '...' + localAnonKey.substring(localAnonKey.length - 10) : 'NONE',
-            keyLength: localAnonKey.length
-        });
+        // FLAT LOGGING - EXTREMELY IMPORTANT FOR PRODUCTION DEBUGGING
+        console.log(`[DEBUG-KEY] Length: ${localAnonKey.length}`);
+        console.log(`[DEBUG-KEY] Starts: ${localAnonKey ? localAnonKey.substring(0, 10) : 'NONE'}...`);
+        console.log(`[DEBUG-KEY] Ends: ...${localAnonKey ? localAnonKey.substring(localAnonKey.length - 10) : 'NONE'}`);
+        console.log(`[DEBUG-URL] ${functionsUrl}`);
 
         if (!localAnonKey) {
-            console.error('[CreemService] CRITICAL: VITE_SUPABASE_ANON_KEY is missing in production env!');
-            throw new Error('Supabase Anon Key configuration missing');
+            console.error('[CreemService] CRITICAL: VITE_SUPABASE_ANON_KEY IS UNDEFINED IN BUNDLE');
+            throw new Error('Supabase configuration missing');
         }
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             'apikey': localAnonKey,
             'Authorization': `Bearer ${localAnonKey}`,
-            'x-client-info': 'focustab-client/direct-fetch'
+            'x-client-info': 'supabase-js/2.39.1'
         };
 
         const makeRequest = async (currentHeaders: Record<string, string>) => {
@@ -156,17 +156,18 @@ export async function getCustomerPortalUrl(email?: string): Promise<string> {
  */
 async function invokeCreemFunction(body: any): Promise<any> {
     try {
-        const urlEnv = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
-        const fallbackUrl = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1` : '';
+        const urlEnv = (import.meta as any).env["VITE_SUPABASE_FUNCTIONS_URL"];
+        const supUrl = (import.meta as any).env["VITE_SUPABASE_URL"];
+        const fallbackUrl = supUrl ? `${supUrl}/functions/v1` : '';
         const baseUrl = (urlEnv || fallbackUrl || '').replace(/\/$/, '');
         const functionsUrl = `${baseUrl}/creem-checkout`;
-        const localAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        const localAnonKey = (import.meta as any).env["VITE_SUPABASE_ANON_KEY"] || '';
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             'apikey': localAnonKey,
             'Authorization': `Bearer ${localAnonKey}`,
-            'x-client-info': 'focustab-client/helper'
+            'x-client-info': 'supabase-js/2.39.1'
         };
 
         const makeRequest = async (currentHeaders: Record<string, string>) => {
