@@ -39,26 +39,59 @@ export async function createCheckoutSession(productId: string, email?: string, u
     }
 
     try {
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/creem-checkout`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': supabaseAnonKey,
-                'Authorization': `Bearer ${supabaseAnonKey}`
-            },
-            body: JSON.stringify({
-                productId,
-                email,
-                userId,
-                action: 'create_checkout',
-                testMode: import.meta.env.VITE_CREEM_TEST_MODE === 'true'
-            })
+        const baseUrl = (import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || '').replace(/\/$/, '');
+        const functionsUrl = `${baseUrl}/creem-checkout`;
+
+        console.log('[CreemService] Requesting checkout for:', productId, {
+            functionsUrl,
+            hasKey: !!supabaseAnonKey,
+            keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 10) + '...' : 'none'
         });
 
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'x-client-info': 'focustab-client'
+        };
+
+        const makeRequest = async (currentHeaders: Record<string, string>) => {
+            return await fetch(functionsUrl, {
+                method: 'POST',
+                headers: currentHeaders,
+                body: JSON.stringify({
+                    productId,
+                    email,
+                    userId,
+                    action: 'create_checkout',
+                    testMode: import.meta.env.VITE_CREEM_TEST_MODE === 'true'
+                })
+            });
+        };
+
+        let response = await makeRequest(headers);
+
+        // FALLBACK: If 401, some gateways prefer ONLY the apikey header without Authorization
+        if (response.status === 401) {
+            console.warn('[CreemService] 401 error detected, trying fallback without Authorization header...');
+            const fallbackHeaders = { ...headers };
+            delete fallbackHeaders['Authorization'];
+            const fallbackResponse = await makeRequest(fallbackHeaders);
+            if (fallbackResponse.ok) {
+                response = fallbackResponse;
+            }
+        }
+
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
+            const errorText = await response.text();
+            let errorData: any = {};
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                errorData = { error: errorText };
+            }
             console.error('[CreemService] Function error status:', response.status, errorData);
-            throw new Error(errorData.error || `Edge Function returned a ${response.status} status code`);
+            throw new Error(errorData.error || errorData.message || `Edge Function returned a ${response.status} status code`);
         }
 
         const data = await response.json();
@@ -113,20 +146,46 @@ export async function getCustomerPortalUrl(email?: string): Promise<string> {
  */
 async function invokeCreemFunction(body: any): Promise<any> {
     try {
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/creem-checkout`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': supabaseAnonKey,
-                'Authorization': `Bearer ${supabaseAnonKey}`
-            },
-            body: JSON.stringify(body)
-        });
+        const baseUrl = (import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || '').replace(/\/$/, '');
+        const functionsUrl = `${baseUrl}/creem-checkout`;
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'x-client-info': 'focustab-client'
+        };
+
+        const makeRequest = async (currentHeaders: Record<string, string>) => {
+            return await fetch(functionsUrl, {
+                method: 'POST',
+                headers: currentHeaders,
+                body: JSON.stringify(body)
+            });
+        };
+
+        let response = await makeRequest(headers);
+
+        if (response.status === 401) {
+            console.warn('[CreemService] 401 in helper, trying fallback without Authorization...');
+            const fallbackHeaders = { ...headers };
+            delete fallbackHeaders['Authorization'];
+            const fallbackResponse = await makeRequest(fallbackHeaders);
+            if (fallbackResponse.ok) {
+                response = fallbackResponse;
+            }
+        }
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
+            const errorText = await response.text();
+            let errorData: any = {};
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                errorData = { error: errorText };
+            }
             console.error('[CreemService] Function error status:', response.status, errorData);
-            throw new Error(errorData.error || `Function invocation failed with status ${response.status}`);
+            throw new Error(errorData.error || errorData.message || `Function invocation failed with status ${response.status}`);
         }
 
         return await response.json();
