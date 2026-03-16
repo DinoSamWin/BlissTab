@@ -135,7 +135,8 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
     console.log('[Subscription] Config Check:', {
       monthly: !!(import.meta as any).env["VITE_CREEM_PRICE_PRO_MONTHLY_ID"],
       yearly: !!(import.meta as any).env["VITE_CREEM_PRICE_PRO_YEARLY_ID"],
-      lifetime: !!(import.meta as any).env["VITE_CREEM_PRODUCT_LIFETIME_ID"]
+      lifetime: !!(import.meta as any).env["VITE_CREEM_PRODUCT_LIFETIME_ID"],
+      testMode: (import.meta as any).env["VITE_CREEM_TEST_MODE"]
     });
   }, []);
 
