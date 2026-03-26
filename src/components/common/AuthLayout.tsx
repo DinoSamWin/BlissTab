@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
+  footer?: React.ReactNode;
   characterImage?: string;
   bgImage?: string;
   showCharacter?: boolean;
@@ -10,6 +11,7 @@ interface AuthLayoutProps {
 
 const AuthLayout: React.FC<AuthLayoutProps> = ({ 
   children, 
+  footer,
   characterImage = '/auth_characters.png', 
   bgImage = '/auth_bg.png',
   showCharacter = true
@@ -40,6 +42,12 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({
         <div className="auth-card animate-enter-card">
           {children}
         </div>
+
+        {footer && (
+          <div className="mt-8 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

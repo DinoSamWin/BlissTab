@@ -22,11 +22,11 @@ const SidePanel: React.FC = () => {
     const [url, setUrl] = useState('');
     const [title, setTitle] = useState('');
     const [iconUrl, setIconUrl] = useState<string | null>(null);
-    const [selectedCategory, setSelectedCategory] = useState<string>('快捷指令');
+    const [selectedCategory, setSelectedCategory] = useState<string>('Quick Access');
     const [customCategory, setCustomCategory] = useState<string>('');
 
     // UI states
-    const [categories, setCategories] = useState<string[]>(['快捷指令']);
+    const [categories, setCategories] = useState<string[]>(['Quick Access']);
     const [isSaving, setIsSaving] = useState(false);
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [shortcut, setShortcut] = useState<string>('');
@@ -38,15 +38,20 @@ const SidePanel: React.FC = () => {
     });
 
     const refreshShortcut = useCallback(() => {
-        chrome.commands.getAll((commands) => {
-            const actionCommand = commands.find(c => c.name === '_execute_action');
-            if (actionCommand && actionCommand.shortcut) {
-                setShortcut(actionCommand.shortcut);
-            } else {
-                const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-                setShortcut(isMac ? 'Command+Shift+A' : 'Ctrl+Shift+A');
-            }
-        });
+        if (typeof chrome !== 'undefined' && chrome.commands) {
+            chrome.commands.getAll((commands) => {
+                const actionCommand = commands.find(c => c.name === '_execute_side_panel' || c.name === '_execute_action');
+                if (actionCommand && actionCommand.shortcut) {
+                    setShortcut(actionCommand.shortcut);
+                } else {
+                    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+                    setShortcut(isMac ? 'Command+Shift+S' : 'Ctrl+Shift+S');
+                }
+            });
+        } else {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            setShortcut(isMac ? 'Command+Shift+S' : 'Ctrl+Shift+S');
+        }
     }, []);
 
     const refreshCategories = useCallback(() => {
@@ -56,18 +61,40 @@ const SidePanel: React.FC = () => {
                 appState.links
                     .filter(l => !l.id.startsWith('ghost-'))
                     .map(l => l.category)
-                    .filter(Boolean)
+                    .filter(c => c && c !== 'Shortcuts' && c !== '快捷指令')
             )) as string[];
-            setCategories(Array.from(new Set(['快捷指令', ...existingCats])));
+            
+            // Unify default categories
+            const defaultCats = ['Quick Access'];
+            const merged = Array.from(new Set([...defaultCats, ...existingCats]));
+            setCategories(merged);
+
+            // If "Shortcuts" exists in app state, and user is currently on "快捷指令", maybe switch?
+            // For now, just ensure both are in the dropdown.
         }
     }, []);
 
     // Effect to handle initialization and URL parameter syncing
     useEffect(() => {
         const initialParams = new URLSearchParams(window.location.search);
-        setUrl(initialParams.get('url') || '');
-        setTitle(initialParams.get('title') || '');
-        setIconUrl(initialParams.get('icon') || null);
+        const urlParam = initialParams.get('url') || '';
+        const titleParam = initialParams.get('title') || '';
+        const iconParam = initialParams.get('icon') || null;
+
+        if (!urlParam && typeof chrome !== 'undefined' && chrome.tabs) {
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs && tabs.length > 0) {
+                    const activeTab = tabs[0];
+                    setUrl(activeTab.url || '');
+                    setTitle(activeTab.title || '');
+                    setIconUrl(activeTab.favIconUrl || null);
+                }
+            });
+        } else {
+            setUrl(urlParam);
+            setTitle(titleParam);
+            setIconUrl(iconParam);
+        }
 
         refreshShortcut();
         refreshCategories();
@@ -85,7 +112,9 @@ const SidePanel: React.FC = () => {
             }
         };
 
-        chrome.tabs.onUpdated.addListener(handleTabUpdate);
+        if (typeof chrome !== 'undefined' && chrome.tabs) {
+            chrome.tabs.onUpdated.addListener(handleTabUpdate);
+        }
 
         const handleStorageChange = (e: StorageEvent) => {
             if (e.key === 'focus_tab_user') {
@@ -115,7 +144,7 @@ const SidePanel: React.FC = () => {
             const appState = getAppState();
             if (!appState) throw new Error('Could not load app state');
 
-            const categoryToUse = customCategory.trim() || selectedCategory || '快捷指令';
+            const categoryToUse = customCategory.trim() || selectedCategory || 'Quick Access';
 
             const newLink: QuickLink = {
                 id: Date.now().toString(),
@@ -140,7 +169,10 @@ const SidePanel: React.FC = () => {
             }
 
             setStatus('success');
-            setTimeout(() => setStatus('idle'), 2000);
+            setTimeout(() => {
+                setStatus('idle');
+                window.close();
+            }, 800);
             refreshCategories();
         } catch (error) {
             console.error('Failed to save link', error);
@@ -236,12 +268,17 @@ const SidePanel: React.FC = () => {
                 <div>
                     <label className="text-[10px] font-extrabold text-black dark:text-white uppercase tracking-[0.2em] mb-3 block">Upload logo</label>
                     <div className="flex items-center gap-4">
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleIconUpload}
-                            className="flex-1 text-xs text-gray-500 dark:text-gray-400 file:mr-4 file:rounded-full file:border-0 file:bg-gray-100 file:px-5 file:py-2.5 file:text-[10px] file:font-bold file:uppercase file:tracking-widest file:text-gray-700 dark:file:bg-white/10 dark:file:text-gray-200 cursor-pointer"
-                        />
+                        <label className="flex-1 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl px-5 py-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-all group">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleIconUpload}
+                                className="hidden"
+                            />
+                            <span className="text-xs text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">
+                                {iconUrl ? 'Click to change image' : 'Choose local image...'}
+                            </span>
+                        </label>
                     </div>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-4 leading-relaxed">
                         We'll store the uploaded image locally for fast display and back it up to Supabase.
@@ -270,28 +307,31 @@ const SidePanel: React.FC = () => {
                     </button>
                 </div>
 
-                {/* Shortcut Display Area */}
-                <div
-                    className="flex items-center justify-between px-6 py-3 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl select-none"
+                {/* Hotkey Link at the bottom */}
+                <button 
+                    onClick={() => {
+                        if (typeof chrome !== 'undefined' && chrome.tabs) {
+                            chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+                        }
+                    }}
+                    className="w-full flex items-center justify-between px-5 py-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-all group"
                 >
                     <div className="flex items-center gap-3">
-                        <span className="bg-white dark:bg-white/10 border border-black/5 dark:border-white/10 rounded-lg px-2 py-1 font-mono text-[10px] text-gray-600 dark:text-gray-300 shadow-sm">
-                            {shortcut || '...'}
-                        </span>
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">to open</span>
+                        <div className="p-2 bg-white dark:bg-white/5 rounded-lg shadow-sm border border-black/5 dark:border-white/10 group-hover:scale-110 transition-transform">
+                            <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0110 0v4" />
+                            </svg>
+                        </div>
+                        <span className="text-[10px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Global Shortcut</span>
                     </div>
-
-                    <button
-                        onClick={() => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' })}
-                        className="flex items-center gap-2 hover:bg-black/5 dark:hover:bg-white/10 px-3 py-1.5 rounded-xl transition-all group"
-                    >
-                        <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-gray-800 dark:text-gray-200">{shortcut}</span>
+                        <svg className="w-3 h-3 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 18l6-6-6-6" />
                         </svg>
-                        <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Settings</span>
-                    </button>
-                </div>
+                    </div>
+                </button>
             </div>
         </div>
     );

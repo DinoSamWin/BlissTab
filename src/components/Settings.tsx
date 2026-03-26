@@ -233,11 +233,11 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
   // Derive categories from links for the edit modal
   const categories = React.useMemo(() => {
-    const cats = new Set<string>(['快捷指令']); // Default category
+    const cats = new Set<string>(['Quick Access']); // Default category
     state.links.forEach(link => {
       let cat = link.category;
-      // Normalize Shortcuts to Chinese (consistency with IntegrationGateways)
-      if (cat === 'Shortcuts') cat = '快捷指令';
+      // Normalize to English canonical: Quick Access
+      if (cat === 'Shortcuts' || cat === '快捷指令') cat = 'Quick Access';
 
       if (cat) {
         cats.add(cat);
@@ -246,8 +246,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
 
     // Convert to array and sort, putting default first
     return Array.from(cats).sort((a, b) => {
-      if (a === '快捷指令') return -1;
-      if (b === '快捷指令') return 1;
+      if (a === 'Quick Access' || a === 'Shortcuts' || a === '快捷指令') return -1;
+      if (b === 'Quick Access' || b === 'Shortcuts' || b === '快捷指令') return 1;
       return a.localeCompare(b);
     });
   }, [state.links]);

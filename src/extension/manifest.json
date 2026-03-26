@@ -1,25 +1,29 @@
 {
     "manifest_version": 3,
     "name": "StartlyTab",
-    "version": "1.0.0",
-    "description": "A beautiful new tab page with gateway shortcuts.",
+    "version": "1.0.1",
+    "description": "A small pause, built into your day. A beautiful new tab page with gateway shortcuts.",
     "permissions": [
+        "bookmarks",
+        "scripting",
         "storage",
+        "management",
         "tabs",
         "activeTab",
         "favicon",
         "contextMenus",
         "identity",
-        "downloads"
+        "downloads",
+        "offscreen"
     ],
     "host_permissions": [
         "<all_urls>"
     ],
     "content_security_policy": {
-        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://accounts.google.com https://sudmwgwvlsdkpoxrnsji.supabase.co https://open.bigmodel.cn https://api.siliconflow.cn https://api.deepseek.com https://cloud.umami.is;"
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://accounts.google.com https://*.googleapis.com https://*.firebaseapp.com https://*.firebase.com https://*.supabase.co https://open.bigmodel.cn https://api.siliconflow.cn https://api.deepseek.com https://cloud.umami.is https://workers.cloudflare.com;"
     },
     "oauth2": {
-        "client_id": "65772780936-q2m0q2jgj7b5r4vb9rn5ohm2vcvsshb7.apps.googleusercontent.com",
+        "client_id": "4260709449-hvmd55u8rt4vrfrh8sduqkcjr3f35gar.apps.googleusercontent.com",
         "scopes": [
             "openid",
             "email",
@@ -59,5 +63,14 @@
                 "<all_urls>"
             ]
         }
-    ]
+    ],
+    "externally_connectable": {
+        "matches": [
+            "http://localhost:*/*",
+            "http://127.0.0.1:*/*",
+            "https://startlytab.com/*",
+            "https://*.vercel.app/*",
+            "https://startlytab.featurebase.app/*"
+        ]
+    }
 }

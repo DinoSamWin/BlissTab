@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppState, EmotionType } from '../types';
 import { getEmotionLogs } from '../services/emotionService';
 import { isSubscribed } from '../services/usageLimitsService';
-import { useDeepCareAI } from '../hooks/useDeepCareAI';
+import { useDeepCareAI, DeepCareContent } from '../hooks/useDeepCareAI';
 import { useUser } from '../contexts/UserContext';
 import {
     Activity,
@@ -59,9 +59,40 @@ const EchoLand: React.FC = () => {
     const { user } = useUser();
 
     // Mocking AppState subset needed for logic
-    const language = localStorage.getItem('focus_tab_language') || 'Chinese (Simplified)';
+    const getStoredLanguage = () => {
+        try {
+            const savedState = localStorage.getItem('focus_tab_state');
+            if (savedState) {
+                const parsed = JSON.parse(savedState);
+                return parsed.language || 'Chinese (Simplified)';
+            }
+        } catch (e) {
+            console.error('[EchoLand] Failed to parse app state', e);
+        }
+        return localStorage.getItem('focus_tab_language') || 'Chinese (Simplified)';
+    };
+
+    const language = getStoredLanguage();
     const isCN = language === 'Chinese (Simplified)';
     const theme = (localStorage.getItem('focus_tab_theme') as any) || 'light';
+
+    // Synchronize i18n language
+    useEffect(() => {
+        const langMap: Record<string, string> = {
+            'Chinese (Simplified)': 'zh-CN',
+            'English': 'en-US',
+            'German': 'en-US',
+            'French': 'en-US',
+            'Spanish': 'en-US',
+            'Italian': 'en-US',
+            'Portuguese': 'en-US',
+            'Japanese': 'en-US'
+        };
+        const i18nCode = langMap[language] || 'en-US';
+        import('../i18n').then(module => {
+            module.default.changeLanguage(i18nCode);
+        });
+    }, [language]);
 
     const state: Partial<AppState> = {
         user,
@@ -69,10 +100,10 @@ const EchoLand: React.FC = () => {
         theme
     };
 
-    // FOR TESTING
     const [testDaysUsed, setTestDaysUsed] = useState<number | null>(null);
     const [testHasPro, setTestHasPro] = useState<boolean | null>(null);
     const [mockScenario, setMockScenario] = useState<string | null>(null);
+    const [mockAiContent, setMockAiContent] = useState<DeepCareContent | null>(null);
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'info' | 'error' } | null>(null);
 
     const hasPro = testHasPro !== null ? testHasPro : isSubscribed(state as AppState);
@@ -103,7 +134,34 @@ const EchoLand: React.FC = () => {
             { timestamp: Date.now() - 5 * 24 * 60 * 60 * 1000, emotionType: 'happy', score: 2, id: 'mock2', created_at: '', user_id: '1' } as any
         ];
         activeLogs = last7DaysLogs;
+    } else if (mockScenario === 'SCENARIO_PRO_FULL') {
+        daysUsed = 15;
+        const mockSet = [
+            { timestamp: Date.now() - 0.5 * 24 * 60 * 60 * 1000, emotionType: 'happy', score: 2, id: 'f1', created_at: '', user_id: '1' } as any,
+            { timestamp: Date.now() - 1.2 * 24 * 60 * 60 * 1000, emotionType: 'neutral', score: 0, id: 'f2', created_at: '', user_id: '1' } as any,
+            { timestamp: Date.now() - 2.5 * 24 * 60 * 60 * 1000, emotionType: 'anxious', score: -1, id: 'f3', created_at: '', user_id: '1' } as any,
+            { timestamp: Date.now() - 3.8 * 24 * 60 * 60 * 1000, emotionType: 'exhausted', score: -2, id: 'f4', created_at: '', user_id: '1' } as any,
+            { timestamp: Date.now() - 4.2 * 24 * 60 * 60 * 1000, emotionType: 'happy', score: 1.5, id: 'f5', created_at: '', user_id: '1' } as any,
+            { timestamp: Date.now() - 5.5 * 24 * 60 * 60 * 1000, emotionType: 'sad', score: -1.5, id: 'f6', created_at: '', user_id: '1' } as any,
+            { timestamp: Date.now() - 6.1 * 24 * 60 * 60 * 1000, emotionType: 'angry', score: -2, id: 'f7', created_at: '', user_id: '1' } as any,
+            { timestamp: Date.now() - 6.9 * 24 * 60 * 60 * 1000, emotionType: 'neutral', score: 0.5, id: 'f8', created_at: '', user_id: '1' } as any,
+        ];
+        last7DaysLogs = mockSet;
+        activeLogs = [...mockSet, { timestamp: Date.now() - 10 * 24 * 60 * 60 * 1000, emotionType: 'happy', score: 1, id: 'f0', created_at: '', user_id: '1' } as any];
+        
+        // Ensure mock AI content is set locally when switching to this scenario
+        if (!mockAiContent) {
+           setMockAiContent({
+              title: isCN ? "致过去七天不断努力的你：" : "To the one who tried so hard this week:",
+              p1: isCN ? "过去一周你的情绪分布显示出一种'稳健中的波动'。你在面对压力时仍保留了一抹明媚的底色。" : "Your emotional footprint shows a 'resilient fluctuation'. You've kept a spark of brightness even under pressure.",
+              p2: isCN ? "这种模式通常意味着你正在经历认知负荷的峰值，但在深层意识中，你拥有极强的自我修复能力。" : "This pattern suggest you're at a peak cognitive load, yet you possess a strong innate capacity for self-repairing.",
+              p3: isCN ? "建议：今晚尝试一次'非生产性休息'。关掉所有屏幕，只听环境声，哪怕只有五分钟。" : "Tip: Try a 'non-productive rest' tonight. Turn off screens and just listen to ambient sounds for five minutes."
+           });
+        }
     }
+
+    // Comprehensive logs override for UI stats
+    const displayedLogs = mockScenario ? activeLogs : logs;
 
     // Day 7 threshold logic
     const isDay7Plus = daysUsed >= 7;
@@ -112,7 +170,8 @@ const EchoLand: React.FC = () => {
     const calibrationProgress = Math.min(100, Math.round((Math.max(1, daysUsed) / 7) * 100));
 
     // Deep Care AI integration
-    const { loading: aiLoading, content: aiContent, error: aiError, fetchAdvice } = useDeepCareAI();
+    const { loading: aiLoading, content: aiLiveContent, error: aiError, fetchAdvice } = useDeepCareAI();
+    const aiContent = mockScenario === 'SCENARIO_PRO_FULL' ? mockAiContent : aiLiveContent;
 
     // Psychological Undertone logic
     const getDailyUndertone = () => {
@@ -344,20 +403,23 @@ const EchoLand: React.FC = () => {
                 </div>
             </div>
 
-            {/* TEST CONTROLS - Simplified & Floating at bottom for less distraction */}
-            {/* <div className="fixed bottom-6 right-6 z-50 group">
-                <div className="p-3 bg-white dark:bg-[#1A1A1A] rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 flex flex-col gap-2 opacity-20 hover:opacity-100 scale-90 hover:scale-100 origin-bottom-right transition-all">
-                    <span className="text-[10px] font-black text-gray-400 select-none px-2 uppercase tracking-widest">Debug Scenarios</span>
+            {/* TEST CONTROLS - Floating at bottom right for viewing different data states */}
+            <div className="fixed bottom-6 right-6 z-50 group">
+                <div className="p-4 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-gray-200 dark:border-white/10 flex flex-col gap-3 opacity-40 hover:opacity-100 scale-90 hover:scale-100 origin-bottom-right transition-all duration-500 ease-out">
+                    <div className="flex items-center justify-between px-2">
+                        <span className="text-[10px] font-black text-indigo-500 select-none uppercase tracking-widest">Test Scenarios</span>
+                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => { setTestHasPro(false); setMockScenario('SCENARIO_1_EMPTY'); }} className="px-3 py-1.5 bg-gray-50 dark:bg-white/5 rounded-lg text-[10px] font-bold">New User</button>
-                        <button onClick={() => { setTestHasPro(true); setMockScenario('SCENARIO_PRO_EMPTY'); }} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold">Pro Empty</button>
-                        <button onClick={() => { setTestHasPro(true); setMockScenario('SCENARIO_3_SPARSE'); }} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold">Pro Sparse</button>
-                        <button onClick={() => { setTestHasPro(true); setMockScenario(null); setTestDaysUsed(8); }} className="px-3 py-1.5 bg-gray-50 dark:bg-white/5 rounded-lg text-[10px] font-bold">Pro Full</button>
-                        <button onClick={() => { setTestHasPro(false); setMockScenario(null); setTestDaysUsed(8); }} className="px-3 py-1.5 bg-gray-50 dark:bg-white/5 rounded-lg text-[10px] font-bold">Free Full</button>
-                        <button onClick={() => { setTestHasPro(null); setTestDaysUsed(null); setMockScenario(null); }} className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-[10px] font-bold">Reset</button>
+                        <button onClick={() => { setTestHasPro(false); setMockScenario('SCENARIO_1_EMPTY'); setTestDaysUsed(3); setMockAiContent(null); }} className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${mockScenario === 'SCENARIO_1_EMPTY' ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-gray-50 dark:bg-white/5 text-gray-400 border-transparent hover:bg-white dark:hover:bg-white/10'}`}>New User</button>
+                        <button onClick={() => { setTestHasPro(true); setMockScenario('SCENARIO_PRO_EMPTY'); setTestDaysUsed(14); setMockAiContent(null); }} className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${mockScenario === 'SCENARIO_PRO_EMPTY' ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-indigo-50/50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-500/20'}`}>Pro Empty</button>
+                        <button onClick={() => { setTestHasPro(true); setMockScenario('SCENARIO_3_SPARSE'); setTestDaysUsed(14); setMockAiContent(null); }} className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${mockScenario === 'SCENARIO_3_SPARSE' ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-indigo-50/50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-500/20'}`}>Pro Sparse</button>
+                        <button onClick={() => { setTestHasPro(true); setMockScenario('SCENARIO_PRO_FULL'); setTestDaysUsed(15); }} className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${mockScenario === 'SCENARIO_PRO_FULL' ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-gray-50 dark:bg-white/5 text-gray-400 border-transparent hover:bg-white dark:hover:bg-white/10'}`}>Pro Full</button>
+                        <button onClick={() => { setTestHasPro(false); setMockScenario('SCENARIO_PRO_FULL'); setTestDaysUsed(15); }} className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${mockScenario === 'SCENARIO_PRO_FULL' && testHasPro === false ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-gray-50 dark:bg-white/5 text-gray-400 border-transparent hover:bg-white dark:hover:bg-white/10'}`}>Free Full</button>
+                        <button onClick={() => { setTestHasPro(null); setTestDaysUsed(null); setMockScenario(null); setMockAiContent(null); }} className="px-3 py-2 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl text-[10px] font-bold transition-all border border-transparent hover:border-red-100 dark:hover:border-red-500/10">Reset</button>
                     </div>
                 </div>
-            </div> */}
+            </div>
 
             <main className="flex-1 flex flex-col justify-center items-center py-12">
                 <div className="max-w-7xl w-full px-6 md:px-12">
@@ -523,7 +585,7 @@ const EchoLand: React.FC = () => {
                                         {isCN ? '感知颗粒度' : 'Sensory Granularity'}
                                     </h3>
                                     <div>
-                                        <div className="text-4xl font-bold text-indigo-600 mb-1">{logs.length}</div>
+                                        <div className="text-4xl font-bold text-indigo-600 mb-1">{displayedLogs.length}</div>
                                         <p className="text-xs font-bold text-gray-400">
                                             {isCN ? '累计情绪印记' : 'Captured Moments'}
                                         </p>

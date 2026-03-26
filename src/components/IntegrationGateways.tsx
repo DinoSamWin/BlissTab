@@ -1,7 +1,9 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { X, Search, Plus, Edit2, Check, Trash2, GripHorizontal, Lock } from 'lucide-react';
+import { X, Search, Plus, Edit2, Check, Trash2, GripHorizontal, Lock, Download } from 'lucide-react';
+import QuickImportModule from './QuickImportModule';
 import {
     DndContext,
     closestCenter,
@@ -41,8 +43,14 @@ interface Props {
     appState: AppState;
 }
 
+// --- Helper Functions ---
+const isDefaultGroupString = (cat: string) => {
+    const trimmed = (cat || '').trim();
+    return trimmed === 'Quick Access' || trimmed === 'Shortcuts' || trimmed === '快捷指令' || trimmed === '快捷分组';
+};
+
 // --- Droppable Group Container ---
-function DroppableGroupContainer({ id, children, className, style }: { id: string, children: React.ReactNode, className?: string, style?: React.CSSProperties }) {
+function DroppableGroupContainer({ id, children, className, style }: { id: string, children: React.ReactNode, className?: string, style?: React.CSSProperties, key?: React.Key }) {
     const { setNodeRef, isOver } = useDroppable({ id: `group-${id}`, data: { type: 'group', category: id } });
 
     return (
@@ -497,6 +505,7 @@ async function uploadLogoAndGetMetadata(
 
 // --- Main Component ---
 export default function IntegrationGateways({ links: propLinks, userId, onUpdate, appState }: Props) {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [elasticY, setElasticY] = useState(0);
@@ -532,6 +541,14 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const [deleteId, setDeleteId] = useState<string | null>(null); // For Delete Shortcunt
     const [deletingGroup, setDeletingGroup] = useState<string | null>(null); // For Delete Group
 
+    // Import Module Visibility
+    const [showImport, setShowImport] = useState(() => {
+        // Auto-show for new users if not dismissed
+        const isNewUser = Array.isArray(propLinks) && propLinks.length <= 12; // Simple heuristic: 12 is the default count
+        const dismissed = localStorage.getItem('focus_tab_import_dismissed');
+        return isNewUser && !dismissed;
+    });
+
     const scrollAccumulator = useRef(0);
     const wheelTimeout = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -550,13 +567,13 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     // Grouping Logic
     const groupedGateways = useMemo(() => {
         const groups: Record<string, QuickLink[]> = {
-            "快捷指令": [] // Default group always first
+            "Quick Access": [] // Default group always first
         };
 
         links.forEach(link => {
-            let cat = link.category || "快捷指令";
-            // Normalize Shortcuts to Chinese
-            if (cat === 'Shortcuts') cat = '快捷指令';
+            let cat = link.category || "Quick Access";
+            // Normalize variants to English
+            if (isDefaultGroupString(cat)) cat = 'Quick Access';
 
             if (!groups[cat]) groups[cat] = [];
             groups[cat].push(link);
@@ -567,8 +584,8 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     // Enforce Category Order (Shortcuts First)
     const sortedCategories = useMemo(() => {
         return Object.keys(groupedGateways).sort((a, b) => {
-            const isA = a === '快捷指令';
-            const isB = b === '快捷指令';
+            const isA = isDefaultGroupString(a);
+            const isB = isDefaultGroupString(b);
             if (isA && !isB) return -1;
             if (!isA && isB) return 1;
             return 0;
@@ -742,8 +759,8 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const handleDeleteGroup = () => {
         if (!deletingGroup) return;
         const newLinks = links.filter(l => {
-            const cat = l.category || "快捷指令";
-            const normalizedCat = cat === 'Shortcuts' ? '快捷指令' : cat;
+            const cat = l.category || "Quick Access";
+            const normalizedCat = (cat === 'Shortcuts' || cat === '快捷指令') ? 'Quick Access' : cat;
             return normalizedCat !== deletingGroup;
         });
         setLinks(newLinks);
@@ -891,7 +908,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
     // Filter links for Compact View (Only Shortcuts)
     const shortcutsLinks = useMemo(() => {
-        return links.filter(l => (l.category === 'Shortcuts' || l.category === '快捷指令' || !l.category) && !l.id.startsWith('ghost-'));
+        return links.filter(l => (l.category === 'Shortcuts' || l.category === '快捷指令' || l.category === 'Quick Access' || !l.category) && !l.id.startsWith('ghost-'));
     }, [links]);
 
     return (
@@ -1021,6 +1038,16 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                 <Plus className="w-4 h-4" />
                                 <span>New Group</span>
                             </button>
+                            
+                            {!showImport && (
+                                <button
+                                    onClick={() => setShowImport(true)}
+                                    className="bg-white/50 dark:bg-white/5 text-indigo-600 dark:text-indigo-400 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest border border-indigo-200/50 dark:border-indigo-500/20 hover:bg-white dark:hover:bg-white/10 hover:shadow-lg transition-all flex items-center gap-2"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    <span>Import</span>
+                                </button>
+                            )}
                             <button
                                 onClick={() => {
                                     if (isLimitReached) {
@@ -1028,7 +1055,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                         const subscriptionUrl = window.location.origin + '/subscription';
                                         window.open(subscriptionUrl, '_blank');
                                     } else {
-                                        setCreateModal({ isOpen: true, category: '快捷指令' });
+                                        setCreateModal({ isOpen: true, category: 'Quick Access' });
                                     }
                                 }}
                                 // disabled={isLimitReached} // Removed to allow hover events for tooltip
@@ -1089,123 +1116,115 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                 <div className="space-y-12">
                                     {sortedCategories.map((category, groupIndex) => {
                                         const categoryLinks = groupedGateways[category];
-                                        const isDefaultGroup = category === '快捷指令';
-
+                                        const isDefaultGroup = isDefaultGroupString(category);
                                         const visibleLinks = categoryLinks?.filter(l => !l.id.startsWith('ghost-')) || [];
 
-                                        // Show group if it has ANY links (including ghost) OR if we are in edit mode
-                                        // This allows empty groups (with ghost links) to persist and be seen
                                         if (!isEditMode && !isDefaultGroup && (!categoryLinks || categoryLinks.length === 0)) return null;
 
                                         return (
-                                            <DroppableGroupContainer
-                                                key={category}
-                                                id={category}
-                                                className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-backwards"
-                                                style={{ animationDelay: `${groupIndex * 0.05}s` }}
-                                            >
-                                                {/* Group Title */}
-                                                <div className="mb-5 pl-1 group/title">
-                                                    <div className="flex items-center gap-4">
-                                                        {editingCategory === category && !isDefaultGroup ? (
-                                                            <input
-                                                                autoFocus
-                                                                defaultValue={category}
-                                                                onBlur={(e) => handleRenameGroup(category, e.currentTarget.value)}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') handleRenameGroup(category, e.currentTarget.value);
-                                                                }}
-                                                                className="text-2xl font-bold bg-transparent border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1"
-                                                            />
-                                                        ) : (
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex items-center gap-3">
-                                                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white"
-                                                                        onDoubleClick={() => isEditMode && !isDefaultGroup && setEditingCategory(category)}>
-                                                                        {category === 'Shortcuts' ? '快捷指令' : category}
-                                                                    </h3>
-                                                                    {isEditMode && !isDefaultGroup && (
-                                                                        <div className="flex items-center gap-1 opacity-100 transition-opacity">
-                                                                            <button
-                                                                                onClick={() => setEditingCategory(category)}
-                                                                                className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                                                                                title="Rename Group"
-                                                                            >
-                                                                                <Edit2 className="w-4 h-4" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => setDeletingGroup(category)}
-                                                                                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
-                                                                                title="Delete Group"
-                                                                            >
-                                                                                <Trash2 className="w-4 h-4" />
-                                                                            </button>
-                                                                        </div>
+                                            <React.Fragment key={category}>
+                                                <DroppableGroupContainer
+                                                    id={category}
+                                                    className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-backwards"
+                                                    style={{ animationDelay: `${groupIndex * 0.05}s` }}
+                                                >
+                                                    <div className="mb-5 pl-1 group/title">
+                                                        <div className="flex items-center gap-4">
+                                                            {editingCategory === category && !isDefaultGroup ? (
+                                                                <input
+                                                                    autoFocus
+                                                                    defaultValue={category}
+                                                                    onBlur={(e) => handleRenameGroup(category, e.currentTarget.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') handleRenameGroup(category, e.currentTarget.value);
+                                                                    }}
+                                                                    className="text-2xl font-bold bg-transparent border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1"
+                                                                />
+                                                            ) : (
+                                                                <div className="flex flex-col gap-1">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white"
+                                                                            onDoubleClick={() => isEditMode && !isDefaultGroup && setEditingCategory(category)}>
+                                                                            {isDefaultGroup ? (t('gateways.quick_access') || 'Quick Access') : category}
+                                                                        </h3>
+                                                                        {isEditMode && !isDefaultGroup && (
+                                                                            <div className="flex items-center gap-1 opacity-100 transition-opacity">
+                                                                                <button
+                                                                                    onClick={() => setEditingCategory(category)}
+                                                                                    className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                                                                    title="Rename Group"
+                                                                                >
+                                                                                    <Edit2 className="w-4 h-4" />
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => setDeletingGroup(category)}
+                                                                                    className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                                                                                    title="Delete Group"
+                                                                                >
+                                                                                    <Trash2 className="w-4 h-4" />
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    {isDefaultGroup && (
+                                                                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                                                                            {t('gateways.quick_access_desc') || "Quick access links persistently displayed on the home page"}
+                                                                        </p>
                                                                     )}
                                                                 </div>
-                                                                {isDefaultGroup && (
-                                                                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">常用快捷指令与工具集合</p>
-                                                                )}
-                                                            </div>
-                                                        )}
+                                                            )}
+                                                        </div>
                                                     </div>
 
-                                                    {/* Description removed for default group as per user request */}
-                                                </div>
+                                                    <SortableContext items={visibleLinks.map(l => l.id)} strategy={rectSortingStrategy}>
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
+                                                            {visibleLinks.map((link, i) => (
+                                                                <React.Fragment key={link.id}>
+                                                                    <SortableLinkCard
+                                                                        link={link}
+                                                                        isEditMode={isEditMode}
+                                                                        index={(groupIndex * 10) + i}
+                                                                        onDelete={(id) => setDeleteId(id)}
+                                                                        onEdit={(l) => setEditLink(l)}
+                                                                    />
+                                                                </React.Fragment>
+                                                            ))}
 
-                                                <SortableContext
-                                                    items={visibleLinks.map(l => l.id)}
-                                                    strategy={rectSortingStrategy}
-                                                >
-                                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
-                                                        {visibleLinks.map((link, i) => (
-                                                            <React.Fragment key={link.id}>
-                                                                <SortableLinkCard
-                                                                    link={link}
-                                                                    isEditMode={isEditMode}
-                                                                    index={(groupIndex * 10) + i}
-                                                                    onDelete={(id) => setDeleteId(id)}
-                                                                    onEdit={(l) => setEditLink(l)}
-                                                                />
-                                                            </React.Fragment>
-                                                        ))}
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (isLimitReached) {
+                                                                        window.open(window.location.origin + '/subscription', '_blank');
+                                                                    } else {
+                                                                        setCreateModal({ isOpen: true, category: isDefaultGroup ? 'Quick Access' : category });
+                                                                    }
+                                                                }}
+                                                                className={`flex items-center justify-center p-3 border-2 border-dashed rounded-xl transition-all h-16 w-full relative ${isEditMode ? 'opacity-40 pointer-events-none' : ''} ${isLimitReached ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-60' : 'bg-white/50 dark:bg-white/5 border-gray-300 dark:border-white/10 hover:bg-white dark:hover:bg-white/10 hover:border-orange-400 dark:hover:border-orange-500 group'}`}
+                                                            >
+                                                                {isLimitReached && <LimitReachedTooltip />}
+                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${isLimitReached ? 'bg-gray-200 dark:bg-gray-800' : 'bg-gray-100 dark:bg-white/10 group-hover:scale-110'}`}>
+                                                                    {isLimitReached ? <Lock className="w-5 h-5 text-gray-400 dark:text-gray-600" /> : <Plus className="w-5 h-5 text-gray-400 group-hover:text-orange-500 transition-colors" />}
+                                                                </div>
+                                                            </button>
+                                                        </div>
+                                                    </SortableContext>
+                                                </DroppableGroupContainer>
 
-                                                        {/* Regular Add Button (Per Group) - Now shown for ALL groups including Default */}
-                                                        {/* Style differentiated from header buttons: Dashed, simple icon */}
-                                                        <button
-                                                            onClick={() => {
-                                                                if (isLimitReached) {
-                                                                    // Show upgrade prompt
-                                                                    const subscriptionUrl = window.location.origin + '/subscription';
-                                                                    window.open(subscriptionUrl, '_blank');
-                                                                } else {
-                                                                    setCreateModal({ isOpen: true, category: category === 'Shortcuts' ? '快捷指令' : category });
-                                                                }
+                                                {isDefaultGroup && showImport && (
+                                                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-12 pb-4">
+                                                        <QuickImportModule 
+                                                            onImport={(newLinks) => {
+                                                                const updatedLinks = [...links, ...newLinks];
+                                                                setLinks(updatedLinks);
+                                                                onUpdate(updatedLinks);
                                                             }}
-                                                            // disabled={isLimitReached} // Removed to allow hover events for tooltip
-                                                            className={`
-                                                                flex items-center justify-center p-3
-                                                                border-2 border-dashed rounded-xl transition-all h-16 w-full relative
-                                                                ${isEditMode ? 'opacity-40 pointer-events-none' : ''}
-                                                                ${isLimitReached
-                                                                    ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-60'
-                                                                    : 'bg-white/50 dark:bg-white/5 border-gray-300 dark:border-white/10 hover:bg-white dark:hover:bg-white/10 hover:border-orange-400 dark:hover:border-orange-500 group'
-                                                                }
-                                                            `}
-                                                        // title={isLimitReached ? `Free plan limit: ${SUBSCRIPTION_LIMITS.GATEWAYS.FREE} gateways. Click to upgrade.` : 'Add a new gateway'}
-                                                        >
-                                                            {isLimitReached && <LimitReachedTooltip />}
-                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${isLimitReached ? 'bg-gray-200 dark:bg-gray-800' : 'bg-gray-100 dark:bg-white/10 group-hover:scale-110'}`}>
-                                                                {isLimitReached ? (
-                                                                    <Lock className="w-5 h-5 text-gray-400 dark:text-gray-600" />
-                                                                ) : (
-                                                                    <Plus className="w-5 h-5 text-gray-400 group-hover:text-orange-500 transition-colors" />
-                                                                )}
-                                                            </div>
-                                                        </button>
+                                                            onClose={() => {
+                                                                setShowImport(false);
+                                                                localStorage.setItem('focus_tab_import_dismissed', 'true');
+                                                            }}
+                                                        />
                                                     </div>
-                                                </SortableContext>
-                                            </DroppableGroupContainer>
+                                                )}
+                                            </React.Fragment>
                                         );
                                     })}
 

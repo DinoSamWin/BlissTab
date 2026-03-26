@@ -116,10 +116,46 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         console.error('[UserContext] Failed to parse user from storage event', error);
                     }
                 }
+            } else if (e.key === 'focus_tab_explicit_signout') {
+                const newValue = e.newValue;
+                if (newValue) {
+                    try {
+                        const { timestamp } = JSON.parse(newValue);
+                        // Only react if the signout happened in the last 10 seconds
+                        if (Date.now() - timestamp < 10000) {
+                            console.log('[UserContext] Recent explicit sign out detected from another tab');
+                            handleSetUser(null, false, 'StorageEvent:Signout'); // false = don't propagate back to storage
+                        }
+                    } catch (err) {
+                        // Legacy support for 'true' string
+                        if (newValue === 'true') {
+                            console.log('[UserContext] Legacy explicit sign out detected');
+                            handleSetUser(null, false, 'StorageEvent:LegacySignout');
+                        }
+                    }
+                }
             }
         };
         window.addEventListener('storage', handleStorageChange);
-        return () => window.removeEventListener('storage', handleStorageChange);
+
+        // 2b. Direct message sync (from background)
+        const handleRuntimeMessage = (message: any) => {
+            if (message.type === 'SYNC_LOCAL_STORAGE' && message.user) {
+                console.log('[UserContext] Received sync message from background');
+                setUserState(message.user);
+            }
+        };
+
+        if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+            chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+        }
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+            if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+                chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
+            }
+        };
     }, []);
 
     // 3. Silent background subscription & settings sync
@@ -184,8 +220,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [user?.id]);
 
     // Manual setUser — used after login actions to immediately update state
-    const handleSetUser = useCallback((newUser: User | null) => {
-        console.log('[UserContext] Manual setUser called:', newUser?.email || 'null', 'Verified:', newUser?.emailVerified);
+    const handleSetUser = useCallback((newUser: User | null, propagateSignout = true, source = 'Manual') => {
+        console.log(`[UserContext] handleSetUser called from ${source}:`, newUser?.email || 'null', 'Verified:', newUser?.emailVerified);
         
         let finalUser = newUser;
         if (newUser && verifiedRef.current && !newUser.emailVerified) {
@@ -201,7 +237,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
             verifiedRef.current = false;
             localStorage.removeItem('focus_tab_user');
-            localStorage.setItem('focus_tab_explicit_signout', 'true');
+            if (propagateSignout) {
+                localStorage.setItem('focus_tab_explicit_signout', JSON.stringify({ timestamp: Date.now() }));
+            }
         }
     }, []);
 

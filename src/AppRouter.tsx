@@ -88,8 +88,8 @@ const RootRedirect: React.FC = () => {
   }
 
   if (user) {
-    // If logged in but NOT verified, don't auto-redirect to Cove (let ProtectedRoute handle it)
-    if (!user.emailVerified) return <Navigate to="/verify-email" replace />;
+    // If logged in but NOT verified, allow them to stay on the landing page (App)
+    if (!user.emailVerified) return <App key="root-app" />;
     return <Navigate to="/cove" replace />;
   }
   return <App key="root-app" />;
@@ -107,7 +107,7 @@ const SubscriptionRoute: React.FC = () => {
         subscriptionExpiresAt: updatedUser.subscriptionExpiresAt || null,
       }, updatedUser.email);
     }
-    setUser(updatedUser);
+    setUser(updatedUser, true, 'AppRouter:SubscriptionUpdate');
   };
 
   return <SubscriptionPage user={user} onSubscriptionUpdate={handleSubscriptionUpdate} />;

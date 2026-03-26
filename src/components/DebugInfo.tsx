@@ -32,7 +32,8 @@ const DebugInfo: React.FC<DebugInfoProps> = ({ currentUser }) => {
         return () => clearInterval(interval);
     }, []);
 
-    if (process.env.NODE_ENV === 'production') return null; // Hide in pure production unless enabled
+    // Strictly hide in all production-like or intentional review builds
+    if (process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost') return null; 
 
     return (
         <div className="fixed top-2 right-2 p-2 bg-red-900/90 text-white text-[10px] font-mono rounded z-[9999] max-w-[200px] pointer-events-none shadow-xl border border-red-500">

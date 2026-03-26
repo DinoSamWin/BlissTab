@@ -66,6 +66,7 @@ export default defineConfig(({ mode }) => {
           main: path.resolve(__dirname, 'index.html'),
           popup: path.resolve(__dirname, 'popup.html'),
           background: path.resolve(__dirname, 'src/background.ts'),
+          offscreen: path.resolve(__dirname, 'src/extension/offscreen.html'),
         },
         output: {
           entryFileNames: 'assets/[name].js',

@@ -40,7 +40,7 @@ export const REGIONAL_SEARCH_ENGINES: Record<'CN' | 'GLOBAL', SearchEngine[]> = 
   CN: [
     {
       id: 'baidu',
-      name: '百度',
+      name: 'Baidu',
       icon: 'https://www.baidu.com/favicon.ico',
       searchUrl: 'https://www.baidu.com/s?wd='
     },
@@ -58,19 +58,19 @@ export const REGIONAL_SEARCH_ENGINES: Record<'CN' | 'GLOBAL', SearchEngine[]> = 
     },
     {
       id: 'so360',
-      name: '360搜索',
+      name: '360 Search',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=so.com',
       searchUrl: 'https://www.so.com/s?q='
     },
     {
       id: 'jd',
-      name: '京东',
+      name: 'JD',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=jd.com',
       searchUrl: 'https://search.jd.com/Search?keyword='
     },
     {
       id: 'taobao',
-      name: '淘宝搜索',
+      name: 'Taobao Search',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=taobao.com',
       searchUrl: 'https://s.taobao.com/search?q='
     },
@@ -107,35 +107,35 @@ export const REGIONAL_DEFAULT_LINKS: Record<'CN' | 'GLOBAL', QuickLink[]> = {
   CN: [
     {
       id: 'zhihu',
-      title: '知乎',
+      title: 'Zhihu',
       url: 'https://www.zhihu.com',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=zhihu.com',
       color: '#0084FF'
     },
     {
       id: 'taobao',
-      title: '淘宝',
+      title: 'Taobao',
       url: 'https://www.taobao.com',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=taobao.com',
       color: '#FF5000'
     },
     {
       id: 'bilibili',
-      title: 'B站',
+      title: 'Bilibili',
       url: 'https://www.bilibili.com',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=bilibili.com',
       color: '#FB7299'
     },
     {
       id: 'weibo',
-      title: '微博',
+      title: 'Weibo',
       url: 'https://weibo.com',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=weibo.com',
       color: '#E6162D'
     },
     {
       id: 'jd',
-      title: '京东',
+      title: 'JD',
       url: 'https://www.jd.com',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=jd.com',
       color: '#E33333'
@@ -149,7 +149,7 @@ export const REGIONAL_DEFAULT_LINKS: Record<'CN' | 'GLOBAL', QuickLink[]> = {
     },
     {
       id: 'doubao',
-      title: '豆包',
+      title: 'Doubao',
       url: 'https://www.doubao.com',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=doubao.com',
       color: '#4C6EF5'
@@ -163,7 +163,7 @@ export const REGIONAL_DEFAULT_LINKS: Record<'CN' | 'GLOBAL', QuickLink[]> = {
     },
     {
       id: 'mita',
-      title: '秘塔搜索',
+      title: 'Mita Search',
       url: 'https://metaso.cn',
       icon: 'https://www.google.com/s2/favicons?sz=64&domain=metaso.cn',
       color: '#3B82F6'

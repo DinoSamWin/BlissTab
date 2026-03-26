@@ -204,7 +204,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
         return { error: 'invalid_email' };
       default:
         console.error('[Auth] signInWithEmail error:', err.code, err.message);
-        return { error: 'unknown' };
+        return { error: err.code || 'unknown' };
     }
   }
 }
@@ -246,7 +246,7 @@ export async function signUpWithEmail(email: string, password: string, displayNa
         return { error: 'invalid_email' };
       default:
         console.error('[Auth] signUpWithEmail error:', err.code, err.message);
-        return { error: 'unknown' };
+        return { error: err.code || 'unknown' };
     }
   }
 }
@@ -269,6 +269,7 @@ export async function sendPasswordReset(email: string): Promise<{ success: boole
 
 export async function signInWithGoogle(): Promise<AuthResult> {
   if (IS_EXTENSION) {
+    console.log('[Auth] Extension environment detected for Google login');
     return signInWithGoogleExtension();
   }
   return signInWithGoogleWeb();
@@ -329,11 +330,20 @@ async function signInWithGoogleExtension(): Promise<AuthResult> {
 
     const credential = GoogleAuthProvider.credential(idToken);
     if (!auth) throw new Error('Firebase not configured');
+    
+    console.log('[Auth] Attempting Firebase sign-in with id_token...');
     const result = await signInWithCredential(auth, credential);
+    console.log('[Auth] Google Extension sign-in success:', result.user?.email);
+    
     return { user: firebaseUserToAppUser(result.user) };
-  } catch (e) {
-    console.error('[Auth] Google Extension sign-in error:', e);
-    return { error: 'cancelled' };
+  } catch (e: any) {
+    console.error('[Auth] Google Extension sign-in error:', e.message || e);
+    // Propagate more descriptive errors if available
+    const msg = e.message || 'unknown';
+    if (msg.includes('lastError') || msg.includes('cancel')) {
+      return { error: 'cancelled' };
+    }
+    return { error: msg };
   }
 }
 
@@ -342,6 +352,9 @@ async function signInWithGoogleExtension(): Promise<AuthResult> {
 // ─────────────────────────────────────────────
 
 export async function signInWithFacebook(): Promise<AuthResult> {
+  if (IS_EXTENSION) {
+    return handleOffscreenAuth('facebook.com');
+  }
   if (!auth) return { error: 'firebase_not_configured' };
   try {
     const provider = new FacebookAuthProvider();
@@ -355,11 +368,15 @@ export async function signInWithFacebook(): Promise<AuthResult> {
   }
 }
 
+
 // ─────────────────────────────────────────────
 // X (Twitter) Sign In
 // ─────────────────────────────────────────────
 
 export async function signInWithX(): Promise<AuthResult> {
+  if (IS_EXTENSION) {
+    return handleOffscreenAuth('twitter.com');
+  }
   if (!auth) return { error: 'firebase_not_configured' };
   try {
     const provider = new TwitterAuthProvider();
@@ -367,6 +384,29 @@ export async function signInWithX(): Promise<AuthResult> {
     return { user: firebaseUserToAppUser(result.user) };
   } catch (e) {
     return handleSocialAuthError(e as AuthError, 'twitter.com');
+  }
+}
+
+// ─────────────────────────────────────────────
+// Offscreen Auth Handler (For Extension Environment)
+// ─────────────────────────────────────────────
+
+async function handleOffscreenAuth(provider: string): Promise<AuthResult> {
+  try {
+    // Determine the web app's URL. Prefer the environment variable or fallback to production.
+    const WEB_URL = import.meta.env.VITE_WEB_URL || 'https://startlytab.com';
+    const loginUrl = `${WEB_URL}/login?from_ext=true&social=${provider}`;
+
+    // Open a new tab to the web app for authentication
+    // @ts-ignore
+    chrome.tabs.create({ url: loginUrl });
+
+    // Return a 'cancelled' error so the UI stops the loading spinner.
+    // The actual login state will be pushed from the web to the extension asynchronously.
+    return { error: 'cancelled' };
+  } catch (e: any) {
+    console.error(`[Auth] Web Auth redirect error for ${provider}:`, e);
+    return { error: e.message || 'unknown' };
   }
 }
 
@@ -447,7 +487,7 @@ async function handleSocialAuthError(err: AuthError, _provider: string): Promise
   }
 
   console.error('[Auth] Social auth error:', err.code, err.message);
-  return { error: 'unknown' };
+  return { error: err.code || 'unknown' };
 }
 
 // ─────────────────────────────────────────────

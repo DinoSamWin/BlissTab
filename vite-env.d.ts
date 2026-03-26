@@ -14,3 +14,5 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
+declare const chrome: any;
+

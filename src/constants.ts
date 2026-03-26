@@ -144,10 +144,34 @@ export const SEARCH_ENGINES: SearchEngine[] = [
     searchUrl: 'https://www.google.com/search?q='
   },
   {
+    id: 'baidu',
+    name: 'Baidu',
+    icon: 'https://www.google.com/s2/favicons?sz=32&domain=baidu.com',
+    searchUrl: 'https://www.baidu.com/s?wd='
+  },
+  {
     id: 'bing',
     name: 'Bing',
     icon: 'https://www.google.com/s2/favicons?sz=32&domain=bing.com',
     searchUrl: 'https://www.bing.com/search?q='
+  },
+  {
+    id: '360',
+    name: '360 Search',
+    icon: 'https://www.google.com/s2/favicons?sz=32&domain=so.com',
+    searchUrl: 'https://www.so.com/s?q='
+  },
+  {
+    id: 'jd',
+    name: 'JD',
+    icon: 'https://www.google.com/s2/favicons?sz=32&domain=jd.com',
+    searchUrl: 'https://search.jd.com/Search?keyword='
+  },
+  {
+    id: 'taobao',
+    name: 'Taobao',
+    icon: 'https://www.google.com/s2/favicons?sz=32&domain=taobao.com',
+    searchUrl: 'https://s.taobao.com/search?q='
   },
   {
     id: 'duckduckgo',
@@ -156,19 +180,47 @@ export const SEARCH_ENGINES: SearchEngine[] = [
     searchUrl: 'https://duckduckgo.com/?q='
   },
   {
-    id: 'brave',
-    name: 'Brave Search',
-    icon: 'https://www.google.com/s2/favicons?sz=32&domain=search.brave.com',
-    searchUrl: 'https://search.brave.com/search?q='
+    id: 'yahoo',
+    name: 'Yahoo',
+    icon: 'https://www.google.com/s2/favicons?sz=32&domain=yahoo.com',
+    searchUrl: 'https://search.yahoo.com/search?p='
   },
   {
-    id: 'ecosia',
-    name: 'Ecosia',
-    icon: 'https://www.google.com/s2/favicons?sz=32&domain=ecosia.org',
-    searchUrl: 'https://www.ecosia.org/search?q='
+    id: 'amazon',
+    name: 'Amazon',
+    icon: 'https://www.google.com/s2/favicons?sz=32&domain=amazon.com',
+    searchUrl: 'https://www.amazon.com/s?k='
   }
 ];
 
 export const DEFAULT_SEARCH_ENGINE = 'google';
+
+export const REGIONAL_DEFAULT_GATEWAYS: Record<'China' | 'Overseas', QuickLink[]> = {
+  China: [
+    { id: 'zh1', title: 'Zhihu', url: 'https://www.zhihu.com', icon: 'https://www.google.com/s2/favicons?domain=zhihu.com&sz=64', color: '#0084FF' },
+    { id: 'tb1', title: 'Taobao', url: 'https://www.taobao.com', icon: 'https://www.google.com/s2/favicons?domain=taobao.com&sz=64', color: '#FF5000' },
+    { id: 'bb1', title: 'Bilibili', url: 'https://www.bilibili.com', icon: 'https://www.google.com/s2/favicons?domain=bilibili.com&sz=64', color: '#00A1D6' },
+    { id: 'wb1', title: 'Weibo', url: 'https://weibo.com', icon: 'https://www.google.com/s2/favicons?domain=weibo.com&sz=64', color: '#E6162D' },
+    { id: 'jd1', title: 'JD', url: 'https://www.jd.com', icon: 'https://www.google.com/s2/favicons?domain=jd.com&sz=64', color: '#E1251B' },
+    { id: 'gpt1', title: 'ChatGPT', url: 'https://chat.openai.com', icon: 'https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64', color: '#10A37F' },
+    { id: 'db1', title: 'Doubao', url: 'https://www.doubao.com', icon: 'https://www.google.com/s2/favicons?domain=doubao.com&sz=64', color: '#4E6EF2' },
+    { id: 'km1', title: 'Kimi', url: 'https://kimi.moonshot.cn', icon: 'https://www.google.com/s2/favicons?domain=moonshot.cn&sz=64', color: '#FF6B00' },
+    { id: 'mt1', title: 'Mita Search', url: 'https://metaso.cn', icon: 'https://www.google.com/s2/favicons?domain=metaso.cn&sz=64', color: '#000000' }
+  ],
+  Overseas: [
+    { id: 'gm1', title: 'Gmail', url: 'https://mail.google.com', icon: 'https://www.google.com/s2/favicons?domain=mail.google.com&sz=64', color: '#EA4335' },
+    { id: 'ol1', title: 'Outlook', url: 'https://outlook.live.com', icon: 'https://www.google.com/s2/favicons?domain=outlook.com&sz=64', color: '#0078D4' },
+    { id: 'gc1', title: 'Google Calendar', url: 'https://calendar.google.com', icon: 'https://www.google.com/s2/favicons?domain=calendar.google.com&sz=64', color: '#4285F4' },
+    { id: 'oc1', title: 'Outlook Calendar', url: 'https://outlook.live.com/calendar', icon: 'https://www.google.com/s2/favicons?domain=outlook.com&sz=64', color: '#0078D4' },
+    { id: 'gd1', title: 'Google Docs', url: 'https://docs.google.com', icon: 'https://www.google.com/s2/favicons?domain=docs.google.com&sz=64', color: '#4285F4' },
+    { id: 'gdv1', title: 'Google Drive', url: 'https://drive.google.com', icon: 'https://www.google.com/s2/favicons?domain=drive.google.com&sz=64', color: '#34A853' },
+    { id: 'od1', title: 'OneDrive', url: 'https://onedrive.live.com', icon: 'https://www.google.com/s2/favicons?domain=microsoft.com&sz=64', color: '#0078D4' },
+    { id: 'sl1', title: 'Slack', url: 'https://slack.com', icon: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64', color: '#4A154B' },
+    { id: 'mtm1', title: 'Teams', url: 'https://teams.microsoft.com', icon: 'https://www.google.com/s2/favicons?domain=microsoft.com&sz=64', color: '#6264A7' },
+    { id: 'nt1', title: 'Notion', url: 'https://www.notion.so', icon: 'https://www.google.com/s2/favicons?domain=notion.so&sz=64', color: '#000000' },
+    { id: 'gpt2', title: 'ChatGPT', url: 'https://chat.openai.com', icon: 'https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64', color: '#10A37F' },
+    { id: 'cv1', title: 'Canva', url: 'https://www.canva.com', icon: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64', color: '#00C4CC' }
+  ]
+};
 
 export const FEATUREBASE_URL = 'https://startlytab.featurebase.app'; // Replace with your actual Featurebase URL

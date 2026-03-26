@@ -18,6 +18,7 @@ import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, 
 import { updateTrackAffinity } from './services/recommendationEngine';
 import { useUser } from './contexts/UserContext';
 import Settings from './components/Settings';
+import i18n from './i18n';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
 import IntegrationGateways from './components/IntegrationGateways';
@@ -154,6 +155,16 @@ const EmotionalPulsePerceiver: React.FC<{ emotion: EmotionType | null; currentLa
   );
 };
 
+// Check if we were opened by the extension and cache it
+if (typeof window !== 'undefined') {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('source') === 'extension') {
+    sessionStorage.setItem('from_extension', 'true');
+    const extId = params.get('ext_id');
+    if (extId) sessionStorage.setItem('ext_id', extId);
+  }
+}
+
 // --- App Component ---
 
 const App: React.FC = () => {
@@ -265,6 +276,7 @@ const App: React.FC = () => {
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
 
   const isAuthenticated = !!appState.user;
+  const isVerifiedUser = !!appState.user && appState.user.emailVerified === true;
 
   // Search state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -306,7 +318,23 @@ const App: React.FC = () => {
 
   // Clear pools when language changes to prevent mix-ups (Reactive Safety)
   useEffect(() => {
-    console.log('[App] Language changed to:', appState.language, '- Clearing perspective pools');
+    console.log('[App] Language changed to:', appState.language, '- Synchronizing i18n and clearing pools');
+    
+    // Sync with i18next engine
+    const langMap: Record<string, string> = {
+      'Chinese (Simplified)': 'zh-CN',
+      'English': 'en-US',
+      'German': 'en-US', // Default to English if no translation yet
+      'French': 'en-US',
+      'Spanish': 'en-US',
+      'Italian': 'en-US',
+      'Portuguese': 'en-US',
+      'Japanese': 'en-US'
+    };
+    
+    const i18nCode = langMap[appState.language] || 'en-US';
+    i18n.changeLanguage(i18nCode).catch(err => console.error('[App] Failed to change language:', err));
+    
     clearAllPerspectivePools();
   }, [appState.language]);
 
@@ -439,6 +467,33 @@ const App: React.FC = () => {
     // Clear explicit signout flag on successful login
     localStorage.removeItem('focus_tab_explicit_signout');
 
+    // BLAST session to extension if we are running in a web environment
+    if (!IS_EXTENSION && typeof chrome !== 'undefined' && chrome.runtime) {
+      try {
+        if (sessionStorage.getItem('from_extension') === 'true') {
+            addToast("Syncing login with extension...", "info");
+        }
+        const token = localStorage.getItem('focus_tab_token');
+        const EXTENSION_ID = sessionStorage.getItem('ext_id') || import.meta.env.VITE_EXTENSION_ID || 'gafmidlphhecjlidigicmmkldhlakoag';
+        chrome.runtime.sendMessage(EXTENSION_ID, {
+          type: 'AUTH_SYNC',
+          user: user,
+          token: token
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+             console.log('[App] Auth sync to extension failed (extension might not be installed):', chrome.runtime.lastError.message);
+          } else {
+             console.log('[App] Auth sync to extension successful:', response);
+             if (sessionStorage.getItem('from_extension') === 'true') {
+                 setTimeout(() => window.close(), 500);
+             }
+          }
+        });
+      } catch (e) {
+        console.warn('[App] Could not send AUTH_SYNC:', e);
+      }
+    }
+
     // CRITICAL: Force Google to forget the "preferred" account by reinitializing
     // This prevents account reversion when switching between accounts
     if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
@@ -562,7 +617,7 @@ const App: React.FC = () => {
 
           if (contextNeedsUpdate) {
             console.log('[App] Updating UserContext with fresh user data');
-            setContextUser(userWithAllData);
+            setContextUser(userWithAllData, true, 'App:handleUserLogin');
           }
 
           if (preferenceToMigrate) {
@@ -586,7 +641,7 @@ const App: React.FC = () => {
 
           // Sync if mismatch
           if (!contextUser || contextUser.id !== userWithAllData.id || (!contextUser.emailVerified && userWithAllData.emailVerified)) {
-            setContextUser(userWithAllData);
+            setContextUser(userWithAllData, true, 'App:SyncMismatch');
           }
 
           return stateWithUser;
@@ -607,7 +662,7 @@ const App: React.FC = () => {
   const handleSignOut = useCallback(() => {
     // 1. Clear auth token/session
     signOutUser();
-    setContextUser(null); // Sync with UserContext
+    setContextUser(null, true, 'App:handleSignOut'); // Sync with UserContext
 
     // Set explicit signout flag to prevent auto-login on refresh
     localStorage.setItem('focus_tab_explicit_signout', 'true');
@@ -1721,12 +1776,21 @@ const App: React.FC = () => {
       }
 
       // Handle explicit sign-out flag (migrated from legacy listener)
-      if (e.key === 'focus_tab_explicit_signout' && e.newValue === 'true') {
-        const currentUser = appStateRef.current.user;
-        if (currentUser) {
-          console.log('[App] Explicit sign out detected from another tab');
-          // Reset state
-          handleSignOut(); // Re-use handleSignOut function for consistency
+      if (e.key === 'focus_tab_explicit_signout') {
+        const newValue = e.newValue;
+        if (newValue) {
+          try {
+            const { timestamp } = JSON.parse(newValue);
+            if (Date.now() - timestamp < 10000 && appStateRef.current.user) {
+              console.log('[App] Recent explicit sign out detected from another tab');
+              handleSignOut();
+            }
+          } catch (err) {
+            if (newValue === 'true' && appStateRef.current.user) {
+              console.log('[App] Legacy explicit sign out detected');
+              handleSignOut();
+            }
+          }
         }
       }
 
@@ -1913,18 +1977,20 @@ const App: React.FC = () => {
             <ExtensionInstallPrompt theme={appState.theme} />
           )} */}
 
-          <button
-            onClick={() => navigate('/echo-land')}
-            className="relative p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
-            aria-label="Trend Hub"
-          >
-            <Activity className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 transition-colors" />
-            {isSubscribed(appState) && getEmotionLogs().length > 0 && Math.floor((Date.now() - [...getEmotionLogs()].sort((a, b) => b.timestamp - a.timestamp)[getEmotionLogs().length - 1].timestamp) / (1000 * 60 * 60 * 24)) >= 7 && (
-              <div className="absolute top-1.5 right-1.5 text-indigo-500 pointer-events-none animate-pulse">
-                <Sparkles size={10} />
-              </div>
-            )}
-          </button>
+          {isVerifiedUser && (
+            <button
+              onClick={() => navigate('/echo-land')}
+              className="relative p-3.5 bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-95 group"
+              aria-label="Trend Hub"
+            >
+              <Activity className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 transition-colors" />
+              {isSubscribed(appState) && getEmotionLogs().length > 0 && Math.floor((Date.now() - [...getEmotionLogs()].sort((a, b) => b.timestamp - a.timestamp)[getEmotionLogs().length - 1].timestamp) / (1000 * 60 * 60 * 24)) >= 7 && (
+                <div className="absolute top-1.5 right-1.5 text-indigo-500 pointer-events-none animate-pulse">
+                  <Sparkles size={10} />
+                </div>
+              )}
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -1940,12 +2006,14 @@ const App: React.FC = () => {
               <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 9H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             }
           </button>
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="px-6 py-3.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-[0.15em] hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-indigo-500/10"
-          >
-            Studio
-          </button>
+          {isVerifiedUser && (
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="px-6 py-3.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-[0.15em] hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-indigo-500/10"
+            >
+              Studio
+            </button>
+          )}
         </div>
       </nav>
 
@@ -1966,7 +2034,7 @@ const App: React.FC = () => {
               ${containerClass} 
               ${isSingleLine ? '-mt-8 md:-mt-12 lg:-mt-16' : ''}`}>
 
-              {isAuthenticated ? (
+              {isVerifiedUser ? (
                 <>
                   {/* Text Container: Handles scrolling for long text while keeping buttons visible */}
                   <div className="min-h-[220px] md:min-h-[260px] lg:min-h-[280px] transition-all duration-700 flex flex-col items-center justify-center w-full px-4 md:px-8">
@@ -2226,8 +2294,8 @@ const App: React.FC = () => {
         })()}
       </main>
 
-      {!isAuthenticated && (
-        /* Unauthenticated State: Hero Login Prompt */
+      {!isVerifiedUser && (
+        /* Unauthenticated or Unverified State: Hero Login Prompt */
         <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
           <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
             <div className="w-full flex flex-col items-center justify-center py-2">
@@ -2303,7 +2371,7 @@ const App: React.FC = () => {
         </section>
       )}
 
-      {!isAuthenticated && (
+      {!isVerifiedUser && (
         <>
           <LandingOptimization />
           <DailyRhythm />
@@ -2315,7 +2383,7 @@ const App: React.FC = () => {
       )}
 
       {/* 3.5. INTEGRATION GATEWAYS (Real Data) */}
-      {isAuthenticated && (
+      {isVerifiedUser && (
         <IntegrationGateways
           links={appState.links}
           userId={appState.user?.id}
@@ -2364,7 +2432,7 @@ const App: React.FC = () => {
         theme={appState.theme}
         isAuthenticated={isAuthenticated}
       />
-      <DebugInfo currentUser={appState.user} />
+      {isVerifiedUser && <DebugInfo currentUser={appState.user} />}
 
     </div >
   );

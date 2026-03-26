@@ -9,5 +9,16 @@
         "anxious_label": "Sensing your anxiety...",
         "sad_label": "Receiving your sadness signals...",
         "exhausted_label": "Captured your fatigue..."
+    },
+    "gateways": {
+        "quick_access": "Quick Access",
+        "quick_access_desc": "Quick access links persistently displayed on the home page",
+        "import": "Import",
+        "new_group": "New Group",
+        "add_gateway": "Add Gateway",
+        "edit": "EDIT",
+        "done": "DONE",
+        "delete_group": "Delete Group",
+        "rename_group": "Rename Group"
     }
 }

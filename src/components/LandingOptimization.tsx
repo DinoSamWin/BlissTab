@@ -7,8 +7,8 @@ const CARDS = [
         id: "tab-hopping",
         title: "The Tab-Hopping Reflex",
         description: "You open 20 tabs before finishing one task, searching for a distraction that never satisfies.",
-        answers: "1.2k",
-        views: "45k",
+        leftLabel: "Restless tabs",
+        rightLabel: "One small step",
         avatar: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?q=80&w=200&h=200&auto=format&fit=crop",
         icon: "🌑"
     },
@@ -16,8 +16,8 @@ const CARDS = [
         id: "busy-empty",
         title: "Busy But Empty",
         description: "You feel busy all day — yet you lack the sense of true accomplishment at sunset.",
-        answers: "850",
-        views: "32k",
+        leftLabel: "All motion",
+        rightLabel: "Quiet clarity",
         avatar: "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?q=80&w=200&h=200&auto=format&fit=crop",
         icon: "🌑"
     },
@@ -25,8 +25,8 @@ const CARDS = [
         id: "digital-escape",
         title: "Digital Escape",
         description: "You subconsciously check messages or social media just to escape the pressure of a hard task.",
-        answers: "2.1k",
-        views: "68k",
+        leftLabel: "Digital noise",
+        rightLabel: "Breathing room",
         avatar: "https://images.unsplash.com/photo-1512428559083-a400a6b5a067?q=80&w=200&h=200&auto=format&fit=crop",
         icon: "🌑"
     },
@@ -34,8 +34,8 @@ const CARDS = [
         id: "morning-burnout",
         title: "Morning Burnout",
         description: "You start your day already feeling drained, dreading the noise of your digital environment.",
-        answers: "1.5K",
-        views: "54k",
+        leftLabel: "Low energy",
+        rightLabel: "Gentle reset",
         avatar: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=200&h=200&auto=format&fit=crop",
         icon: "🌑"
     },
@@ -43,8 +43,8 @@ const CARDS = [
         id: "silent-stress",
         title: "Silent Stress",
         description: "You don’t notice your heart racing or your breath shallowing until it’s already too late.",
-        answers: "920",
-        views: "41k",
+        leftLabel: "Quiet tension",
+        rightLabel: "Optional check-in",
         avatar: "https://images.unsplash.com/photo-1516534775068-ba3e7458af70?q=80&w=200&h=200&auto=format&fit=crop",
         icon: "🌑"
     }
@@ -188,14 +188,14 @@ const LandingOptimization: React.FC = () => {
                                                 {card.description}
                                             </p>
 
-                                            <div className="flex items-center gap-10 text-[10px] font-bold tracking-[0.2em] text-gray-400 dark:text-gray-500">
+                                            <div className="flex items-center gap-10 text-[10px] font-bold tracking-[0.2em] text-gray-400 dark:text-gray-500 uppercase">
                                                 <div className="flex items-center gap-3">
                                                     <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.8)]"></span>
-                                                    {card.answers} ANSWERS
+                                                    {(card as any).leftLabel}
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]"></span>
-                                                    {card.views} VIEWS
+                                                    {(card as any).rightLabel}
                                                 </div>
                                             </div>
                                         </div>

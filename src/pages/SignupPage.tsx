@@ -22,6 +22,7 @@ const SignupPage: React.FC = () => {
   const [loading, setLoading] = useState<'email' | 'google' | 'x' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflictInfo, setConflictInfo] = useState<{ methods: string[]; email: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [verificationPending, setVerificationPending] = useState<{ email: string } | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resending, setResending] = useState(false);
@@ -44,7 +45,7 @@ const SignupPage: React.FC = () => {
       return;
     }
     if (result.user) {
-      setUser(result.user);
+      setUser(result.user, true, 'SignupPage:handleResult');
       navigate('/cove', { replace: true });
       return;
     }
@@ -64,7 +65,8 @@ const SignupPage: React.FC = () => {
       firebase_not_configured: 'Auth Service not configured. Please check environment variables.',
       unknown: 'Signup failed. Please try again later.',
     };
-    let msg = messages[code] ?? 'Signup failed';
+
+    let msg = messages[code] ?? (code.includes('/') ? `Error: ${code}` : 'Signup failed');
     if (code.startsWith('email_delivery_failed:')) {
       msg = `Signup success, but email failed: ${code.split(':')[1]}`;
     }
@@ -85,6 +87,18 @@ const SignupPage: React.FC = () => {
   };
 
   const handleSocialLogin = async (provider: 'google' | 'x') => {
+    // @ts-ignore
+    const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+    if (provider === 'x' && isExtension) {
+      setToastMessage("Redirecting to the web to login. Your login status will sync automatically.");
+      setTimeout(() => {
+        const webUrl = import.meta.env.VITE_WEB_URL || 'https://startlytab.com';
+        setToastMessage(null);
+        window.open(`${webUrl}/signup?source=extension&ext_id=${chrome.runtime.id}`, '_blank');
+      }, 2000);
+      return;
+    }
+
     setError(null);
     setConflictInfo(null);
     setLoading(provider);
@@ -147,6 +161,15 @@ const SignupPage: React.FC = () => {
           { title: "Ravi de vous voir :)", subtitle: "Votre journée mérite un début tout en douceur." },
         ]}
       />
+
+      {toastMessage && (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 w-[90vw] max-w-[480px]">
+          <div className="bg-gray-900/95 text-white px-8 py-5 rounded-3xl shadow-2xl text-[16px] flex items-center justify-center gap-4 backdrop-blur-md border border-white/10">
+            <AlertCircle size={24} className="text-amber-400 shrink-0" />
+            <span className="font-medium leading-normal text-gray-100 text-center">{toastMessage}</span>
+          </div>
+        </div>
+      )}
 
       <div className="social-auth-group">
         <button className="social-auth-btn" onClick={() => handleSocialLogin('x')} title="Continue with X">

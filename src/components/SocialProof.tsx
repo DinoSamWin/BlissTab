@@ -25,7 +25,7 @@ const SocialProof: React.FC = () => {
                 ))}
             </div>
             <p className="text-[20px] text-slate-400/80 dark:text-slate-500/80 font-normal tracking-tight flex items-center h-12" style={{ fontFamily: "'Inter', sans-serif" }}>
-                Joined by 2,000+ mindful workers
+                A small pause, built into your day.
             </p>
         </div>
     );

@@ -1,14 +1,24 @@
 {
     "manifest_version": 3,
-    "name": "FocusTab",
-    "version": "1.0.0",
-    "description": "A beautiful New Tab dashboard with AI perspectives.",
+    "name": "StartlyTab",
+    "version": "1.0.1",
+    "description": "A small pause, built into your day. A beautiful new tab page with gateway shortcuts.",
     "permissions": [
-        "activeTab",
+        "bookmarks",
+        "scripting",
         "storage",
-        "unlimitedStorage",
+        "management",
+        "tabs",
+        "activeTab",
+        "favicon",
+        "contextMenus",
         "identity",
+        "downloads",
+        "unlimitedStorage",
         "sidePanel"
+    ],
+    "host_permissions": [
+        "<all_urls>"
     ],
     "chrome_url_overrides": {
         "newtab": "index.html"
@@ -35,14 +45,10 @@
         "48": "icons/icon-64x64.png",
         "128": "icons/icon-128x128.png"
     },
-    "host_permissions": [
-        "<all_urls>"
-    ],
     "web_accessible_resources": [
         {
             "resources": [
                 "assets/*",
-                "public/*",
                 "icons/*"
             ],
             "matches": [
@@ -51,14 +57,30 @@
         }
     ],
     "content_security_policy": {
-        "extension_pages": "script-src 'self'; object-src 'self'"
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://accounts.google.com https://*.googleapis.com https://*.firebaseapp.com https://*.firebase.com https://*.supabase.co https://open.bigmodel.cn https://api.siliconflow.cn https://api.deepseek.com https://cloud.umami.is https://workers.cloudflare.com;"
+    },
+    "externally_connectable": {
+        "matches": [
+            "https://www.startlytab.com/*",
+            "https://startlytab.com/*",
+            "http://localhost/*",
+            "http://127.0.0.1/*",
+            "http://*.localhost/*"
+        ]
+    },
+    "oauth2": {
+        "client_id": "4260709449-hvmd55u8rt4vrfrh8sduqkcjr3f35gar.apps.googleusercontent.com",
+        "scopes": [
+            "openid",
+            "email",
+            "profile"
+        ]
     },
     "commands": {
-        "_execute_action": {
+        "_execute_side_panel": {
             "suggested_key": {
-                "default": "Ctrl+Shift+A",
-                "mac": "MacCtrl+Shift+A",
-                "windows": "Ctrl+Shift+A"
+                "default": "Ctrl+Shift+S",
+                "mac": "Command+Shift+S"
             },
             "description": "Open Side Panel"
         }
