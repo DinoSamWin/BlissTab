@@ -474,7 +474,7 @@ const App: React.FC = () => {
             addToast("Syncing login with extension...", "info");
         }
         const token = localStorage.getItem('focus_tab_token');
-        const EXTENSION_ID = sessionStorage.getItem('ext_id') || import.meta.env.VITE_EXTENSION_ID || 'gafmidlphhecjlidigicmmkldhlakoag';
+        const EXTENSION_ID = sessionStorage.getItem('ext_id') || import.meta.env.VITE_EXTENSION_ID || 'pfjfdnaopfaampmgaalfafhodcafbelm';
         chrome.runtime.sendMessage(EXTENSION_ID, {
           type: 'AUTH_SYNC',
           user: user,

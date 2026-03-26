@@ -62,10 +62,7 @@
     "externally_connectable": {
         "matches": [
             "https://www.startlytab.com/*",
-            "https://startlytab.com/*",
-            "http://localhost/*",
-            "http://127.0.0.1/*",
-            "http://*.localhost/*"
+            "https://startlytab.com/*"
         ]
     },
     "oauth2": {
