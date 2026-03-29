@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, lang = 'en' } = await req.json();
+    const { email, lang = 'en', redirectUrl } = await req.json();
 
     if (!admin.apps.length) {
       admin.initializeApp({
@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     }
 
     const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-    const continueUrl = Deno.env.get("APP_URL") || "http://localhost:3000/auth/action"; 
+    const continueUrl = redirectUrl || Deno.env.get("APP_URL") || "https://www.startlytab.com/auth/action";
     const link = await admin.auth().generatePasswordResetLink(email, { url: continueUrl, handleCodeInApp: true });
     const urlObj = new URL(link);
     const customResetLink = `${continueUrl}?mode=resetPassword&oobCode=${urlObj.searchParams.get('oobCode')}`;
