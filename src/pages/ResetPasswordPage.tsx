@@ -88,7 +88,7 @@ const ResetPasswordPage: React.FC = () => {
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit}>
+        <div className="space-y-6">
           {error && (
             <div className="auth-error">
               <AlertCircle size={16} className="shrink-0 mt-0.5" />
@@ -103,6 +103,7 @@ const ResetPasswordPage: React.FC = () => {
                 placeholder="Email address"
                 className="auth-input"
                 value={email}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(e); }}
                 onChange={e => { setEmail(e.target.value); setError(null); }}
                 disabled={loading}
                 required
@@ -110,14 +111,19 @@ const ResetPasswordPage: React.FC = () => {
             </div>
           </div>
 
-          <button type="submit" className="auth-submit-btn mb-6" disabled={loading}>
+          <button 
+            type="button" 
+            className="auth-submit-btn mb-6 w-full" 
+            onClick={handleSubmit} 
+            disabled={loading}
+          >
             {loading ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Send reset link'}
           </button>
 
-          <div className="auth-footer">
+          <div className="auth-footer text-center">
             Remembered your password? <Link to="/login" className="auth-link">Sign in</Link>
           </div>
-        </form>
+        </div>
       )}
     </AuthLayout>
   );
