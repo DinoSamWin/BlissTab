@@ -21,11 +21,39 @@ import { auth } from './firebaseService';
 import { User } from '../types';
 
 // Environment Helpers
+const AUTH_VERSION = '1.0.3-env-fix'; // Force unique build update 2024-03-29T21:13
+
 const getAppUrl = () => {
-  if (import.meta.env.PROD) {
+  if (typeof window === 'undefined') return 'https://www.startlytab.com';
+  
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  const port = window.location.port;
+
+  // 1. Production Domain
+  if (hostname === 'www.startlytab.com' || hostname === 'startlytab.com') {
     return 'https://www.startlytab.com';
   }
-  return window.location.origin || 'http://localhost:3000';
+
+  // 2. Vercel Preview / Branch URLs
+  if (hostname.endsWith('.vercel.app')) {
+    return `${protocol}//${hostname}`;
+  }
+
+  // 3. Local Development (localhost / 127.0.0.1 / Local IPs)
+  const isLocal = hostname === 'localhost' || 
+                  hostname === '127.0.0.1' || 
+                  hostname === '0.0.0.0' ||
+                  hostname.startsWith('192.168.') ||
+                  hostname.startsWith('10.') ||
+                  hostname.startsWith('172.');
+                  
+  if (isLocal) {
+    return `${protocol}//${hostname}${port ? ':' + port : ''}`;
+  }
+
+  // Fallback to origin if available, otherwise production
+  return window.location.origin || 'https://www.startlytab.com';
 };
 
 // Check if we're in a Chrome Extension environment
