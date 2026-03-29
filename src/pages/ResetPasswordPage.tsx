@@ -27,10 +27,23 @@ const ResetPasswordPage: React.FC = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Invalid email format'); return; }
 
     setLoading(true);
-    await sendPasswordReset(email);
+    const result = await sendPasswordReset(email);
     setLoading(false);
-    setSent(true);
-    setResendCooldown(60);
+    
+    if (result.success) {
+      setSent(true);
+      setResendCooldown(60);
+      setError(null);
+    } else {
+      if (result.error === 'account_is_social') {
+        const provider = result.methods?.[0] === 'google.com' ? 'Google' : 'Social';
+        setError(`This account is linked to ${provider}. Please sign in with ${provider}.`);
+      } else if (result.error === 'user_not_found') {
+        setError('Account not found. Please check your email or sign up.');
+      } else {
+        setError('Failed to send reset link. Please try again.');
+      }
+    }
   };
 
   const handleResend = async () => {

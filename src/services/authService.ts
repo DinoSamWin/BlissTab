@@ -1,23 +1,32 @@
 import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  sendEmailVerification,
-  signOut,
-  signInWithCredential,
-  signInWithPopup,
-  fetchSignInMethodsForEmail,
-  linkWithCredential,
-  GoogleAuthProvider,
-  FacebookAuthProvider,
-  TwitterAuthProvider,
-  OAuthCredential,
+  Auth,
+  User as FirebaseUser,
   AuthError,
   AuthErrorCodes,
+  GoogleAuthProvider,
+  TwitterAuthProvider,
+  signInWithPopup,
+  signOut,
   updateProfile,
+  fetchSignInMethodsForEmail,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  OAuthCredential,
+  sendEmailVerification as firebaseSendEmailVerification,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
+  verifyPasswordResetCode as firebaseVerifyPasswordResetCode,
+  confirmPasswordReset as firebaseConfirmPasswordReset
 } from 'firebase/auth';
 import { auth } from './firebaseService';
 import { User } from '../types';
+
+// Environment Helpers
+const getAppUrl = () => {
+  if (import.meta.env.PROD) {
+    return 'https://www.startlytab.com';
+  }
+  return window.location.origin || 'http://localhost:3000';
+};
 
 // Check if we're in a Chrome Extension environment
 // @ts-ignore
@@ -133,7 +142,11 @@ export async function resendVerificationEmail(): Promise<{ success: boolean }> {
   if (!auth?.currentUser) return { success: false };
   try {
     const user = auth.currentUser;
-    return await triggerCustomVerificationEmail(user.email || '', user.displayName || '');
+    return await triggerCustomEmailFunction('send-verification-email', {
+      email: user.email || '',
+      displayName: user.displayName || '',
+      redirectUrl: getAppUrl()
+    });
   } catch (e) {
     console.warn('[Auth] resendVerificationEmail error:', e);
     return { success: false };
@@ -186,7 +199,11 @@ export async function signUpWithEmail(email: string, password: string, displayNa
     }
     // Send branded verification email using custom Supabase Edge Function
     try {
-      await triggerCustomVerificationEmail(email, displayName);
+      await triggerCustomEmailFunction('send-verification-email', {
+        email,
+        displayName,
+        redirectUrl: getAppUrl()
+      });
     } catch (verifyErr: any) {
       console.warn('[Auth] Verification email failed:', verifyErr);
       return { error: `email_delivery_failed:${verifyErr.message}` };
@@ -219,56 +236,65 @@ export async function signUpWithEmail(email: string, password: string, displayNa
   }
 }
 
-export async function triggerCustomPasswordResetEmail(email: string) {
+// ─────────────────────────────────────────────
+// Custom Email Functions
+// ─────────────────────────────────────────────
+
+async function triggerCustomEmailFunction(endpoint: string, payload: any) {
   const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   
-  console.log('[Auth] triggerCustomPasswordResetEmail config check:', { 
-    hasUrl: !!functionsUrl, 
-    hasKey: !!anonKey,
-    url: functionsUrl 
-  });
-
   if (!functionsUrl || !anonKey) {
-    console.error('[Auth] Supabase credentials missing in environment');
+    console.error(`[Auth] Supabase credentials missing for ${endpoint}`);
     return { success: false };
   }
 
   try {
-    const lang = 'en';
-    const response = await fetch(`${functionsUrl}/send-password-reset-email`, {
+    const response = await fetch(`${functionsUrl}/${endpoint}`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'apikey': anonKey
       },
-      body: JSON.stringify({ email, lang }),
+      body: JSON.stringify({ ...payload, lang: 'en' }),
     });
     
     if (!response.ok) {
       const errTxt = await response.text();
-      console.error('[Auth] Edge Function error response:', response.status, errTxt);
+      console.error(`[Auth] ${endpoint} error response:`, response.status, errTxt);
       return { success: false };
     }
     
     return { success: true };
   } catch (err) {
-    console.error('[Auth] Custom reset trigger network/fetch error:', err);
+    console.error(`[Auth] ${endpoint} network error:`, err);
     return { success: false };
   }
 }
 
-export async function sendPasswordReset(email: string): Promise<{ success: boolean }> {
+export async function sendPasswordReset(email: string): Promise<{ success: boolean; error?: string; methods?: string[] }> {
   if (!auth) {
     console.error('[Auth] sendPasswordReset: firebase auth not initialized');
-    return { success: false };
+    return { success: false, error: 'firebase_not_configured' };
   }
   
   try {
-    console.log('[Auth] Attempting password reset for:', email);
+    console.log('[Auth] Pre-verifying sign-in methods for:', email);
     
+    // 0. Pre-check: Does this email have a password provider?
+    const methods = await fetchSignInMethodsForEmail(auth, email);
+    console.log('[Auth] Methods found for this email:', methods);
+    
+    if (methods.length > 0 && !methods.includes('password')) {
+      console.warn('[Auth] Detected Google-only account. Skipping reset link to avoid Firebase 400.');
+      return { success: false, error: 'account_is_social', methods };
+    }
+
     // 1. First attempt: Custom branded email via Supabase Edge Function
-    const customResult = await triggerCustomPasswordResetEmail(email);
+    const customResult = await triggerCustomEmailFunction('send-password-reset-email', {
+      email,
+      redirectUrl: getAppUrl()
+    });
     if (customResult.success) {
       console.log('[Auth] Custom branded reset email sent successfully.');
       return { success: true };
@@ -287,10 +313,14 @@ export async function sendPasswordReset(email: string): Promise<{ success: boole
     
     return { success: true };
   } catch (e: any) {
-    console.error('[Auth] sendPasswordReset error:', e.code || e.message || e);
+    const errorCode = e.code || e.message || 'unknown';
+    console.error('[Auth] sendPasswordReset top-level error:', errorCode);
     
-    // Always return success to the UI to avoid email scanning, 
-    // but in local dev we want to know it happened.
+    if (errorCode === 'auth/user-not-found') {
+      return { success: false, error: 'user_not_found' };
+    }
+    
+    // Fallback success for security reasons in production, but we might want to show error in dev
     return { success: true };
   }
 }
