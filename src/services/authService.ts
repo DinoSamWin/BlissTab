@@ -21,10 +21,10 @@ import { auth } from './firebaseService';
 import { User } from '../types';
 
 // Environment Helpers
-const AUTH_VERSION = '1.0.3-env-fix'; // Force unique build update 2024-03-29T21:13
+const AUTH_VERSION = '1.0.4-path-fix';
 
 const getAppUrl = () => {
-  if (typeof window === 'undefined') return 'https://www.startlytab.com';
+  if (typeof window === 'undefined') return 'https://www.startlytab.com/auth/action';
   
   const hostname = window.location.hostname;
   const protocol = window.location.protocol;
@@ -32,15 +32,15 @@ const getAppUrl = () => {
 
   // 1. Production Domain
   if (hostname === 'www.startlytab.com' || hostname === 'startlytab.com') {
-    return 'https://www.startlytab.com';
+    return 'https://www.startlytab.com/auth/action';
   }
 
   // 2. Vercel Preview / Branch URLs
   if (hostname.endsWith('.vercel.app')) {
-    return `${protocol}//${hostname}`;
+    return `${protocol}//${hostname}/auth/action`;
   }
 
-  // 3. Local Development (localhost / 127.0.0.1 / Local IPs)
+  // 3. Local Development
   const isLocal = hostname === 'localhost' || 
                   hostname === '127.0.0.1' || 
                   hostname === '0.0.0.0' ||
@@ -49,11 +49,10 @@ const getAppUrl = () => {
                   hostname.startsWith('172.');
                   
   if (isLocal) {
-    return `${protocol}//${hostname}${port ? ':' + port : ''}`;
+    return `${protocol}//${hostname}${port ? ':' + port : ''}/auth/action`;
   }
 
-  // Fallback to origin if available, otherwise production
-  return window.location.origin || 'https://www.startlytab.com';
+  return `${window.location.origin}/auth/action`;
 };
 
 // Check if we're in a Chrome Extension environment
