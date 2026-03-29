@@ -114,39 +114,7 @@ export interface AuthResult {
   needsEmailVerification?: boolean;
 }
 
-/** 
- * Call custom Supabase Edge Function to generate verification link and send branded email via Resend
- */
-async function triggerCustomVerificationEmail(email: string, displayName?: string) {
-  const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
-  if (!functionsUrl) {
-    console.error('[Auth] VITE_SUPABASE_FUNCTIONS_URL not configured');
-    return { success: false };
-  }
 
-  try {
-    const lang = 'en'; 
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const response = await fetch(`${functionsUrl}/send-verification-email`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'apikey': supabaseKey || ''
-      },
-      body: JSON.stringify({ email, displayName, lang }),
-    });
-    
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Failed to trigger cloud function');
-    }
-    
-    return { success: true };
-  } catch (err) {
-    console.error('[Auth] Custom notification trigger failed:', err);
-    throw err; // Propagate error so UI can show it
-  }
-}
 
 /** Force-reload the current user's data from Firebase server */
 export async function reloadUser(): Promise<User | null> {
@@ -216,7 +184,7 @@ export async function signUpWithEmail(email: string, password: string, displayNa
     if (displayName) {
       await updateProfile(result.user, { displayName });
     }
-    // Send verification email — now using custom Supabase + Resend flow
+    // Send branded verification email using custom Supabase Edge Function
     try {
       await triggerCustomVerificationEmail(email, displayName);
     } catch (verifyErr: any) {
@@ -251,14 +219,78 @@ export async function signUpWithEmail(email: string, password: string, displayNa
   }
 }
 
-export async function sendPasswordReset(email: string): Promise<{ success: boolean }> {
-  if (!auth) return { success: false };
+export async function triggerCustomPasswordResetEmail(email: string) {
+  const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  
+  console.log('[Auth] triggerCustomPasswordResetEmail config check:', { 
+    hasUrl: !!functionsUrl, 
+    hasKey: !!anonKey,
+    url: functionsUrl 
+  });
+
+  if (!functionsUrl || !anonKey) {
+    console.error('[Auth] Supabase credentials missing in environment');
+    return { success: false };
+  }
+
   try {
-    // We now use our custom branded email via Supabase Edge Function
-    return await triggerCustomPasswordResetEmail(email);
-  } catch (e) {
-    // Always return success to prevent email enumeration in UI
-    console.error('[Auth] sendPasswordReset error:', (e as AuthError).code);
+    const lang = 'en';
+    const response = await fetch(`${functionsUrl}/send-password-reset-email`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'apikey': anonKey
+      },
+      body: JSON.stringify({ email, lang }),
+    });
+    
+    if (!response.ok) {
+      const errTxt = await response.text();
+      console.error('[Auth] Edge Function error response:', response.status, errTxt);
+      return { success: false };
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error('[Auth] Custom reset trigger network/fetch error:', err);
+    return { success: false };
+  }
+}
+
+export async function sendPasswordReset(email: string): Promise<{ success: boolean }> {
+  if (!auth) {
+    console.error('[Auth] sendPasswordReset: firebase auth not initialized');
+    return { success: false };
+  }
+  
+  try {
+    console.log('[Auth] Attempting password reset for:', email);
+    
+    // 1. First attempt: Custom branded email via Supabase Edge Function
+    const customResult = await triggerCustomPasswordResetEmail(email);
+    if (customResult.success) {
+      console.log('[Auth] Custom branded reset email sent successfully.');
+      return { success: true };
+    }
+    
+    console.warn('[Auth] Custom reset failed. Falling back to native Firebase.');
+    
+    // 2. Second attempt: Native Firebase as fallback
+    const actionCodeSettings = {
+      url: `${window.location.origin}/auth/action`,
+      handleCodeInApp: true,
+    };
+    
+    await sendPasswordResetEmail(auth, email, actionCodeSettings);
+    console.log('[Auth] Native Firebase reset email dispatched as fallback.');
+    
+    return { success: true };
+  } catch (e: any) {
+    console.error('[Auth] sendPasswordReset error:', e.code || e.message || e);
+    
+    // Always return success to the UI to avoid email scanning, 
+    // but in local dev we want to know it happened.
     return { success: true };
   }
 }
@@ -522,36 +554,3 @@ export async function initGoogleAuthStrict(_onUser: (user: User | null) => void)
   // This shim prevents import errors from components still referencing it.
 }
 
-/**
- * Call custom Supabase Edge Function to generate password reset link and send branded email
- */
-async function triggerCustomPasswordResetEmail(email: string) {
-  const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
-  if (!functionsUrl) {
-    console.error('[Auth] VITE_SUPABASE_FUNCTIONS_URL not configured');
-    return { success: false };
-  }
-
-  try {
-    const lang = 'en';
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const response = await fetch(`${functionsUrl}/send-password-reset-email`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'apikey': supabaseKey || ''
-      },
-      body: JSON.stringify({ email, lang }),
-    });
-    
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Failed to trigger reset function');
-    }
-    
-    return { success: true };
-  } catch (err) {
-    console.error('[Auth] Custom reset trigger failed:', err);
-    return { success: false };
-  }
-}

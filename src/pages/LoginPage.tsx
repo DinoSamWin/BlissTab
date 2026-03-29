@@ -182,7 +182,7 @@ const LoginPage: React.FC = () => {
         </div>
       )}
 
-      <form onSubmit={handleEmailLogin}>
+      <div className="space-y-6">
         <div className="auth-input-group">
           <div className="auth-input-wrapper">
             <input
@@ -190,6 +190,7 @@ const LoginPage: React.FC = () => {
               placeholder="Email address"
               className="auth-input"
               value={email}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleEmailLogin(e); }}
               onChange={e => setEmail(e.target.value)}
               disabled={!!loading || rateLockSeconds > 0}
               required
@@ -201,6 +202,7 @@ const LoginPage: React.FC = () => {
               placeholder="Password"
               className="auth-input"
               value={password}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleEmailLogin(e); }}
               onChange={e => setPassword(e.target.value)}
               disabled={!!loading || rateLockSeconds > 0}
               required
@@ -221,10 +223,15 @@ const LoginPage: React.FC = () => {
           </Link>
         </div>
 
-        <button type="submit" className="auth-submit-btn" disabled={!!loading || rateLockSeconds > 0}>
+        <button 
+          type="button" 
+          className="auth-submit-btn w-full" 
+          onClick={handleEmailLogin}
+          disabled={!!loading || rateLockSeconds > 0}
+        >
           {loading === 'email' ? <Loader2 size={20} className="animate-spin mx-auto" /> : (rateLockSeconds > 0 ? `Wait ${rateLockSeconds}s` : 'Sign in')}
         </button>
-      </form>
+      </div>
 
       <div className="auth-footer">
         Don’t have an account? <Link to="/signup" className="auth-link">Sign up</Link>
