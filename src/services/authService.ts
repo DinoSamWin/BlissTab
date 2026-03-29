@@ -21,18 +21,18 @@ import { auth } from './firebaseService';
 import { User } from '../types';
 
 // Environment Helpers
-const AUTH_VERSION = '1.0.4-path-fix';
+const AUTH_VERSION = '1.0.5-domain-fix';
 
 const getAppUrl = () => {
-  if (typeof window === 'undefined') return 'https://www.startlytab.com/auth/action';
+  if (typeof window === 'undefined') return 'https://startlytab.com/auth/action';
   
   const hostname = window.location.hostname;
   const protocol = window.location.protocol;
   const port = window.location.port;
 
-  // 1. Production Domain
+  // 1. Production Domain (both www and non-www → use startlytab.com which is Firebase-authorized)
   if (hostname === 'www.startlytab.com' || hostname === 'startlytab.com') {
-    return 'https://www.startlytab.com/auth/action';
+    return 'https://startlytab.com/auth/action';
   }
 
   // 2. Vercel Preview / Branch URLs
