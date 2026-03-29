@@ -335,7 +335,7 @@ export async function sendPasswordReset(email: string): Promise<{ success: boole
       handleCodeInApp: true,
     };
     
-    await sendPasswordResetEmail(auth, email, actionCodeSettings);
+    await firebaseSendPasswordResetEmail(auth, email, actionCodeSettings);
     console.log('[Auth] Native Firebase reset email dispatched as fallback.');
     
     return { success: true };
