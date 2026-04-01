@@ -135,10 +135,7 @@ const FAQScreen: React.FC<FAQScreenProps> = ({ onRequireLogin }) => {
                     </button>
 
                     {/* Trust Micro-copy */}
-                    <div className="mt-6 flex items-center justify-center gap-2 text-[11px] font-medium tracking-wide text-gray-400 uppercase">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Secure payment via Stripe. Available on Google Chrome Web Store.</span>
-                    </div>
+
 
                 </div>
             </div>
