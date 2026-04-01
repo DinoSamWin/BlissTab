@@ -11,6 +11,7 @@ import SubscriptionPage from './components/SubscriptionPage';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
 import LoadingDemo from './components/LoadingDemo';
+import GreetingDemoPage from './pages/GreetingDemoPage';
 import { User } from './types';
 import { updateSubscriptionState } from './services/subscriptionService';
 import { UserProvider, useUser } from './contexts/UserContext';
@@ -44,11 +45,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       <JumpStarLoading caption="Starting your day softly..." />
     </div>
   );
-  
+
   if (!user) {
     return <Navigate to="/signup" state={{ from: location }} replace />;
   }
-  
+
   // STABILITY FIX: If the user is verified, let them pass.
   // If we are ALREADY on a /cove path, do NOT kick the user out just because of a transient state update
   // unless we are absolutely sure they are logged out.
@@ -71,7 +72,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     if (location.pathname === '/verify-email') return <>{children}</>;
     return <Navigate to="/verify-email" replace />;
   }
-  
+
   return <>{children}</>;
 };
 
@@ -132,6 +133,7 @@ const AppRoutes: React.FC = () => {
       {/* Other pages */}
       <Route path="/subscription" element={<SubscriptionRoute />} />
       <Route path="/loading-demo" element={<LoadingDemo />} />
+      <Route path="/greeting-demo" element={<GreetingDemoPage />} />
       <Route path="/echo-land" element={<EchoLand />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />

@@ -107,15 +107,7 @@ const SemanticFooter: React.FC = () => {
                         <li>
                             <a href="mailto:support@startlytab.com" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Contact Us</a>
                         </li>
-                        <li className="pt-2">
-                            {/* Note: This to Chrome Web Store is strategically NOT nofollow to boost extension page */}
-                            <a href="https://chrome.google.com/webstore" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-semibold text-white transition-colors">
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2c5.523 0 10 4.477 10 10 0 1.258-.236 2.463-.666 3.58L14.735 6.096C13.9 5.415 13.012 5 12 5 8.134 5 5 8.134 5 12c0 .99.197 1.936.55 2.808l5.856-10.144c.196-.037.394-.064.594-.064zM3.483 8.356c.928-1.554 2.308-2.768 4.02-3.486l4.908 8.5H12c-2.76 0-5 2.24-5 5v.498L3.435 12.68c-.687.94-.954 2.053-.954 3.238 0-2.658 1.05-5.074 2.76-6.85zM12 20c-1.854 0-3.555-.658-4.904-1.748L11.332 11h9.54c.732 1.628 1.128 3.444 1.128 5.352 0 4.418-3.582 8-8 8zm4.332-9.5H12c.552 0 1 .448 1 1v6c0 .552-.448 1-1 1s-1-.448-1-1v-2.348l1.344-4.8c.2-.71 1.02-1.042 1.684-.684l.65.344c.642.34 1.488.22 1.984-.36z" />
-                                </svg>
-                                Add to Chrome
-                            </a>
-                        </li>
+
                     </ul>
                 </div>
             </div>
@@ -123,7 +115,7 @@ const SemanticFooter: React.FC = () => {
             <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between text-xs text-gray-600 relative z-10">
                 <p>© {new Date().getFullYear()} StartlyTab. Building a calmer internet.</p>
                 <p className="mt-2 md:mt-0 flex items-center gap-1">
-                    Designed with <span className="text-purple-500">♥</span> for mindful workers
+                    Designed with <span className="text-purple-500">♥</span>
                 </p>
             </div>
         </footer>

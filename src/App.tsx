@@ -22,7 +22,7 @@ import i18n from './i18n';
 import LoginPromptModal from './components/LoginPromptModal';
 import PreferenceInputModal from './components/PreferenceInputModal';
 import IntegrationGateways from './components/IntegrationGateways';
-import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
+
 import { DevFeedbackUI } from './components/DevFeedbackUI';
 import DebugInfo from './components/DebugInfo';
 import SocialProof from './components/SocialProof';
@@ -1973,9 +1973,7 @@ const App: React.FC = () => {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
-          {/* {isAuthenticated && !IS_EXTENSION && (
-            <ExtensionInstallPrompt theme={appState.theme} />
-          )} */}
+
 
           {isVerifiedUser && (
             <button
