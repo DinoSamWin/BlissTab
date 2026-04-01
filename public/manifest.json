@@ -6,14 +6,13 @@
     "permissions": [
         "bookmarks",
         "scripting",
-        "storage",
         "management",
         "tabs",
         "activeTab",
         "favicon",
-        "contextMenus",
         "identity",
         "downloads",
+        "search",
         "unlimitedStorage",
         "sidePanel"
     ],

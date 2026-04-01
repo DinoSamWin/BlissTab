@@ -39,6 +39,12 @@ export async function isChinaRegion(): Promise<boolean> {
 export const REGIONAL_SEARCH_ENGINES: Record<'CN' | 'GLOBAL', SearchEngine[]> = {
   CN: [
     {
+      id: 'browser',
+      name: '浏览器默认设置',
+      icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /%3E%3C/svg%3E",
+      searchUrl: ''
+    },
+    {
       id: 'baidu',
       name: 'Baidu',
       icon: 'https://www.baidu.com/favicon.ico',
@@ -76,6 +82,12 @@ export const REGIONAL_SEARCH_ENGINES: Record<'CN' | 'GLOBAL', SearchEngine[]> = 
     },
   ],
   GLOBAL: [
+    {
+      id: 'browser',
+      name: 'Browser Default',
+      icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /%3E%3C/svg%3E",
+      searchUrl: ''
+    },
     {
       id: 'google',
       name: 'Google',

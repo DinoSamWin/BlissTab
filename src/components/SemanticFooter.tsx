@@ -99,10 +99,10 @@ const SemanticFooter: React.FC = () => {
                     <h3 className="text-sm font-bold text-white uppercase tracking-widest">Trust & Privacy</h3>
                     <ul className="space-y-3.5">
                         <li>
-                            <a href="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Privacy Policy</a>
+                            <a href="https://startlytab.com/privacy" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Privacy Policy</a>
                         </li>
                         <li>
-                            <a href="/terms" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Terms of Service</a>
+                            <a href="https://startlytab.com/terms" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Terms of Service</a>
                         </li>
                         <li>
                             <a href="mailto:support@startlytab.com" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Contact Us</a>

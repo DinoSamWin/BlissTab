@@ -6,29 +6,32 @@ const PrivacyPolicy: React.FC = () => {
             <div className="max-w-3xl mx-auto space-y-8 animate-reveal">
                 <header className="space-y-4 border-b border-gray-200 dark:border-white/10 pb-8">
                     <h1 className="text-4xl font-bold tracking-tight">Privacy Policy</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.02.11</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.04.01</p>
                 </header>
 
                 <section className="space-y-4">
-                    <p>This Privacy Policy describes how this website ("Service", "we", "us", or "our") collects, uses, and protects personal data when you use our browser start-page web application.</p>
-                    <p>This Service is operated by an independent developer and is intended for users located in the European Union, United States, and Canada.</p>
+                    <h2 className="text-2xl font-semibold">1. Scope of This Policy</h2>
+                    <p>This Privacy Policy describes how StartlyTab ("Service", "we", "us", or "our") collects, uses, and protects personal data when you use our browser start-page web application and our Chrome Extension.</p>
+                    <p>This Service is operated by an independent developer and is intended for global users.</p>
                     <p>By using the Service, you agree to the practices described in this Privacy Policy.</p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">1. Scope of This Policy</h2>
-                    <p>This Policy applies to:</p>
+                    <h2 className="text-2xl font-semibold">2. Chrome Extension Data Disclosure</h2>
+                    <p>When used as a Chrome Extension, the Service accesses the following browser permissions to provide specific features:</p>
                     <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
-                        <li>Account registration and authentication</li>
-                        <li>User-configured content preferences</li>
-                        <li>Custom quick-link management</li>
-                        <li>Analytics and infrastructure processing</li>
+                        <li><strong>Bookmarks:</strong> Accessed only when you explicitly use the "Import Bookmarks" feature to populate your dashboard. Bookmarks are processed locally and only the specific links you choose to add are stored in our database.</li>
+                        <li><strong>Tabs & Scripting:</strong> Used to facilitate importing shortcuts from other start-page services by temporarily opening their tabs and extracting your configuration. These tabs are closed immediately after import.</li>
+                        <li><strong>Identity:</strong> Used to manage secure authentication via Google OAuth. We only receive your basic profile information as permitted by the OAuth scopes.</li>
+                        <li><strong>Management:</strong> Used solely to check if our complementary extension components are installed to improve user experience.</li>
+                        <li><strong>Downloads:</strong> Used to provide status awareness of active downloads on your personalized dashboard (if configured). We do not track what you download.</li>
+                        <li><strong>Storage:</strong> We use local storage (via offscreen documents) to maintain your session and preferences.</li>
                     </ul>
-                    <p>This Service is designed to collect only the minimum data necessary to operate functionality.</p>
+                    <p>All browser data is processed with a <strong>privacy-first approach</strong>. We do not collect your browsing history, sell your data, or share personal information with third parties for advertising.</p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">2. Information We Collect</h2>
+                    <h2 className="text-2xl font-semibold">3. Information We Collect</h2>
 
                     <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
                         <h3 className="text-xl font-medium">2.1 Account Information</h3>

@@ -253,7 +253,13 @@ const App: React.FC = () => {
       // Update default search engine if not saved
       const savedEngine = localStorage.getItem('focus_tab_search_engine');
       if (!savedEngine) {
-        setSelectedEngine(detectedRegion === 'CN' ? 'baidu' : 'google');
+        // Extension: Use browser default as primary to satisfy Google Policy
+        // Web: Use baidu/google as per region
+        if (IS_EXTENSION) {
+          setSelectedEngine('browser');
+        } else {
+          setSelectedEngine(detectedRegion === 'CN' ? 'baidu' : 'google');
+        }
       }
     });
   }, []);
@@ -282,8 +288,9 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedEngine, setSelectedEngine] = useState<string>(() => {
     const saved = localStorage.getItem('focus_tab_search_engine');
-    // If not saved, it will be set by the region effect
-    return saved || 'google'; 
+    // If not saved, it will be set by the region effect (see above) 
+    // Fallback based on environment
+    return saved || (IS_EXTENSION ? 'browser' : 'google'); 
   });
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState<boolean>(false);
   const [isComposing, setIsComposing] = useState<boolean>(false); // 输入法组合状态
@@ -981,10 +988,41 @@ const App: React.FC = () => {
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
 
-    const engine = searchEngines.find(e => e.id === selectedEngine) || searchEngines[0];
-    const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
-    window.open(searchUrl, '_blank', 'noopener,noreferrer');
-    setSearchQuery(''); // 搜索后清空输入框
+    const isBrowserEngine = selectedEngine === 'browser';
+
+    // Check if we're in extension and have the search API
+    if (typeof chrome !== 'undefined' && chrome.search && chrome.search.query) {
+      // If 'browser' is selected OR we want to force policy compliance
+      // Actually, if 'browser' is picked, we MUST use chrome.search.query
+      if (isBrowserEngine) {
+          chrome.search.query({
+            text: searchQuery.trim(),
+            disposition: 'NEW_TAB'
+          }, () => {
+            if (chrome.runtime.lastError) {
+              console.warn('[App] chrome.search.query failed, falling back to manual redirect:', chrome.runtime.lastError);
+              const engine = searchEngines.find(e => e.id === 'google') || searchEngines[0];
+              const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
+              window.open(searchUrl, '_blank', 'noopener,noreferrer');
+            }
+          });
+      } else {
+          // If a specific engine is selected (e.g. Bing), we can still use manual redirect
+          // OR we can use the API if we want to be super safe, but then we lose the specific engine choice.
+          // CWS says "You must use Chrome Search API to respect the user's selected settings" IF you provide search experience.
+          // This implies the specific icons we show (Bing/Yahoo) are "extra options" but the DEFAULT should be the API.
+          const engine = searchEngines.find(e => e.id === selectedEngine) || searchEngines[0];
+          const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
+          window.open(searchUrl, '_blank', 'noopener,noreferrer');
+      }
+    } else {
+      // Standard web behavior or fallback
+      const engine = searchEngines.find(e => e.id === selectedEngine) || searchEngines[0];
+      const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
+      window.open(searchUrl, '_blank', 'noopener,noreferrer');
+    }
+    
+    setSearchQuery(''); 
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -2360,9 +2398,9 @@ const App: React.FC = () => {
                     </div>
                   )}
                   <div className="flex items-center justify-center gap-3 mt-4 opacity-60">
-                    <a href="/privacy" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Privacy Policy</a>
+                    <a href="https://startlytab.com/privacy" target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Privacy Policy</a>
                     <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
-                    <a href="/terms" target="_blank" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Terms of Service</a>
+                    <a href="https://startlytab.com/terms" target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Terms of Service</a>
                   </div>
                 </div>
               </div>
