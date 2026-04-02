@@ -78,17 +78,34 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 localStorage.removeItem('focus_tab_explicit_signout');
                 console.log('[UserContext] Auth update:', merged.email, 'Verified:', merged.emailVerified);
             } else {
-                // Firebase says no user. 
-                const explicitSignout = localStorage.getItem('focus_tab_explicit_signout') === 'true';
+                // Firebase says no user (currently null)
+                const signoutRaw = localStorage.getItem('focus_tab_explicit_signout');
+                let isRecentSignout = false;
+                
+                try {
+                    if (signoutRaw) {
+                        const parsed = JSON.parse(signoutRaw);
+                        // Only treat as signout if happened in the last 15 minutes
+                        if (parsed && typeof parsed.timestamp === 'number') {
+                            isRecentSignout = (Date.now() - parsed.timestamp < 15 * 60 * 1000);
+                        }
+                    } else if (signoutRaw === 'true') {
+                        isRecentSignout = true; // Legacy support
+                    }
+                } catch {
+                    isRecentSignout = signoutRaw === 'true';
+                }
+
                 const hasLocalUser = !!localStorage.getItem('focus_tab_user');
                 
-                if (explicitSignout || !hasLocalUser) {
-                    console.log('[UserContext] Clearing user state (explicit logout or missing session)');
+                // CRITICAL: Only clear state if it's a confirmed explicit signout.
+                // Otherwise, preserve the local UI state until the next explicit action.
+                if (isRecentSignout || !hasLocalUser) {
+                    console.log('[UserContext] Clearing user state (confirmed logout or missing session)');
                     setUserState(null);
                     localStorage.removeItem('focus_tab_user');
                 } else {
-                    // Possible transient null (refreshing token)
-                    console.log('[UserContext] Firebase auth returned null but local session exists. Preserving for stability.');
+                    console.log('[UserContext] Firebase auth null but preserving local session for stability.');
                 }
             }
             setIsAuthChecking(false);
