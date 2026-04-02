@@ -103,7 +103,7 @@ const LoginPage: React.FC = () => {
     setLoading('email');
     const result = await signInWithEmail(email, password);
     setLoading(null);
-    handleResult(result);
+    localStorage.removeItem("focus_tab_explicit_signout"); handleResult(result);
   };
 
   const handleSocialLogin = async (provider: 'google' | 'x') => {
@@ -126,7 +126,7 @@ const LoginPage: React.FC = () => {
     if (provider === 'google') result = await signInWithGoogle();
     else result = await signInWithX();
     setLoading(null);
-    handleResult(result);
+    localStorage.removeItem("focus_tab_explicit_signout"); handleResult(result);
   };
 
   return (
