@@ -9,7 +9,10 @@ import {
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  // Use default firebaseapp domain for auth on localhost to avoid ORB blocks found during debug
+  authDomain: (typeof window !== 'undefined' && window.location.hostname === 'localhost') 
+    ? 'startlytab.firebaseapp.com' 
+    : (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'startlytab.firebaseapp.com'),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
