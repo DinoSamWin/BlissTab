@@ -9,8 +9,8 @@ import {
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  // Use default firebaseapp domain for auth on localhost to avoid ORB blocks found during debug
-  authDomain: (typeof window !== 'undefined' && window.location.hostname === 'localhost') 
+  // Use default firebaseapp domain for auth on localhost/127.0.0.1 to avoid ORB blocks found during debug
+  authDomain: (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) 
     ? 'startlytab.firebaseapp.com' 
     : (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'startlytab.firebaseapp.com'),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
