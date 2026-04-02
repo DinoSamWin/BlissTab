@@ -17,8 +17,8 @@ const firebaseConfig = {
 };
 
 // Check if we're running inside a Chrome Extension
-// @ts-ignore
-const IS_EXTENSION = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
+const IS_EXTENSION = typeof window !== 'undefined' && 
+                     window.location.protocol === 'chrome-extension:';
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
