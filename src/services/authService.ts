@@ -615,3 +615,4 @@ export async function initGoogleAuthStrict(_onUser: (user: User | null) => void)
   // This shim prevents import errors from components still referencing it.
 }
 
+// Triggering Vercel rebuild Thu Apr  2 10:40:29 CST 2026
