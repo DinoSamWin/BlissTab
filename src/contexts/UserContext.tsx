@@ -50,21 +50,27 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
-        // Handle Google Redirect Result FIRST (before onAuthStateChanged fires)
-        // This is required when using signInWithRedirect - the result must be
-        // explicitly retrieved after the page reloads from the Google auth page.
-        getRedirectResult(auth).then(result => {
-            if (result?.user) {
-                console.log('[UserContext] Google redirect login successful:', result.user.email);
-                // onAuthStateChanged will fire automatically after this with the user
-            }
-        }).catch(err => {
-            if (err?.code && err.code !== 'auth/popup-closed-by-user') {
-                console.warn('[UserContext] Redirect result error:', err.code, err.message);
-            }
-        });
+        let unsubscribe: (() => void) | null = null;
+        let cancelled = false;
 
-        const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
+        // CRITICAL: Must await getRedirectResult BEFORE registering onAuthStateChanged.
+        // Otherwise onAuthStateChanged fires with null BEFORE Firebase processes the redirect,
+        // causing the app to clear state and redirect to /login (race condition).
+        (async () => {
+            try {
+                const redirectResult = await getRedirectResult(auth);
+                if (redirectResult?.user) {
+                    console.log('[UserContext] Google redirect login successful:', redirectResult.user.email);
+                }
+            } catch (err: any) {
+                if (err?.code && err.code !== 'auth/popup-closed-by-user') {
+                    console.warn('[UserContext] Redirect result error:', err.code, err.message);
+                }
+            }
+
+            // Now safe to listen — Firebase has already processed any pending redirect
+            if (cancelled) return;
+            unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
             if (fbUser) {
                 const appUser = firebaseUserToAppUser(fbUser);
                 
@@ -123,14 +129,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
             }
             setIsAuthChecking(false);
-        });
+            });
 
-        // Safety: if Firebase doesn't respond within 3s, stop blocking UI
-        const timer = setTimeout(() => setIsAuthChecking(false), 3000);
+            // Safety: if Firebase doesn't respond within 3s, stop blocking UI
+            setTimeout(() => setIsAuthChecking(false), 3000);
+        })();
 
         return () => {
-            unsubscribe();
-            clearTimeout(timer);
+            cancelled = true;
+            if (unsubscribe) unsubscribe();
         };
     }, []);
 
