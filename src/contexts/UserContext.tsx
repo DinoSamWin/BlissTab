@@ -50,6 +50,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
+        // Handle Google Redirect Result FIRST (before onAuthStateChanged fires)
+        // This is required when using signInWithRedirect - the result must be
+        // explicitly retrieved after the page reloads from the Google auth page.
+        getRedirectResult(auth).then(result => {
+            if (result?.user) {
+                console.log('[UserContext] Google redirect login successful:', result.user.email);
+                // onAuthStateChanged will fire automatically after this with the user
+            }
+        }).catch(err => {
+            if (err?.code && err.code !== 'auth/popup-closed-by-user') {
+                console.warn('[UserContext] Redirect result error:', err.code, err.message);
+            }
+        });
+
         const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
             if (fbUser) {
                 const appUser = firebaseUserToAppUser(fbUser);

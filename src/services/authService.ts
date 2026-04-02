@@ -459,7 +459,7 @@ export async function signInWithFacebook(): Promise<AuthResult> {
     provider.addScope('email');
     provider.addScope('public_profile');
 
-    const result = await signInWithRedirect(auth, provider);
+    const result = await signInWithPopup(auth, provider);
     return { user: firebaseUserToAppUser(result.user) };
   } catch (e) {
     return handleSocialAuthError(e as AuthError, 'facebook.com');
@@ -478,7 +478,7 @@ export async function signInWithX(): Promise<AuthResult> {
   if (!auth) return { error: 'firebase_not_configured' };
   try {
     const provider = new TwitterAuthProvider();
-    const result = await signInWithRedirect(auth, provider);
+    const result = await signInWithPopup(auth, provider);
     return { user: firebaseUserToAppUser(result.user) };
   } catch (e) {
     return handleSocialAuthError(e as AuthError, 'twitter.com');
