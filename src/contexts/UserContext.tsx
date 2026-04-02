@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../services/firebaseService';
 import { User } from '../types';
 import { fetchSubscriptionState } from '../services/subscriptionService';
@@ -49,6 +49,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsAuthChecking(false);
             return;
         }
+
+        // Catch the result of signInWithRedirect
+        getRedirectResult(auth).catch(err => {
+            if (err.code !== 'auth/popup-closed-by-user') {
+                console.warn('[UserContext] Redirect result error:', err);
+            }
+        });
 
         const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
             if (fbUser) {
