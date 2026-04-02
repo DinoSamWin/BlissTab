@@ -5,7 +5,7 @@ import {
   AuthErrorCodes,
   GoogleAuthProvider,
   TwitterAuthProvider,
-  signInWithPopup, signInWithRedirect,
+  signInWithPopup, signInWithPopup,
   signOut,
   updateProfile,
   fetchSignInMethodsForEmail,
@@ -378,7 +378,7 @@ async function signInWithGoogleWeb(): Promise<AuthResult> {
 
     // Switch to Redirect mode to bypass all browser popup/iframe blockers (ORB)
     localStorage.removeItem("focus_tab_explicit_signout"); // Clear signout markers to prevent loop
-    await signInWithRedirect(auth, provider);
+    await signInWithPopup(auth, provider);
     
     // The redirect will navigate the page away. Handled via onAuthStateChanged in Context.
     return { error: 'cancelled' }; 
