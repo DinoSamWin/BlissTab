@@ -54,4 +54,9 @@ if (firebaseConfig.apiKey) {
   console.warn('[Firebase] No API key configured — Firebase auth is disabled.');
 }
 
+if (typeof window !== 'undefined') {
+  (window as any).__AUTH_DEBUG = { auth, app, config: firebaseConfig, IS_EXTENSION };
+  console.log('[Firebase] Auth Instance:', auth ? 'Created' : 'NULL', 'Mode:', IS_EXTENSION ? 'Extension' : 'Web');
+}
+
 export { auth, app };
