@@ -377,12 +377,10 @@ async function signInWithGoogleWeb(): Promise<AuthResult> {
     provider.addScope('profile');
     provider.setCustomParameters({ prompt: 'select_account' });
 
-    // Switch to Redirect mode to bypass all browser popup/iframe blockers (ORB)
-    localStorage.removeItem("focus_tab_explicit_signout"); // Clear signout markers to prevent loop
-    await signInWithRedirect(auth, provider);
-    
-    // The redirect will navigate the page away. Handled via onAuthStateChanged in Context.
-    return { error: 'cancelled' }; 
+    // Use Popup mode - Redirect fails in storage-partitioned browsers (Chrome privacy settings)
+    localStorage.removeItem('focus_tab_explicit_signout');
+    const result = await signInWithPopup(auth, provider);
+    return { user: firebaseUserToAppUser(result.user) };
   } catch (e) {
     return handleSocialAuthError(e as AuthError, 'google.com');
   }

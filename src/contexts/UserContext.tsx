@@ -50,31 +50,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
-        let unsubscribe: (() => void) | null = null;
-        let cancelled = false;
-
-        // CRITICAL: Must await getRedirectResult BEFORE registering onAuthStateChanged.
-        // Otherwise onAuthStateChanged fires with null BEFORE Firebase processes the redirect,
-        // causing the app to clear state and redirect to /login (race condition).
-        (async () => {
-            try {
-                const redirectResult = await getRedirectResult(auth);
-                if (redirectResult?.user) {
-                    console.log('[UserContext] Google redirect login successful:', redirectResult.user.email);
-                }
-            } catch (err: any) {
-                if (err?.code && err.code !== 'auth/popup-closed-by-user') {
-                    console.warn('[UserContext] Redirect result error:', err.code, err.message);
-                }
-            }
-
-            // Now safe to listen — Firebase has already processed any pending redirect
-            if (cancelled) return;
-            unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
+        const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
             if (fbUser) {
                 const appUser = firebaseUserToAppUser(fbUser);
                 
-                // Get pre-auth storage check to see if we already verified this guy
                 const existingRaw = localStorage.getItem('focus_tab_user');
                 let merged = appUser;
                 
@@ -82,10 +61,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     try {
                         const existing = JSON.parse(existingRaw);
                         if (existing.id === appUser.id) {
-                            // STICKY VERIFICATION: Trust local state/ref over Firebase (Firebase token can be stale)
                             const finalEmailVerified = appUser.emailVerified || existing.emailVerified || verifiedRef.current;
                             if (finalEmailVerified) verifiedRef.current = true;
-                            
                             merged = { ...existing, ...appUser, emailVerified: finalEmailVerified };
                         }
                     } catch (e) {
@@ -98,19 +75,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 localStorage.removeItem('focus_tab_explicit_signout');
                 console.log('[UserContext] Auth update:', merged.email, 'Verified:', merged.emailVerified);
             } else {
-                // Firebase says no user (currently null)
                 const signoutRaw = localStorage.getItem('focus_tab_explicit_signout');
                 let isRecentSignout = false;
                 
                 try {
                     if (signoutRaw) {
                         const parsed = JSON.parse(signoutRaw);
-                        // Only treat as signout if happened in the last 15 minutes
                         if (parsed && typeof parsed.timestamp === 'number') {
                             isRecentSignout = (Date.now() - parsed.timestamp < 15 * 60 * 1000);
                         }
                     } else if (signoutRaw === 'true') {
-                        isRecentSignout = true; // Legacy support
+                        isRecentSignout = true;
                     }
                 } catch {
                     isRecentSignout = signoutRaw === 'true';
@@ -118,26 +93,22 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 const hasLocalUser = !!localStorage.getItem('focus_tab_user');
                 
-                // CRITICAL: Only clear state if it's a confirmed explicit signout.
-                // Otherwise, preserve the local UI state until the next explicit action.
                 if (isRecentSignout || !hasLocalUser) {
                     console.log('[UserContext] Clearing user state (confirmed logout or missing session)');
                     setUserState(null);
                     localStorage.removeItem('focus_tab_user');
                 } else {
-                    console.log('[UserContext] Firebase auth null but preserving local session for stability.');
+                    console.log('[UserContext] Firebase auth null but preserving local session.');
                 }
             }
             setIsAuthChecking(false);
-            });
+        });
 
-            // Safety: if Firebase doesn't respond within 3s, stop blocking UI
-            setTimeout(() => setIsAuthChecking(false), 3000);
-        })();
+        const timer = setTimeout(() => setIsAuthChecking(false), 5000);
 
         return () => {
-            cancelled = true;
-            if (unsubscribe) unsubscribe();
+            unsubscribe();
+            clearTimeout(timer);
         };
     }, []);
 
