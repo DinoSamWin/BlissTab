@@ -50,13 +50,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
-        // Catch the result of signInWithRedirect
-        getRedirectResult(auth).catch(err => {
-            if (err.code !== 'auth/popup-closed-by-user') {
-                console.warn('[UserContext] Redirect result error:', err);
-            }
-        });
-
         const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
             if (fbUser) {
                 const appUser = firebaseUserToAppUser(fbUser);
