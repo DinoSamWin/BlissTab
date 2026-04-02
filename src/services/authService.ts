@@ -5,7 +5,7 @@ import {
   AuthErrorCodes,
   GoogleAuthProvider,
   TwitterAuthProvider,
-  signInWithPopup,
+  signInWithPopup, signInWithRedirect,
   signOut,
   updateProfile,
   fetchSignInMethodsForEmail,
@@ -376,8 +376,12 @@ async function signInWithGoogleWeb(): Promise<AuthResult> {
     provider.addScope('profile');
     provider.setCustomParameters({ prompt: 'select_account' });
 
-    const result = await signInWithPopup(auth, provider);
-    return { user: firebaseUserToAppUser(result.user) };
+    // Switch to Redirect mode to bypass all browser popup/iframe blockers (ORB)
+    localStorage.removeItem("focus_tab_explicit_signout"); // Clear signout markers to prevent loop
+    await signInWithRedirect(auth, provider);
+    
+    // The redirect will navigate the page away. Handled via onAuthStateChanged in Context.
+    return { error: 'cancelled' }; 
   } catch (e) {
     return handleSocialAuthError(e as AuthError, 'google.com');
   }
