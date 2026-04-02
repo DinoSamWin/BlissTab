@@ -59,8 +59,9 @@ const getAppUrl = () => {
 };
 
 // Check if we're in a Chrome Extension environment
-// @ts-ignore
-const IS_EXTENSION = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
+// Critical: We check the protocol to ensure websites are NEVER treated as extensions
+const IS_EXTENSION = typeof window !== 'undefined' && 
+                     window.location.protocol === 'chrome-extension:';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
