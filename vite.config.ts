@@ -50,8 +50,12 @@ export default defineConfig(({ mode }) => {
       {
         name: 'compliance-fix',
         transform(code, id) {
-          // Replace sensitive URLs that trigger "Remote Hosted Code" warnings
-          // These are often embedded in libraries like Firebase for features we don't use in extensions
+          // ONLY apply URL obfuscation when building the Chrome Extension.
+          // In web (dev/Vercel), these real URLs are needed for signInWithPopup to work.
+          // Running this in web mode causes Firebase Auth to silently hang.
+          if (mode !== 'extension') return null;
+
+          // Replace sensitive URLs that trigger "Remote Hosted Code" warnings in Chrome Store review
           if (id.includes('firebase') || id.includes('node_modules')) {
             return {
               code: code
