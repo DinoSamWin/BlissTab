@@ -378,7 +378,7 @@ async function signInWithGoogleWeb(): Promise<AuthResult> {
 
     // Switch to Redirect mode to bypass all browser popup/iframe blockers (ORB)
     localStorage.removeItem("focus_tab_explicit_signout"); // Clear signout markers to prevent loop
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
     
     // The redirect will navigate the page away. Handled via onAuthStateChanged in Context.
     return { error: 'cancelled' }; 
@@ -458,7 +458,7 @@ export async function signInWithFacebook(): Promise<AuthResult> {
     provider.addScope('email');
     provider.addScope('public_profile');
 
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithRedirect(auth, provider);
     return { user: firebaseUserToAppUser(result.user) };
   } catch (e) {
     return handleSocialAuthError(e as AuthError, 'facebook.com');
@@ -477,7 +477,7 @@ export async function signInWithX(): Promise<AuthResult> {
   if (!auth) return { error: 'firebase_not_configured' };
   try {
     const provider = new TwitterAuthProvider();
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithRedirect(auth, provider);
     return { user: firebaseUserToAppUser(result.user) };
   } catch (e) {
     return handleSocialAuthError(e as AuthError, 'twitter.com');
