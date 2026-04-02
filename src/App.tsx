@@ -232,7 +232,11 @@ const App: React.FC = () => {
 
   const [region, setRegion] = useState<'CN' | 'GLOBAL'>('GLOBAL');
 
-  const searchEngines = useMemo(() => REGIONAL_SEARCH_ENGINES[region], [region]);
+  const searchEngines = useMemo(() => {
+    const list = REGIONAL_SEARCH_ENGINES[region] || (region === 'CN' ? REGIONAL_SEARCH_ENGINES.CN : REGIONAL_SEARCH_ENGINES.GLOBAL);
+    if (IS_EXTENSION) return list;
+    return list.filter(e => e.id !== 'browser');
+  }, [region]);
   const defaultLinks = useMemo(() => REGIONAL_DEFAULT_LINKS[region], [region]);
 
   // Sync region on mount
@@ -250,9 +254,9 @@ const App: React.FC = () => {
         }));
       }
 
-      // Update default search engine if not saved
+      // Update default search engine if not saved or if it's 'browser' on the web
       const savedEngine = localStorage.getItem('focus_tab_search_engine');
-      if (!savedEngine) {
+      if (!savedEngine || (!IS_EXTENSION && savedEngine === 'browser')) {
         // Extension: Use browser default as primary to satisfy Google Policy
         // Web: Use baidu/google as per region
         if (IS_EXTENSION) {
@@ -288,9 +292,8 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedEngine, setSelectedEngine] = useState<string>(() => {
     const saved = localStorage.getItem('focus_tab_search_engine');
-    // If not saved, it will be set by the region effect (see above) 
-    // Fallback based on environment
-    return saved || (IS_EXTENSION ? 'browser' : 'google'); 
+    const engine = saved || (IS_EXTENSION ? 'browser' : 'google'); 
+    return (!IS_EXTENSION && engine === 'browser') ? 'google' : engine;
   });
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState<boolean>(false);
   const [isComposing, setIsComposing] = useState<boolean>(false); // 输入法组合状态
@@ -1017,7 +1020,13 @@ const App: React.FC = () => {
       }
     } else {
       // Standard web behavior or fallback
-      const engine = searchEngines.find(e => e.id === selectedEngine) || searchEngines[0];
+      let engine = searchEngines.find(e => e.id === selectedEngine) || searchEngines[0];
+      
+      // FIX: If 'browser' is selected on the web, it has no searchUrl. Fallback to a real engine.
+      if (isBrowserEngine && !engine.searchUrl) {
+        engine = searchEngines.find(e => e.id !== 'browser') || searchEngines[0];
+      }
+
       const searchUrl = `${engine.searchUrl}${encodeURIComponent(searchQuery.trim())}`;
       window.open(searchUrl, '_blank', 'noopener,noreferrer');
     }
