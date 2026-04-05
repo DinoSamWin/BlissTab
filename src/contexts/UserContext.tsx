@@ -28,11 +28,22 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Optimistic pre-load from localStorage for instant UI render
         try {
             const savedUser = localStorage.getItem('focus_tab_user');
-            return savedUser ? JSON.parse(savedUser) : null;
-        } catch {
-            return null;
-        }
+            if (savedUser) return JSON.parse(savedUser);
+        } catch {}
+        return null;
     });
+
+    // Extension-only: Initial sync from chrome.storage.local
+    useEffect(() => {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            chrome.storage.local.get(['focus_tab_user'], (result) => {
+                if (result.focus_tab_user) {
+                    console.log('[UserContext] Found user in chrome.storage.local');
+                    handleSetUser(result.focus_tab_user, false, 'StorageLocal:Initial');
+                }
+            });
+        }
+    }, []);
 
     // PERSISTENT VERIFICATION FLAG: Prevents rollback during synchronization races
     const verifiedRef = React.useRef<boolean>(!!user?.emailVerified);
@@ -149,9 +160,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // 2b. Direct message sync (from background)
         const handleRuntimeMessage = (message: any) => {
-            if (message.type === 'SYNC_LOCAL_STORAGE' && message.user) {
-                console.log('[UserContext] Received sync message from background');
-                setUserState(message.user);
+            if ((message.type === 'SYNC_LOCAL_STORAGE' || message.type === 'AUTH_SYNC_COMPLETE') && message.user) {
+                console.log('[UserContext] Received auth sync message from background');
+                handleSetUser(message.user, true, 'RuntimeMessage:Sync');
             }
         };
 
@@ -243,9 +254,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (finalUser.emailVerified) verifiedRef.current = true;
             localStorage.setItem('focus_tab_user', JSON.stringify(finalUser));
             localStorage.removeItem('focus_tab_explicit_signout');
+            
+            // Extension: also sync to storage.local for other extension components
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.set({ 'focus_tab_user': finalUser });
+            }
         } else {
             verifiedRef.current = false;
             localStorage.removeItem('focus_tab_user');
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.remove('focus_tab_user');
+            }
             if (propagateSignout) {
                 localStorage.setItem('focus_tab_explicit_signout', JSON.stringify({ timestamp: Date.now() }));
             }

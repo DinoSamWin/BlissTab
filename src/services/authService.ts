@@ -5,8 +5,6 @@ import {
   AuthErrorCodes,
   GoogleAuthProvider,
   TwitterAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
   signOut,
   updateProfile,
   fetchSignInMethodsForEmail,
@@ -372,6 +370,7 @@ export async function signInWithGoogle(): Promise<AuthResult> {
 async function signInWithGoogleWeb(): Promise<AuthResult> {
   if (!auth) return { error: 'firebase_not_configured' };
   try {
+    const { signInWithPopup } = await import('firebase/auth');
     const provider = new GoogleAuthProvider();
     provider.addScope('email');
     provider.addScope('profile');
@@ -449,10 +448,11 @@ async function signInWithGoogleExtension(): Promise<AuthResult> {
 
 export async function signInWithFacebook(): Promise<AuthResult> {
   if (IS_EXTENSION) {
-    return handleOffscreenAuth('facebook.com');
+    return handleExtensionRedirectAuth('facebook.com');
   }
   if (!auth) return { error: 'firebase_not_configured' };
   try {
+    const { signInWithPopup } = await import('firebase/auth');
     const provider = new FacebookAuthProvider();
     provider.addScope('email');
     provider.addScope('public_profile');
@@ -471,10 +471,11 @@ export async function signInWithFacebook(): Promise<AuthResult> {
 
 export async function signInWithX(): Promise<AuthResult> {
   if (IS_EXTENSION) {
-    return handleOffscreenAuth('twitter.com');
+    return handleExtensionRedirectAuth('twitter.com');
   }
   if (!auth) return { error: 'firebase_not_configured' };
   try {
+    const { signInWithPopup } = await import('firebase/auth');
     const provider = new TwitterAuthProvider();
     const result = await signInWithPopup(auth, provider);
     return { user: firebaseUserToAppUser(result.user) };
@@ -483,25 +484,25 @@ export async function signInWithX(): Promise<AuthResult> {
   }
 }
 
-// ─────────────────────────────────────────────
-// Offscreen Auth Handler (For Extension Environment)
-// ─────────────────────────────────────────────
-
-async function handleOffscreenAuth(provider: string): Promise<AuthResult> {
+/**
+ * Extension Auth Handler: Redirects to the Web App for social login.
+ * This is used for non-Google providers to avoid remote script loading in extensions.
+ */
+async function handleExtensionRedirectAuth(provider: string): Promise<AuthResult> {
   try {
-    // Determine the web app's URL. Prefer the environment variable or fallback to production.
     const WEB_URL = import.meta.env.VITE_WEB_URL || 'https://startlytab.com';
     const loginUrl = `${WEB_URL}/login?from_ext=true&social=${provider}`;
 
-    // Open a new tab to the web app for authentication
-    // @ts-ignore
-    chrome.tabs.create({ url: loginUrl });
+    // Open a new tab for authentication
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+       chrome.tabs.create({ url: loginUrl });
+    } else {
+       window.open(loginUrl, '_blank');
+    }
 
-    // Return a 'cancelled' error so the UI stops the loading spinner.
-    // The actual login state will be pushed from the web to the extension asynchronously.
     return { error: 'cancelled' };
   } catch (e: any) {
-    console.error(`[Auth] Web Auth redirect error for ${provider}:`, e);
+    console.error(`[Auth] Redirect error for ${provider}:`, e);
     return { error: e.message || 'unknown' };
   }
 }

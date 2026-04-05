@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "StartlyTab",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "A small pause, built into your day. A beautiful new tab page with gateway shortcuts.",
     "permissions": [
         "bookmarks",
@@ -12,8 +12,7 @@
         "favicon",
         "identity",
         "downloads",
-        "search",
-        "offscreen"
+        "search"
     ],
     "host_permissions": [
         "<all_urls>"

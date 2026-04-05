@@ -6,243 +6,88 @@ const PrivacyPolicy: React.FC = () => {
             <div className="max-w-3xl mx-auto space-y-8 animate-reveal">
                 <header className="space-y-4 border-b border-gray-200 dark:border-white/10 pb-8">
                     <h1 className="text-4xl font-bold tracking-tight">Privacy Policy</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.04.01</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.04.05</p>
                 </header>
 
                 <section className="space-y-4">
                     <h2 className="text-2xl font-semibold">1. Scope of This Policy</h2>
-                    <p>This Privacy Policy describes how StartlyTab ("Service", "we", "us", or "our") collects, uses, and protects personal data when you use our browser start-page web application and our Chrome Extension.</p>
-                    <p>This Service is operated by an independent developer and is intended for global users.</p>
-                    <p>By using the Service, you agree to the practices described in this Privacy Policy.</p>
+                    <p>This Privacy Policy describes how StartlyTab ("Service", "we", "us", or "our") collects, uses, and protects personal and sensitive user data when you use our browser start-page web application and our Chrome Extension.</p>
+                    <p>We are committed to transparency regarding how we handle your information. By using the Service, you agree to the practices described in this Privacy Policy.</p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">2. Chrome Extension Data Disclosure</h2>
-                    <p>When used as a Chrome Extension, the Service accesses the following browser permissions to provide specific features:</p>
-                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
-                        <li><strong>Bookmarks:</strong> Accessed only when you explicitly use the "Import Bookmarks" feature to populate your dashboard. Bookmarks are processed locally and only the specific links you choose to add are stored in our database.</li>
-                        <li><strong>Tabs & Scripting:</strong> Used to facilitate importing shortcuts from other start-page services by temporarily opening their tabs and extracting your configuration. These tabs are closed immediately after import.</li>
-                        <li><strong>Identity:</strong> Used to manage secure authentication via Google OAuth. We only receive your basic profile information as permitted by the OAuth scopes.</li>
-                        <li><strong>Management:</strong> Used solely to check if our complementary extension components are installed to improve user experience.</li>
-                        <li><strong>Downloads:</strong> Used to provide status awareness of active downloads on your personalized dashboard (if configured). We do not track what you download.</li>
-                        <li><strong>Storage:</strong> We use local storage (via offscreen documents) to maintain your session and preferences.</li>
-                    </ul>
-                    <p>All browser data is processed with a <strong>privacy-first approach</strong>. We do not collect your browsing history, sell your data, or share personal information with third parties for advertising.</p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">3. Information We Collect</h2>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">2.1 Account Information</h3>
-                        <p>When you sign in using:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Google OAuth (currently supported)</li>
-                            <li>Apple Sign-In (planned)</li>
-                            <li>Email authentication (planned)</li>
+                    <h2 className="text-2xl font-semibold">2. User Data Collection (What We Collect)</h2>
+                    <p>We collect only the minimum amount of data necessary to provide and synchronize your personalized workspace:</p>
+                    <div className="pl-4 border-l-2 border-indigo-500 space-y-4">
+                        <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                            <li><strong>Identity Information:</strong> Email address, public display name, and profile picture URL (provided by authentication providers like Google).</li>
+                            <li><strong>Personalization Data:</strong> Your customized gateway links (titles and URLs), folder structures, and dashboard layout settings.</li>
+                            <li><strong>Interaction Data:</strong> App settings such as theme (dark/light), language preference, and search engine choice.</li>
+                            <li><strong>AI Interaction History:</strong> Text prompts you submit to our AI features (e.g., motivational quote requests or workspace assistant) to provide continuity in your experience.</li>
+                            <li><strong>Technical Identifiers:</strong> A unique project-specific User ID to link your data across devices.</li>
                         </ul>
-                        <p>We may collect:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Email address</li>
-                            <li>Public display name</li>
-                            <li>Authentication identifier</li>
-                            <li>Account ID generated by our backend</li>
-                        </ul>
-                        <p className="text-sm text-gray-500">Authentication is securely managed via Supabase. We do not collect or store passwords when third-party OAuth providers are used.</p>
-                    </div>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">2.2 User Preferences and Settings</h3>
-                        <p>We store:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Natural language content preferences (e.g., “show me motivational quotes”)</li>
-                            <li>Custom quick-link URLs</li>
-                            <li>Custom display configurations</li>
-                        </ul>
-                        <p>This data is stored in Supabase databases.</p>
-                        <p>We do not intentionally collect sensitive personal data. Users are advised not to submit sensitive personal information in prompt fields.</p>
-                    </div>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">2.3 Content Processing and AI Usage</h3>
-                        <p>User preference text may be processed to retrieve or generate content.</p>
-                        <p>Where AI services are used:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Prompts are pseudonymized</li>
-                            <li>Direct account identifiers are not transmitted</li>
-                            <li>Data is processed only to provide requested functionality</li>
-                            <li>Prompts are not used to train public AI models</li>
-                        </ul>
-                        <p>We do not use user data for profiling or automated decision-making that produces legal or significant effects.</p>
-                    </div>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">2.4 Website Icon Retrieval</h3>
-                        <p>When users add a custom link:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>The browser directly requests publicly available favicon data from the target website.</li>
-                            <li>We do not proxy, intercept, or log those requests.</li>
-                            <li>We do not monitor or analyze user-added URLs for behavioral tracking.</li>
-                        </ul>
-                    </div>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">2.5 Analytics</h3>
-                        <p>We use Umami, a privacy-focused analytics solution.</p>
-                        <p>Umami:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Does not use tracking cookies</li>
-                            <li>Does not collect personal identifiers</li>
-                            <li>Does not track users across websites</li>
-                            <li>Does not store IP addresses in identifiable form</li>
-                        </ul>
-                        <p>Analytics are used only to understand aggregated usage patterns.</p>
                     </div>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">3. Legal Basis for Processing (GDPR – EU Users)</h2>
-                    <p>We process personal data under the following legal bases:</p>
+                    <h2 className="text-2xl font-semibold">3. Data Handling and Processing (How We Use It)</h2>
+                    <p>Your data is processed strictly for the following purposes:</p>
                     <ul className="list-disc pl-5 space-y-2">
-                        <li><strong>Article 6(1)(b)</strong> – Performance of a contract (providing the Service)</li>
-                        <li><strong>Article 6(1)(f)</strong> – Legitimate interests (service security and improvement)</li>
-                        <li><strong>Article 6(1)(a)</strong> – Consent (where required)</li>
+                        <li><strong>Cross-Device Synchronization:</strong> We process your email and UID to ensure your gateway shortcuts and settings are consistent between your extension and web dashboard.</li>
+                        <li><strong>Service Functionality:</strong> Processing your AI prompts to generate relevant content or workspace insights.</li>
+                        <li><strong>Security and Account Management:</strong> Authenticating your identity and preventing unauthorized access to your account.</li>
+                        <li><strong>Analytics:</strong> We use privacy-preserving, cookieless analytics (Umami) to understand aggregated usage trends (e.g., most used features) without identifying individual users.</li>
                     </ul>
+                    <p className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 text-sm">
+                        <strong>Important:</strong> We do not use your personal data or AI prompts to train public machine learning models or sell them to third parties.
+                    </p>
                 </section>
 
                 <section className="space-y-4">
                     <h2 className="text-2xl font-semibold">4. Data Storage and Infrastructure</h2>
-                    <p>We use:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li><strong>Vercel</strong> – Hosting and deployment</li>
-                        <li><strong>Supabase</strong> – Database and authentication services</li>
-                        <li><strong>Google OAuth</strong> – Authentication provider</li>
+                    <p>We rely on world-class infrastructure providers to securely store and process your data:</p>
+                    <ul className="list-disc pl-5 space-y-2">
+                        <li><strong>Firebase (by Google):</strong> Used for secure authentication and user session management.</li>
+                        <li><strong>Supabase:</strong> Used for storing your encrypted dashboard configuration, gateway shortcuts, and user settings.</li>
+                        <li><strong>Vercel:</strong> Used to host our secure web interface and edge functions.</li>
                     </ul>
-                    <p>Data may be processed in the United States or other jurisdictions where these providers operate.</p>
-                    <p>Where required, we rely on Standard Contractual Clauses (SCCs) or equivalent data protection safeguards.</p>
+                    <p>All data is transmitted over secure, encrypted HTTPS connections. Sensitive configuration data is stored with industry-standard row-level security (RLS) in our databases.</p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">5. Data Sharing</h2>
-                    <p>We do not:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>Sell personal data</li>
-                        <li>Share personal data for advertising</li>
-                        <li>Engage in behavioral advertising</li>
-                        <li>Monetize user data</li>
+                    <h2 className="text-2xl font-semibold">5. Data Sharing (Who We Share With)</h2>
+                    <p>We have a strict <strong>No-Sharing-for-Profit</strong> policy.</p>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                        <li><strong>No Sale of Data:</strong> We never sell your personal or sensitive data to any third parties.</li>
+                        <li><strong>No Advertising:</strong> We do not share your name, email, or browsing habits with advertisers or data brokers.</li>
+                        <li><strong>Essential Service Providers:</strong> We share data only with the infrastructure partners listed above (Google/Firebase, Supabase, Vercel) as strictly necessary to host and operate the Service.</li>
+                        <li><strong>Legal Requirements:</strong> We may disclose data only if required by valid legal processes (e.g., a court order).</li>
                     </ul>
-                    <p>Personal data is shared only with infrastructure providers strictly necessary to operate the Service.</p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">6. Future Personalization Features</h2>
-                    <p>We may introduce optional personalization features in the future, such as:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>Usage frequency metrics</li>
-                        <li>Click-based optimization</li>
-                        <li>Feature engagement analysis</li>
+                    <h2 className="text-2xl font-semibold">6. Chrome Extension Specific Disclosures</h2>
+                    <p>When used as a Chrome Extension, the Service requires specific permissions to function correctly:</p>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                        <li><strong>Bookmarks:</strong> Only accessed if you explicitly use the "Import Bookmarks" tool. We do not monitor your bookmarks in the background.</li>
+                        <li><strong>Tabs:</strong> Used to allow you to import shortcuts from other services or to facilitate the secure OAuth login flow.</li>
+                        <li><strong>Identity:</strong> Used for Chrome-native Google Sign-In, receiving only your basic profile info.</li>
+                        <li><strong>Favicon:</strong> Used to display high-quality icons for your gateway shortcuts.</li>
                     </ul>
-                    <p>If implemented, this Privacy Policy will be updated accordingly.</p>
-                    <p>No behavioral tracking is currently active.</p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">7. Data Retention</h2>
-                    <p>We retain data:</p>
+                    <h2 className="text-2xl font-semibold">7. Data Retention and Deletion</h2>
+                    <p>We retain your data as long as your account is active. You have full control over your data:</p>
                     <ul className="list-disc pl-5 space-y-1">
-                        <li>While your account remains active</li>
-                        <li>Until you request deletion</li>
+                        <li><strong>Self-Service Deletion:</strong> You can delete specific shortcuts or folders at any time.</li>
+                        <li><strong>Full Account Deletion:</strong> You may request full deletion of your account and all associated data by emailing <span className="font-medium text-indigo-600">support@startlytab.com</span>. We process verified requests within 3 business days.</li>
                     </ul>
-                    <p>Inactive accounts may be deleted after prolonged inactivity for security purposes.</p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">8. Data Deletion</h2>
-                    <p>You may request deletion of your account and associated data at any time.</p>
-                    <p>To request deletion, contact:</p>
-                    <p className="font-medium">Email: support@startlytab.com</p>
-                    <p>Upon verified request:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>Account information will be deleted</li>
-                        <li>Stored preferences will be permanently removed</li>
-                        <li>Authentication tokens will be revoked</li>
-                    </ul>
-                    <p>Deletion requests are processed within a reasonable timeframe.</p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">9. Your Rights</h2>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">9.1 European Union (GDPR)</h3>
-                        <p>You have the right to:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Access your personal data</li>
-                            <li>Rectify inaccurate data</li>
-                            <li>Request erasure</li>
-                            <li>Restrict processing</li>
-                            <li>Object to processing</li>
-                            <li>Data portability</li>
-                            <li>Lodge a complaint with your supervisory authority</li>
-                        </ul>
-                    </div>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">9.2 California (CCPA/CPRA)</h3>
-                        <p>California residents have the right to:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Know what personal data is collected</li>
-                            <li>Request deletion</li>
-                            <li>Request correction</li>
-                            <li>Opt-out of sale (we do not sell data)</li>
-                        </ul>
-                    </div>
-
-                    <div className="pl-4 border-l-2 border-gray-200 dark:border-white/10 space-y-4">
-                        <h3 className="text-xl font-medium">9.3 Canada (PIPEDA)</h3>
-                        <p>Canadian users may:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>Access their personal data</li>
-                            <li>Request correction</li>
-                            <li>Withdraw consent</li>
-                        </ul>
-                    </div>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">10. Children’s Privacy</h2>
-                    <p>This Service is intended for users aged 16 or older.</p>
-                    <p>We do not knowingly collect personal data from children under 16.</p>
-                    <p>If you believe a child has provided personal data, please contact us and we will delete it promptly.</p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">11. Security Measures</h2>
-                    <p>We implement reasonable technical safeguards, including:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>Encrypted HTTPS transmission</li>
-                        <li>Secure authentication workflows</li>
-                        <li>Database access controls</li>
-                        <li>Infrastructure-level protections</li>
-                    </ul>
-                    <p>However, no internet transmission is completely secure.</p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">12. International Data Transfers</h2>
-                    <p>Because our infrastructure providers operate globally, data may be processed outside your country of residence.</p>
-                    <p>Where required, appropriate safeguards are implemented to ensure lawful data transfers.</p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">13. Changes to This Policy</h2>
-                    <p>We may update this Privacy Policy as the Service evolves.</p>
-                    <p>Material changes will be reflected in the updated date above.</p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">14. Contact Information</h2>
-                    <p>For privacy-related inquiries or deletion requests, contact:</p>
+                    <h2 className="text-2xl font-semibold">8. Contact Information</h2>
+                    <p>For any privacy-related questions or data requests, please reach out to us:</p>
                     <p className="font-medium text-lg text-indigo-600 dark:text-indigo-400">Email: support@startlytab.com</p>
                 </section>
             </div>

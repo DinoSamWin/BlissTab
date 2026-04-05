@@ -1,87 +1,8 @@
 // Background script for FocusTab Extension
 
-/// OFFSCREEN AUTHENTICATION MANAGER ///
-const OFFSCREEN_DOCUMENT_PATH = 'assets/offscreen.html';
-
-async function hasOffscreenDocument() {
-    // @ts-ignore
-    if ('getContexts' in chrome.runtime) {
-        // @ts-ignore
-        const contexts = await chrome.runtime.getContexts({
-            contextTypes: ['OFFSCREEN_DOCUMENT'],
-            documentUrls: [chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)]
-        });
-        return contexts.length > 0;
-    } else {
-        // @ts-ignore
-        const matchedClients = await clients.matchAll();
-        return await matchedClients.some(c => c.url.includes(chrome.runtime.id));
-    }
-}
-
-async function setupOffscreenDocument(path: string) {
-    if (await hasOffscreenDocument()) return;
-    
-    // @ts-ignore
-    if (chrome.offscreen) {
-        // @ts-ignore
-        await chrome.offscreen.createDocument({
-            url: path,
-            reasons: ['DOM_SCRAPING'], // Used as a workaround for Firebase Auth which needs DOM access
-            justification: 'Firebase Authentication popup handling'
-        });
-    }
-}
-
 // Listen for auth messages from the popup/UI
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'INIT_OFFSCREEN_AUTH') {
-        (async () => {
-
-            try {
-                // Ensure offscreen document exists
-                await setupOffscreenDocument(OFFSCREEN_DOCUMENT_PATH);
-                
-                // The offscreen document might not be ready to receive messages immediately because
-                // its module script takes a moment to execute. We retry a few times if we get an error.
-                let response;
-                let lastError = null;
-                
-                for (let i = 0; i < 15; i++) {
-                    try {
-                        response = await chrome.runtime.sendMessage({
-                            type: 'EXECUTE_OFFSCREEN_AUTH',
-                            provider: message.provider,
-                            target: 'offscreen'
-                        });
-                        // If no error was thrown, it was received
-                        break;
-
-                    } catch (err: any) {
-                        lastError = err;
-                        if (err.message && (err.message.includes('Receiving end does not exist') || err.message.includes('A listener indicated an asynchronous response'))) {
-                            // Wait 100ms before retrying
-                            await new Promise(r => setTimeout(r, 100));
-                        } else {
-                            // Some other error, throw it
-                            throw err;
-                        }
-                    }
-                }
-                
-                if (!response && lastError) {
-                    throw lastError;
-                }
-                
-                sendResponse(response);
-            } catch (err: any) {
-                console.error('[Background] Offscreen auth error:', err);
-                sendResponse({ error: err.message || 'setup_failed' });
-            }
-        })();
-        return true; // Indicate async response
-    }
-});
+// Note: We no longer use offscreen documents to avoid remote hosted code flagging.
+// Social logins are handled via redirect to web + AUTH_SYNC back to extension.
 
 // Listen for external messages (Web-to-Extension Sync)
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
@@ -89,14 +10,29 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         console.log('[Background] Received AUTH_SYNC from:', sender.origin);
         (async () => {
             try {
-                // Ensure offscreen document exists so it can write to localStorage
-                await setupOffscreenDocument(OFFSCREEN_DOCUMENT_PATH);
-                
-                await chrome.runtime.sendMessage({
-                    type: 'SYNC_LOCAL_STORAGE',
-                    user: message.user,
-                    token: message.token
+                // Store auth info in chrome.storage which all extension pages can access
+                await chrome.storage.local.set({ 
+                    'focus_tab_user': message.user,
+                    'focus_tab_token': message.token || null,
+                    'focus_tab_sync_ts': Date.now()
                 });
+                
+                // Also broadcast to any open New Tab pages to trigger immediate state update
+                const tabs = await chrome.tabs.query({ url: 'chrome://newtab/*' });
+                const internalTabs = await chrome.tabs.query({ url: chrome.runtime.getURL('*') });
+                
+                const allTabs = [...tabs, ...internalTabs];
+                for (const tab of allTabs) {
+                    if (tab.id) {
+                        try {
+                           chrome.tabs.sendMessage(tab.id, { 
+                               type: 'AUTH_SYNC_COMPLETE', 
+                               user: message.user, 
+                               token: message.token 
+                           }).catch(() => {}); // Ignore errors for inactive tabs
+                        } catch (e) {}
+                    }
+                }
                 
                 sendResponse({ success: true });
             } catch (err: any) {
