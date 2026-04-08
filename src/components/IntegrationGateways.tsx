@@ -34,6 +34,7 @@ import { getLocalLogoDataUrl, upsertLocalLogo } from '../services/gatewayLogoCac
 import { uploadGatewayLogo } from '../services/supabaseService';
 import { canonicalizeUrl } from '../services/urlCanonicalService';
 import { canAddGateway, isSubscribed, SUBSCRIPTION_LIMITS } from '../services/usageLimitsService';
+import { getInternalUrl } from '../services/environmentService';
 
 // --- Types ---
 interface Props {
@@ -1052,7 +1053,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                 onClick={() => {
                                     if (isLimitReached) {
                                         // Show upgrade prompt
-                                        const subscriptionUrl = window.location.origin + '/subscription';
+                                        const subscriptionUrl = getInternalUrl('/subscription');
                                         window.open(subscriptionUrl, '_blank');
                                     } else {
                                         setCreateModal({ isOpen: true, category: 'Quick Access' });
@@ -1193,7 +1194,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                                             <button
                                                                 onClick={() => {
                                                                     if (isLimitReached) {
-                                                                        window.open(window.location.origin + '/subscription', '_blank');
+                                                                        window.open(getInternalUrl('/subscription'), '_blank');
                                                                     } else {
                                                                         setCreateModal({ isOpen: true, category: isDefaultGroup ? 'Quick Access' : category });
                                                                     }

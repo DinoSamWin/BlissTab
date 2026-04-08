@@ -230,17 +230,7 @@
       envDetails.innerHTML = html;
     }
 
-    // Load Google SDK
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      setTimeout(() => {
-        checkGoogleOAuth();
-      }, 500);
-    };
-    document.head.appendChild(script);
+    // Google SDK is explicitly removed to comply with MV3 remotely hosted code rules.
 
     // Initial checks
     checkEnvironment();

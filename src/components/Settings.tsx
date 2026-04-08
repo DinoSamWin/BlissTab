@@ -3,6 +3,7 @@ import { AppState, QuickLink, SnippetRequest } from '../types';
 import { fetchSiteMetadata } from '../services/metadataService';
 import { canonicalizeUrl } from '../services/urlCanonicalService';
 import { getLocalLogoDataUrl, removeLocalLogo, upsertLocalLogo } from '../services/gatewayLogoCacheService';
+import { getInternalUrl, REGIONAL_SEARCH_ENGINES, REGIONAL_DEFAULT_LINKS, isChinaRegion } from '../services/environmentService';
 import { imageFileToSquareWebp } from '../services/imageProcessingService';
 import { fetchUserGatewayOverrides, upsertUserGatewayOverride, uploadGatewayLogo } from '../services/supabaseService';
 import { COLORS, SUPPORTED_LANGUAGES, BRAND_CONFIG, FEATUREBASE_URL } from '../constants';
@@ -32,8 +33,7 @@ const PlanBadge = ({ user }: { user: AppState['user'] }) => {
   const navigateToSubscription = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const subscriptionUrl = window.location.origin + '/subscription';
-    window.open(subscriptionUrl, '_blank');
+    window.open(getInternalUrl('/subscription'), '_blank');
   };
 
   const plan = user?.subscriptionPlan || 'free';
@@ -621,8 +621,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
   };
 
   const handleUpgrade = () => {
-    const subscriptionUrl = window.location.origin + '/subscription';
-    window.open(subscriptionUrl, '_blank');
+    window.open(getInternalUrl('/subscription'), '_blank');
   };
 
   const toggleSnippetActive = async (id: string) => {
@@ -894,7 +893,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                             </p>
                             <button
                               onClick={() => {
-                                const subscriptionUrl = window.location.origin + '/subscription';
+                                const subscriptionUrl = getInternalUrl('/subscription');
                                 window.open(subscriptionUrl, '_blank');
                               }}
                               className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
@@ -1112,7 +1111,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                             </p>
                             <button
                               onClick={() => {
-                                const subscriptionUrl = window.location.origin + '/subscription';
+                                const subscriptionUrl = getInternalUrl('/subscription');
                                 window.open(subscriptionUrl, '_blank');
                               }}
                               className="px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-full text-[11px] font-bold uppercase tracking-widest hover:opacity-90 transition-all"
@@ -1468,7 +1467,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
                     <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Data & Backup</label>
                     {!isSubscribed(state) && (
                       <button
-                        onClick={() => window.open(window.location.origin + '/subscription', '_blank')}
+                        onClick={() => window.open(getInternalUrl('/subscription'), '_blank')}
                         className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-700/50 shadow-sm hover:scale-105 transition-transform cursor-pointer"
                       >
                         <Diamond size={10} className="fill-amber-400/20" strokeWidth={2.5} />

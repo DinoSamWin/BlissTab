@@ -5,6 +5,7 @@ import { isSubscribed } from '../services/usageLimitsService';
 import { useDeepCareAI } from '../hooks/useDeepCareAI';
 import { BRAND_CONFIG } from '../constants';
 import { Activity, History, Lock, Unlock, Zap, Shield, Sparkles } from 'lucide-react';
+import { getInternalUrl } from '../services/environmentService';
 
 interface TrendHubProps {
     isOpen: boolean;
@@ -292,7 +293,7 @@ const TrendHub: React.FC<TrendHubProps> = ({ isOpen, onClose, state }) => {
                                 <div className="text-center px-4">
                                     <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">记录未完待续</h4>
                                     <button
-                                        onClick={() => window.open(window.location.origin + '/subscription', '_blank')}
+                                        onClick={() => window.open(getInternalUrl('/subscription'), '_blank')}
                                         className="px-8 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-bold text-sm tracking-wide mt-6 shadow-lg shadow-indigo-500/20"
                                     >
                                         解锁完整处方 ($4.99/mo)
@@ -342,7 +343,7 @@ const TrendHub: React.FC<TrendHubProps> = ({ isOpen, onClose, state }) => {
                                     你的情绪地图还有 70% 的深度内容未解锁。升级 Pro，获取专属定制的完整心理处方。
                                 </p>
                                 <button
-                                    onClick={() => window.open(window.location.origin + '/subscription', '_blank')}
+                                    onClick={() => window.open(getInternalUrl('/subscription'), '_blank')}
                                     className="px-8 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-bold text-sm tracking-wide hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all animate-pulse shadow-lg shadow-indigo-500/20"
                                 >
                                     解锁完整处方 ($4.99/mo)

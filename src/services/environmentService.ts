@@ -268,3 +268,32 @@ export const REGIONAL_DEFAULT_LINKS: Record<'CN' | 'GLOBAL', QuickLink[]> = {
     }
   ]
 };
+
+/**
+ * Gets the correct internal URL for a route, handling both web (BrowserRouter)
+ * and extension (HashRouter) environments.
+ */
+export function getInternalUrl(path: string): string {
+  const isExtension = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
+  
+  // Ensure path starts with /
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  // REDIRECT TO WEB FOR SUBSCRIPTION: 
+  // Payment gateways (Creem, Stripe, etc.) do not support chrome-extension:// protocols.
+  // We force subscription related links to open on the official website.
+  if (normalizedPath === '/subscription') {
+    const webUrl = 'https://www.startlytab.com';
+    return `${webUrl}/subscription`;
+  }
+
+  const baseUrl = window.location.origin;
+  
+  if (isExtension) {
+    // For HashRouter in extensions, we need to point to index.html#<path>
+    return `${baseUrl}/index.html#${normalizedPath}`;
+  }
+  
+  // For web (BrowserRouter)
+  return `${baseUrl}${normalizedPath}`;
+}

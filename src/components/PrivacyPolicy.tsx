@@ -6,7 +6,7 @@ const PrivacyPolicy: React.FC = () => {
             <div className="max-w-3xl mx-auto space-y-8 animate-reveal">
                 <header className="space-y-4 border-b border-gray-200 dark:border-white/10 pb-8">
                     <h1 className="text-4xl font-bold tracking-tight">Privacy Policy</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.04.05</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.04.08</p>
                 </header>
 
                 <section className="space-y-4">
@@ -30,7 +30,7 @@ const PrivacyPolicy: React.FC = () => {
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">3. Data Handling and Processing (How We Use It)</h2>
+                    <h2 className="text-2xl font-semibold">3. Data Processing (How We Process It)</h2>
                     <p>Your data is processed strictly for the following purposes:</p>
                     <ul className="list-disc pl-5 space-y-2">
                         <li><strong>Cross-Device Synchronization:</strong> We process your email and UID to ensure your gateway shortcuts and settings are consistent between your extension and web dashboard.</li>
@@ -45,13 +45,13 @@ const PrivacyPolicy: React.FC = () => {
 
                 <section className="space-y-4">
                     <h2 className="text-2xl font-semibold">4. Data Storage and Infrastructure</h2>
-                    <p>We rely on world-class infrastructure providers to securely store and process your data:</p>
+                    <p>We rely on world-class infrastructure providers to securely store your data:</p>
                     <ul className="list-disc pl-5 space-y-2">
                         <li><strong>Firebase (by Google):</strong> Used for secure authentication and user session management.</li>
                         <li><strong>Supabase:</strong> Used for storing your encrypted dashboard configuration, gateway shortcuts, and user settings.</li>
                         <li><strong>Vercel:</strong> Used to host our secure web interface and edge functions.</li>
                     </ul>
-                    <p>All data is transmitted over secure, encrypted HTTPS connections. Sensitive configuration data is stored with industry-standard row-level security (RLS) in our databases.</p>
+                    <p>All data is transmitted over secure, encrypted HTTPS connections. Sensitive configuration data is stored with industry-standard row-level security (RLS) in our databases until you choose to delete your account.</p>
                 </section>
 
                 <section className="space-y-4">
@@ -59,14 +59,24 @@ const PrivacyPolicy: React.FC = () => {
                     <p>We have a strict <strong>No-Sharing-for-Profit</strong> policy.</p>
                     <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
                         <li><strong>No Sale of Data:</strong> We never sell your personal or sensitive data to any third parties.</li>
-                        <li><strong>No Advertising:</strong> We do not share your name, email, or browsing habits with advertisers or data brokers.</li>
                         <li><strong>Essential Service Providers:</strong> We share data only with the infrastructure partners listed above (Google/Firebase, Supabase, Vercel) as strictly necessary to host and operate the Service.</li>
                         <li><strong>Legal Requirements:</strong> We may disclose data only if required by valid legal processes (e.g., a court order).</li>
                     </ul>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">6. Chrome Extension Specific Disclosures</h2>
+                    <h2 className="text-2xl font-semibold">6. Limited Use Disclosure</h2>
+                    <p>StartlyTab's use and transfer to any other app of information received from Google APIs and Chrome APIs will adhere to the <a href="https://developer.chrome.com/docs/webstore/program-policies#userdata" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-500 underline">Chrome Web Store User Data Policy</a>, including the Limited Use requirements:</p>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                        <li><strong>Allowed Use:</strong> We only use your data to provide or improve our single purpose and user-facing features (your personalized workspace tab).</li>
+                        <li><strong>Allowed Transfer:</strong> We only transfer user data to others if that transfer is strictly necessary to provide or improve our single purpose, to comply with applicable laws, for security purposes (investigating abuse), or as part of a merger/acquisition. User data is never transferred for any other reason.</li>
+                        <li><strong>Prohibited Advertising:</strong> We never use or transfer your user data to serve you personalized, re-targeted, or interest-based advertisements.</li>
+                        <li><strong>Prohibited Human Interaction:</strong> We do not allow humans to read your data unless: (a) we first obtain your affirmative agreement for specific messages (e.g., for tech support), (b) it is necessary for security purposes, (c) to comply with applicable laws, or (d) for our internal operations where the data has been aggregated and anonymized.</li>
+                    </ul>
+                </section>
+
+                <section className="space-y-4">
+                    <h2 className="text-2xl font-semibold">7. Chrome Extension Specific Disclosures</h2>
                     <p>When used as a Chrome Extension, the Service requires specific permissions to function correctly:</p>
                     <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
                         <li><strong>Bookmarks:</strong> Only accessed if you explicitly use the "Import Bookmarks" tool. We do not monitor your bookmarks in the background.</li>
@@ -77,7 +87,7 @@ const PrivacyPolicy: React.FC = () => {
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">7. Data Retention and Deletion</h2>
+                    <h2 className="text-2xl font-semibold">8. Data Retention and Deletion</h2>
                     <p>We retain your data as long as your account is active. You have full control over your data:</p>
                     <ul className="list-disc pl-5 space-y-1">
                         <li><strong>Self-Service Deletion:</strong> You can delete specific shortcuts or folders at any time.</li>
@@ -86,7 +96,7 @@ const PrivacyPolicy: React.FC = () => {
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">8. Contact Information</h2>
+                    <h2 className="text-2xl font-semibold">9. Contact Information</h2>
                     <p>For any privacy-related questions or data requests, please reach out to us:</p>
                     <p className="font-medium text-lg text-indigo-600 dark:text-indigo-400">Email: support@startlytab.com</p>
                 </section>
