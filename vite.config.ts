@@ -81,6 +81,9 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        ...(mode === 'extension' ? {
+          'firebase/auth': 'firebase/auth/web-extension'
+        } : {})
       }
     },
     build: {

@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "extension:zip": "bestzip focustab-extension.zip dist/*",
     "extension:crx": "crx3 -p focustab.pem -o focustab.crx dist/ && cp focustab.crx public/focustab.crx",
-    "build:extension": "npm run build && npm run extension:zip && npm run extension:crx"
+    "build:extension": "vite build --mode extension && npm run extension:zip && npm run extension:crx"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

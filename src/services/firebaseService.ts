@@ -3,7 +3,6 @@ import {
   getAuth,
   initializeAuth,
   indexedDBLocalPersistence,
-  browserLocalPersistence,
   Auth
 } from 'firebase/auth';
 
@@ -43,10 +42,9 @@ if (firebaseConfig.apiKey) {
   } else {
     try {
       auth = getAuth(app);
-      // Default is browserLocalPersistence in web context
     } catch {
       auth = initializeAuth(app, {
-        persistence: browserLocalPersistence,
+        persistence: indexedDBLocalPersistence,
       });
     }
   }
