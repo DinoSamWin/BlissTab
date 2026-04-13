@@ -10,94 +10,70 @@ const PrivacyPolicy: React.FC = () => {
                 </header>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">1. Scope of This Policy</h2>
-                    <p>This Privacy Policy describes how StartlyTab ("Service", "we", "us", or "our") collects, uses, and protects personal and sensitive user data when you use our browser start-page web application and our Chrome Extension.</p>
-                    <p>We are committed to transparency regarding how we handle your information. By using the Service, you agree to the practices described in this Privacy Policy.</p>
+                    <h2 className="text-2xl font-semibold">1. Data Collection</h2>
+                    <p>When you use StartlyTab (both the website and the Chrome Extension), we collect only the necessary data required to provide you with our core functionalities. The data collected includes:</p>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                        <li><strong>Google API Data (Authentication):</strong> When you sign in using Google, we collect your Email Address, Name, and Profile Picture. This information is retrieved through Google OAuth and the Chrome Identity API to establish your identity.</li>
+                        <li><strong>Personalization Data:</strong> Gateway shortcuts (URLs and titles) you add, folder structures, and dashboard layout settings.</li>
+                        <li><strong>User Preferences:</strong> Theme choice (dark/light mode), search engine preference, and language settings.</li>
+                        <li><strong>AI Interaction History:</strong> Text prompts you submit to our AI features is collected to execute the AI requests.</li>
+                        <li><strong>Technical Identifiers:</strong> A unique User ID to securely sync your data across devices.</li>
+                    </ul>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">2. User Data Collection (What We Collect)</h2>
-                    <p>We collect only the minimum amount of data necessary to provide and synchronize your personalized workspace:</p>
-                    <div className="pl-4 border-l-2 border-indigo-500 space-y-4">
-                        <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
-                            <li><strong>Identity Information:</strong> Email address, public display name, and profile picture URL (provided by authentication providers like Google).</li>
-                            <li><strong>Personalization Data:</strong> Your customized gateway links (titles and URLs), folder structures, and dashboard layout settings.</li>
-                            <li><strong>Interaction Data:</strong> App settings such as theme (dark/light), language preference, and search engine choice.</li>
-                            <li><strong>AI Interaction History:</strong> Text prompts you submit to our AI features (e.g., motivational quote requests or workspace assistant) to provide continuity in your experience.</li>
-                            <li><strong>Technical Identifiers:</strong> A unique project-specific User ID to link your data across devices.</li>
-                        </ul>
+                    <h2 className="text-2xl font-semibold">2. Data Processing and Use</h2>
+                    <p>Your data is processed and used strictly to deliver and improve our single-purpose experience (your personalized workspace tab). Specifically, we use your data to:</p>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                        <li><strong>Identify and Authenticate You:</strong> We use your Google email and profile information to log you in, secure your account, and synchronize your shortcuts across devices.</li>
+                        <li><strong>Provide Core Features:</strong> We process your shortcuts, AI prompts, and layout configuration to render your personalized New Tab page.</li>
+                        <li><strong>Ensure Security:</strong> To prevent unauthorized access and investigate potential abuse.</li>
+                        <li><strong>Service Improvement:</strong> We use privacy-preserving analytics to understand aggregated usage. <strong>We strictly prohibit the use of your data, including AI prompts and Google API data, to train public machine learning models or to serve you personalized, re-targeted, or interest-based advertisements.</strong></li>
+                    </ul>
+                </section>
+
+                <section className="space-y-4">
+                    <h2 className="text-2xl font-semibold">3. Data Storage and Security</h2>
+                    <p>We implement robust security measures, including modern cryptography and HTTPS encryption during transmission, to protect your data. Your data is stored securely through industry-standard providers:</p>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                        <li><strong>Authentication Data:</strong> Your Google OAuth credentials, email, and identity tokens are securely encrypted and stored by Google Firebase Authentication.</li>
+                        <li><strong>User Configuration Data:</strong> Your customized shortcuts, layout, and settings are stored in our secure database provided by Supabase, enforcing row-level security (RLS).</li>
+                        <li><strong>Local Device Storage:</strong> We use Chrome's local storage mechanisms (`chrome.storage.local` and IndexedDB) to securely cache your session state and settings locally for fast offline access.</li>
+                    </ul>
+                </section>
+
+                <section className="space-y-4">
+                    <h2 className="text-2xl font-semibold">4. Data Sharing and Disclosure</h2>
+                    <p>We do not sell your personal or sensitive data. We only transfer or share user data to third parties under the following strict conditions:</p>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
+                        <li><strong>Essential Service Providers:</strong> We share necessary data with our infrastructure partners (Google/Firebase for auth, Supabase for database hosting, Vercel for web hosting). These providers are contractually obligated to protect your data.</li>
+                        <li><strong>Legal Compliance:</strong> If necessary to comply with applicable laws, valid legal processes, or to protect against malware, spam, phishing, or other fraud or abuse.</li>
+                        <li><strong>Merger or Acquisition:</strong> As part of a merger, acquisition, or sale of assets, but only after obtaining explicit prior consent from you (the user).</li>
+                        <li><strong>We do NOT transfer, use, or sell your user data to any advertising platforms, data brokers, or other information resellers.</strong> We absolutely prohibit humans from reading your data unless explicit consent is obtained for support, it is necessary for security investigations, or to comply with applicable laws.</li>
+                    </ul>
+                </section>
+
+                <section className="space-y-4">
+                    <h2 className="text-2xl font-semibold">5. Limited Use Disclosure</h2>
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                        <p className="font-semibold text-lg mb-2">Compliance Statement</p>
+                        <p className="mb-4"><strong>The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.</strong></p>
+                        <p>We guarantee that our collection, use, and transfer of any Google User Data strictly adheres to the Chrome Web Store Program Policies, and we never use your data for advertising, credit-worthiness, or lending purposes.</p>
                     </div>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">3. Data Processing (How We Process It)</h2>
-                    <p>Your data is processed strictly for the following purposes:</p>
-                    <ul className="list-disc pl-5 space-y-2">
-                        <li><strong>Cross-Device Synchronization:</strong> We process your email and UID to ensure your gateway shortcuts and settings are consistent between your extension and web dashboard.</li>
-                        <li><strong>Service Functionality:</strong> Processing your AI prompts to generate relevant content or workspace insights.</li>
-                        <li><strong>Security and Account Management:</strong> Authenticating your identity and preventing unauthorized access to your account.</li>
-                        <li><strong>Analytics:</strong> We use privacy-preserving, cookieless analytics (Umami) to understand aggregated usage trends (e.g., most used features) without identifying individual users.</li>
-                    </ul>
-                    <p className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 text-sm">
-                        <strong>Important:</strong> We do not use your personal data or AI prompts to train public machine learning models or sell them to third parties.
-                    </p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">4. Data Storage and Infrastructure</h2>
-                    <p>We rely on world-class infrastructure providers to securely store your data:</p>
-                    <ul className="list-disc pl-5 space-y-2">
-                        <li><strong>Firebase (by Google):</strong> Used for secure authentication and user session management.</li>
-                        <li><strong>Supabase:</strong> Used for storing your encrypted dashboard configuration, gateway shortcuts, and user settings.</li>
-                        <li><strong>Vercel:</strong> Used to host our secure web interface and edge functions.</li>
-                    </ul>
-                    <p>All data is transmitted over secure, encrypted HTTPS connections. Sensitive configuration data is stored with industry-standard row-level security (RLS) in our databases until you choose to delete your account.</p>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">5. Data Sharing (Who We Share With)</h2>
-                    <p>We have a strict <strong>No-Sharing-for-Profit</strong> policy.</p>
+                    <h2 className="text-2xl font-semibold">6. Data Retention and Deletion</h2>
+                    <p>We retain your user data only for as long as your account is active to provide you with the Service.</p>
                     <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
-                        <li><strong>No Sale of Data:</strong> We never sell your personal or sensitive data to any third parties.</li>
-                        <li><strong>Essential Service Providers:</strong> We share data only with the infrastructure partners listed above (Google/Firebase, Supabase, Vercel) as strictly necessary to host and operate the Service.</li>
-                        <li><strong>Legal Requirements:</strong> We may disclose data only if required by valid legal processes (e.g., a court order).</li>
+                        <li><strong>Self-Service:</strong> You can delete any saved shortcut, folder, or AI prompt history directly within the application's interface at any time.</li>
+                        <li><strong>Account Deletion:</strong> You have the absolute right to request full account deletion. Please email your request to <a href="mailto:support@startlytab.com" className="text-indigo-600 hover:text-indigo-500">support@startlytab.com</a> using your registered email. We will completely purge your identity, settings, and database records within 3 business days of verification.</li>
                     </ul>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">6. Limited Use Disclosure</h2>
-                    <p>StartlyTab's use and transfer to any other app of information received from Google APIs and Chrome APIs will adhere to the <a href="https://developer.chrome.com/docs/webstore/program-policies#userdata" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-500 underline">Chrome Web Store User Data Policy</a>, including the Limited Use requirements:</p>
-                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
-                        <li><strong>Allowed Use:</strong> We only use your data to provide or improve our single purpose and user-facing features (your personalized workspace tab).</li>
-                        <li><strong>Allowed Transfer:</strong> We only transfer user data to others if that transfer is strictly necessary to provide or improve our single purpose, to comply with applicable laws, for security purposes (investigating abuse), or as part of a merger/acquisition. User data is never transferred for any other reason.</li>
-                        <li><strong>Prohibited Advertising:</strong> We never use or transfer your user data to serve you personalized, re-targeted, or interest-based advertisements.</li>
-                        <li><strong>Prohibited Human Interaction:</strong> We do not allow humans to read your data unless: (a) we first obtain your affirmative agreement for specific messages (e.g., for tech support), (b) it is necessary for security purposes, (c) to comply with applicable laws, or (d) for our internal operations where the data has been aggregated and anonymized.</li>
-                    </ul>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">7. Chrome Extension Specific Disclosures</h2>
-                    <p>When used as a Chrome Extension, the Service requires specific permissions to function correctly:</p>
-                    <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
-                        <li><strong>Bookmarks:</strong> Only accessed if you explicitly use the "Import Bookmarks" tool. We do not monitor your bookmarks in the background.</li>
-                        <li><strong>Tabs:</strong> Used to allow you to import shortcuts from other services or to facilitate the secure OAuth login flow.</li>
-                        <li><strong>Identity:</strong> Used for Chrome-native Google Sign-In, receiving only your basic profile info.</li>
-                        <li><strong>Favicon:</strong> Used to display high-quality icons for your gateway shortcuts.</li>
-                    </ul>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">8. Data Retention and Deletion</h2>
-                    <p>We retain your data as long as your account is active. You have full control over your data:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li><strong>Self-Service Deletion:</strong> You can delete specific shortcuts or folders at any time.</li>
-                        <li><strong>Full Account Deletion:</strong> You may request full deletion of your account and all associated data by emailing <span className="font-medium text-indigo-600">support@startlytab.com</span>. We process verified requests within 3 business days.</li>
-                    </ul>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">9. Contact Information</h2>
-                    <p>For any privacy-related questions or data requests, please reach out to us:</p>
+                    <h2 className="text-2xl font-semibold">7. Contact Information</h2>
+                    <p>If you have any questions or concerns about this privacy policy or our data practices, please contact us immediately:</p>
                     <p className="font-medium text-lg text-indigo-600 dark:text-indigo-400">Email: support@startlytab.com</p>
                 </section>
             </div>
