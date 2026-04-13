@@ -6,7 +6,7 @@ const PrivacyPolicy: React.FC = () => {
             <div className="max-w-3xl mx-auto space-y-8 animate-reveal">
                 <header className="space-y-4 border-b border-gray-200 dark:border-white/10 pb-8">
                     <h1 className="text-4xl font-bold tracking-tight">Privacy Policy</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.04.08</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Last Updated: 2026.04.13</p>
                 </header>
 
                 <section className="space-y-4">
