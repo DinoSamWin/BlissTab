@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - StartlyTab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #FBFBFE;
+            --text: #1A1A1E;
+            --primary: #4F46E5;
+            --secondary: #6B7280;
+            --border: #E5E7EB;
+            --card-bg: #FFFFFF;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0A0A0B;
+                --text: #F3F4F6;
+                --primary: #818CF8;
+                --secondary: #9CA3AF;
+                --border: #262626;
+                --card-bg: #141416;
+            }
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+        header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 3rem;
+            margin-bottom: 4rem;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.4rem 1rem;
+            background: rgba(79, 70, 229, 0.1);
+            color: var(--primary);
+            font-size: 0.75rem;
+            font-weight: 800;
+            border-radius: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1rem;
+            margin-bottom: 1rem;
+        }
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin: 0 0 1rem 0;
+            letter-spacing: -0.02em;
+        }
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--secondary);
+            font-weight: 300;
+        }
+        section {
+            margin-bottom: 4rem;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .number {
+            width: 2.25rem;
+            height: 2.25rem;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            border-radius: 0.6rem;
+            font-size: 0.9rem;
+        }
+        h2 {
+            font-size: 1.50rem;
+            font-weight: 800;
+            margin: 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            h1 { font-size: 2.5rem; }
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            border-radius: 1.25rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+        .card h3 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        .card .dot {
+            width: 0.4rem;
+            height: 0.4rem;
+            border-radius: 50%;
+        }
+        .data-type {
+            font-size: 0.8rem;
+            color: var(--secondary);
+            margin-bottom: 0.4rem;
+            font-weight: 600;
+        }
+        .purpose {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        .pillar {
+            padding: 1.5rem;
+            background: rgba(0,0,0,0.02);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            font-size: 0.9rem;
+        }
+        .pillar strong { color: var(--primary); }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            overflow: hidden;
+            font-size: 0.85rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background: rgba(0,0,0,0.02);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1rem;
+            color: var(--secondary);
+        }
+        .mono {
+            font-family: monospace;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .banner {
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            color: white;
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+        }
+        .banner h2 { color: white; margin-bottom: 1rem; }
+        .banner ul { list-style: none; padding: 0; }
+        .banner li { margin-bottom: 0.75rem; display: flex; gap: 0.5rem; font-size: 0.9rem; }
+        footer {
+            border-top: 1px solid var(--border);
+            padding-top: 3rem;
+            text-align: center;
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+        a { color: var(--primary); text-decoration: none; font-weight: 700; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="badge">Compliance Updated: April 2026</div>
+            <h1>Privacy Policy</h1>
+            <p class="subtitle">Complete disclosure of user data collection, processing, storage, and sharing practices.</p>
+        </header>
+
+        <!-- PILLAR 1: COLLECTION -->
+        <section id="collection">
+            <div class="section-header">
+                <div class="number">1</div>
+                <h2>Data Collection</h2>
+            </div>
+            <p style="font-size:0.9rem; color:var(--secondary); margin-bottom:2rem;">The following data types are collected to provide core product functionality:</p>
+            <div class="grid">
+                <div class="card">
+                    <h3><span class="dot" style="background:#3B82F6"></span>Identifiable Information</h3>
+                    <div class="data-type">Google ID, Email, Profile Name</div>
+                    <div class="purpose"><strong>Purpose:</strong> Used for account identity, cross-device synchronization, and verifying subscription status.</div>
+                </div>
+                <div class="card">
+                    <h3><span class="dot" style="background:#10B981"></span>Location & Context</h3>
+                    <div class="data-type">Region (IP), Battery, Local Time</div>
+                    <div class="purpose"><strong>Purpose:</strong> To localize search/weather and provide contextually-relevant AI content.</div>
+                </div>
+                <div class="card">
+                    <h3><span class="dot" style="background:#8B5CF6"></span>Digital Environment</h3>
+                    <div class="data-type">Tab Count, Audio state, Idle Time</div>
+                    <div class="purpose"><strong>Purpose:</strong> Allows the AI to sense your current "digital pace" (e.g., if you are busy or inactive).</div>
+                </div>
+                <div class="card">
+                    <h3><span class="dot" style="background:#F43F5E"></span>Personal Records</h3>
+                    <div class="data-type">Mood Logs, Patterns, Notes</div>
+                    <div class="purpose"><strong>Purpose:</strong> Core psychology-tracking to provide well-being reports and detected patterns (e.g. late night work).</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PILLAR 2: PROCESSING -->
+        <section id="processing">
+            <div class="section-header">
+                <div class="number">2</div>
+                <h2>Data Processing</h2>
+            </div>
+            <div class="pillar">
+                <p>We process your data according to strictly defined principles:</p>
+                <ul style="padding-left:1.5rem; margin:0;">
+                    <li><strong>Edge Processing:</strong> Emotional patterns and digital pace sensors are analyzed locally on your device.</li>
+                    <li><strong>AI Personalization:</strong> Anonymized context (e.g., "5 tabs open") is sent to LLMs for creative generation.</li>
+                    <li><strong>No Training:</strong> Your private data is never used to train public machine learning models.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- PILLAR 3: STORAGE -->
+        <section id="storage">
+            <div class="section-header">
+                <div class="number">3</div>
+                <h2>Data Storage & Retention</h2>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h3>Storage Location</h3>
+                    <div class="purpose">Most data (mood, patterns, cached generation) is stored <strong>locally</strong> in IndexedDB. Sync data is encrypted in Supabase.</div>
+                </div>
+                <div class="card">
+                    <h3>Retention & Purge</h3>
+                    <div class="purpose">Activity logs and smart caches are automatically purged every <strong>30 days</strong> to maintain lean local storage.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PILLAR 4: SHARING -->
+        <section id="sharing">
+            <div class="section-header">
+                <div class="number">4</div>
+                <h2>Data Sharing</h2>
+            </div>
+            <div class="pillar" style="background:rgba(239, 68, 68, 0.05); border-color:rgba(239, 68, 68, 0.1);">
+                <p><strong>Strict Zero-Sharing:</strong> We do NOT sell, lease, or trade your data. Access is restricted to core infrastructure (Google/Supabase) for verified technical operations only.</p>
+            </div>
+        </section>
+
+        <section id="permissions">
+            <div class="section-header">
+                <div class="number">5</div>
+                <h2>Permissions Rationale</h2>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>Permission</th><th>Functionality Driven</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><span class="mono">bookmarks</span></td><td>Enables the custom Bookmarks Sidebar for quick navigation.</td></tr>
+                    <tr><td><span class="mono">history</span></td><td>Powers searching visited sites and contextual AI references.</td></tr>
+                    <tr><td><span class="mono">idle / tabs</span></td><td>Allows sensing user activity levels (e.g. being away).</td></tr>
+                    <tr><td><span class="mono">identity</span></td><td>Manages secure Google login for settings sync.</td></tr>
+                    <tr><td><span class="mono">storage</span></td><td>Saves notes, emotional patterns, and app state to disk.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer style="margin-top:2rem;">
+            <div class="banner">
+                <h2>Limited Use Compliance</h2>
+                <ul>
+                    <li>✅ Adheres to Chrome Web Store User Data Policy.</li>
+                    <li>✅ No human reading of user data without explicit consent.</li>
+                    <li>✅ No use for credit-worthiness or advertising.</li>
+                </ul>
+            </div>
+        </footer>
+
+        <footer>
+            <p>Questions? Reach out to support.</p>
+            <a href="mailto:support@startlytab.com">support@startlytab.com</a>
+            <p style="font-size: 0.6rem; margin-top: 2rem; opacity:0.5;">© 2026 STARTLYTAB BY DINOSAMWIN. ALL RIGHTS RESERVED.</p>
+        </footer>
+    </div>
+</body>
+</html>
