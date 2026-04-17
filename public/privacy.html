@@ -40,7 +40,7 @@
             padding: 4rem 2rem;
         }
         header {
-            border-bottom: 1px solid var(--border);
+            border-bottom: 2px solid var(--border);
             padding-bottom: 3rem;
             margin-bottom: 4rem;
         }
@@ -53,247 +53,230 @@
             font-weight: 800;
             border-radius: 2rem;
             text-transform: uppercase;
-            letter-spacing: 0.1rem;
-            margin-bottom: 1rem;
+            letter-spacing: 0.2rem;
+            margin-bottom: 1.5rem;
         }
         h1 {
-            font-size: 3.5rem;
+            font-size: 4rem;
             font-weight: 800;
             margin: 0 0 1rem 0;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.04em;
         }
         .subtitle {
-            font-size: 1.25rem;
+            font-size: 1.4rem;
             color: var(--secondary);
             font-weight: 300;
         }
         section {
-            margin-bottom: 4rem;
+            margin-bottom: 5rem;
         }
         .section-header {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
+            gap: 1.25rem;
+            margin-bottom: 2rem;
         }
         .number {
-            width: 2.25rem;
-            height: 2.25rem;
+            width: 2.5rem;
+            height: 2.5rem;
             background: var(--primary);
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 800;
-            border-radius: 0.6rem;
-            font-size: 0.9rem;
+            border-radius: 0.75rem;
+            font-size: 1rem;
         }
         h2 {
-            font-size: 1.50rem;
+            font-size: 1.75rem;
             font-weight: 800;
             margin: 0;
+        }
+        .box {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            padding: 2rem;
+            border-radius: 1.5rem;
+            margin-bottom: 1.5rem;
         }
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1.25rem;
+            gap: 1.5rem;
         }
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
-            h1 { font-size: 2.5rem; }
         }
         .card {
-            background: var(--card-bg);
+            background: rgba(0,0,0,0.02);
             border: 1px solid var(--border);
             padding: 1.5rem;
             border-radius: 1.25rem;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-            display: flex;
-            flex-direction: column;
         }
         .card h3 {
-            margin-top: 0;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 1rem;
-            margin-bottom: 0.75rem;
-        }
-        .card .dot {
-            width: 0.4rem;
-            height: 0.4rem;
-            border-radius: 50%;
+            margin: 0 0 1rem 0;
+            font-size: 1.1rem;
+            font-weight: 800;
         }
         .card ul {
-            padding: 0;
+            padding-left: 1.25rem;
+            font-size: 0.85rem;
             margin: 0;
-            list-style: none;
-            font-size: 0.8rem;
-            opacity: 0.8;
+            opacity: 0.85;
         }
-        .card li { margin-bottom: 0.25rem; }
-        
-        .pillar {
+        .shoutout {
+            background: #EF444408;
+            border: 1px solid #EF444420;
+            color: #EF4444;
             padding: 1.5rem;
-            background: rgba(0,0,0,0.02);
-            border: 1px solid var(--border);
             border-radius: 1rem;
+            font-weight: 600;
             font-size: 0.9rem;
         }
-        .pillar strong { color: var(--primary); }
-        
         table {
             width: 100%;
             border-collapse: collapse;
-            border: 1px solid var(--border);
-            border-radius: 1rem;
-            overflow: hidden;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
         }
         th, td {
             text-align: left;
-            padding: 1rem;
+            padding: 1.25rem;
             border-bottom: 1px solid var(--border);
         }
-        th {
-            background: rgba(0,0,0,0.02);
-            font-size: 0.65rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1rem;
-            color: var(--secondary);
-        }
-        .mono {
-            font-family: monospace;
-            font-weight: 700;
-            color: var(--primary);
-        }
-        .banner {
-            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        th { font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1rem; color: var(--secondary); }
+        .footer-banner {
+            background: var(--primary);
             color: white;
-            padding: 2.5rem;
-            border-radius: 1.5rem;
-        }
-        .banner h2 { color: white; margin-bottom: 1rem; }
-        .banner ul { list-style: none; padding: 0; }
-        .banner li { margin-bottom: 0.75rem; display: flex; gap: 0.5rem; font-size: 0.9rem; }
-        footer {
-            border-top: 1px solid var(--border);
-            padding-top: 3rem;
+            padding: 3rem;
+            border-radius: 2rem;
             text-align: center;
-            color: var(--secondary);
-            font-size: 0.9rem;
         }
-        a { color: var(--primary); text-decoration: none; font-weight: 700; }
-        a:hover { text-decoration: underline; }
+        .footer-banner h3 { font-size: 2rem; margin-top: 0; }
+        footer {
+            margin-top: 5rem;
+            padding-top: 3rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--secondary);
+        }
+        a { color: var(--primary); font-weight: 700; text-decoration: none; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <div class="badge">Extreme Disclosure Edition: April 2026</div>
-            <h1>Privacy Policy</h1>
-            <p class="subtitle">Complete transparency on Links, Orders, Subscriptions, and Workspace telemetry.</p>
+            <div class="badge">Chrome Web Store Compliance 2026</div>
+            <h1>Privacy Disclosure</h1>
+            <p class="subtitle">A full mapping of data collection, processing, storage, and sharing.</p>
         </header>
 
-        <!-- PILLAR 1: COLLECTION -->
-        <section id="collection">
+        <!-- 1. COLLECTION -->
+        <section>
             <div class="section-header">
                 <div class="number">1</div>
-                <h2>Data Collection Granularity</h2>
+                <h2>Detailed Data Collection</h2>
             </div>
             <div class="grid">
                 <div class="card">
-                    <h3><span class="dot" style="background:#3B82F6"></span>Identity & Account</h3>
+                    <h3>Account Identity</h3>
                     <ul>
-                        <li>• Google ID (Sync Anchor)</li>
-                        <li>• Email (Order verification)</li>
-                        <li>• Profile Name & Photo URL</li>
+                        <li>Google Account ID & Email Address</li>
+                        <li>User Profile Name & Avatar</li>
+                        <li>Authentication Session Tokens</li>
                     </ul>
                 </div>
                 <div class="card">
-                    <h3><span class="dot" style="background:#10B981"></span>Gateway Links</h3>
+                    <h3>Dashboard Objects</h3>
                     <ul>
-                        <li>• URL & Page Hostname</li>
-                        <li>• Custom Web Titles</li>
-                        <li>• User-uploaded Favicons</li>
-                        <li>• Layout/Group organization</li>
+                        <li>Canonical Website URLs & Hostnames</li>
+                        <li>User-defined Titles & Link Labels</li>
+                        <li>Custom Favicon Uploads & Storage Paths</li>
                     </ul>
                 </div>
                 <div class="card">
-                    <h3><span class="dot" style="background:#F59E0B"></span>Commerce & Orders</h3>
+                    <h3>Financial & Records</h3>
                     <ul>
-                        <li>• Subscription Status (Pro/Free)</li>
-                        <li>• Redemption Codes Used</li>
-                        <li>• Plan Expiry Timestamps</li>
-                        <li>• Order Transaction IDs</li>
+                        <li>Subscription Tier & Renewal Status</li>
+                        <li>Redemption Code Usage History</li>
+                        <li>Transactional Reference IDs (Anchors)</li>
                     </ul>
                 </div>
                 <div class="card">
-                    <h3><span class="dot" style="background:#8B5CF6"></span>Workspace Metadata</h3>
+                    <h3>Environmental Context</h3>
                     <ul>
-                        <li>• Last Active (Heartbeat)</li>
-                        <li>• Return Time/Baselines</li>
-                        <li>• Language/Theme overrides</li>
-                        <li>• Tab & Audio telemetry</li>
+                        <li>Heartbeat Timestamps (Last Active)</li>
+                        <li>Tab counts & Multimedia status</li>
+                        <li>App settings (Theme, Language)</li>
                     </ul>
                 </div>
             </div>
         </section>
 
-        <!-- PILLAR 2: PURPOSE -->
-        <section id="processing">
+        <!-- 2. PROCESSING -->
+        <section>
             <div class="section-header">
                 <div class="number">2</div>
-                <h2>Processing & Purpose</h2>
+                <h2>Data Processing Purpose</h2>
             </div>
-            <table>
-                <thead>
-                    <tr><th>Data Group</th><th>Processing Rationale</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td>Gateways</td><td>Synchronizing your customized shortcuts across all browser instances.</td></tr>
-                    <tr><td>Membership</td><td>Granting Pro features and validating redeemed promotional codes.</td></tr>
-                    <tr><td>Environment</td><td>Adjusting AI companion empathy based on work pace and return frequency.</td></tr>
-                    <tr><td>Mood Patterns</td><td>Detecting 'Late Night Overwork' to provide gentle psychological support.</td></tr>
-                </tbody>
-            </table>
-        </section>
-
-        <!-- PILLAR 3: STORAGE -->
-        <section id="storage">
-            <div class="section-header">
-                <div class="number">3</div>
-                <h2>Storage & Retention Policy</h2>
-            </div>
-            <div class="grid">
-                <div class="card">
-                    <h3>Cloud Storage</h3>
-                    <div style="font-size: 0.85rem;">Account settings, Links, and Membership data are encrypted and stored in **Supabase** (Google Cloud Infrastructure).</div>
-                </div>
-                <div class="card">
-                    <h3>Local Storage</h3>
-                    <div style="font-size: 0.85rem;">Sensitive records like mood, notes, and local activity caches are stored in **IndexedDB** on your physical hard drive.</div>
-                </div>
-            </div>
-            <p style="margin-top:1.5rem; font-size:0.85rem; color:var(--secondary);">Activity records and generation caches are automatically purged every **30 days**.</p>
-        </section>
-
-        <section id="limited-use">
-            <div class="banner">
-                <h2>Limited Use Compliance</h2>
-                <ul>
-                    <li>✅ We adhere to the Chrome Web Store Limited Use policy.</li>
-                    <li>✅ No data sharing with third-party ad networks.</li>
-                    <li>✅ No human interaction with user data except for support.</li>
-                    <li>✅ Strictly no use for credit or marketing purposes.</li>
+            <div class="box">
+                <p>We process data for the following exclusive reasons:</p>
+                <ul style="padding-left:1.5rem; font-size:0.95rem;">
+                    <li style="margin-bottom:1rem;"><strong>Cross-Device Sync:</strong> Matching dashboard objects across multiple browser instances using your Unique ID.</li>
+                    <li style="margin-bottom:1rem;"><strong>AI Calibrated Empathy:</strong> Analyzing environmental telemetry to adjust AI response tone based on work intensity.</li>
+                    <li style="margin-bottom:1rem;"><strong>Membership Validation:</strong> Processing redeem codes and subscriptions to unlock premium capabilities.</li>
+                    <li><strong>Mood Archetyping:</strong> Analyzing local patterns to surface well-being trends (e.g. night-owl work cycles).</li>
                 </ul>
             </div>
         </section>
 
+        <!-- 3. STORAGE & RETENTION -->
+        <section>
+            <div class="section-header">
+                <div class="number">3</div>
+                <h2>Storage, Security & Retention</h2>
+            </div>
+            <div class="grid">
+                <div class="box" style="margin-bottom:0;">
+                    <h3 style="margin-top:0;">Cloud Storage</h3>
+                    <p style="font-size:0.9rem;">Settings, links, and identity are stored on <strong>Supabase (managed via Google Cloud)</strong> with AES-256 encryption at rest.</p>
+                </div>
+                <div class="box" style="margin-bottom:0;">
+                    <h3 style="margin-top:0;">Local Retention</h3>
+                    <p style="font-size:0.9rem;">Sensitive records are stored in <strong>IndexedDB</strong>. Activity logs are purged every <strong>30 days</strong>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. SHARING -->
+        <section>
+            <div class="section-header">
+                <div class="number">4</div>
+                <h2>Sharing & Third-Party Transfers</h2>
+            </div>
+            <div class="shoutout">
+                STRICT POLICY: We do NOT share your data with advertisers, data brokers, or marketing networks. Transfers are limited to core infrastructure (Google, Supabase, Vercel) for performance and operations only.
+            </div>
+        </section>
+
+        <!-- 5. RIGHTS -->
+        <section>
+            <div class="section-header">
+                <div class="number">5</div>
+                <h2>Data Deletion & User Rights</h2>
+            </div>
+            <p>Users maintain full sovereignty over their data. You can erase local caches via Settings. To request a full account wipe from our cloud database, email <a href="mailto:support@startlytab.com">support@startlytab.com</a>. Requests are processed within 7 business days.</p>
+        </section>
+
+        <div class="footer-banner">
+            <h3>Limited Use Compliant</h3>
+            <p>We strictly adhere to Chrome's User Data and Limited Use policies. No data is used for credit-worthiness or public model training.</p>
+        </div>
+
         <footer>
-            <p>Transparency is our commitment.</p>
-            <a href="mailto:support@startlytab.com">support@startlytab.com</a>
-            <p style="font-size: 0.6rem; margin-top: 2rem; opacity:0.5;">© 2026 STARTLYTAB. CO-PILOTED BY HUMANITY.</p>
+            <p>© 2026 StartlyTab. Co-pilot for the digital soul.</p>
+            <p><a href="mailto:support@startlytab.com">support@startlytab.com</a></p>
         </footer>
     </div>
 </body>
