@@ -20,54 +20,74 @@ const PrivacyPolicy: React.FC = () => {
                 <section id="collection" className="space-y-6">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">1</div>
-                        <h2 className="text-2xl font-bold">Data Collection Disclosure</h2>
+                        <h2 className="text-2xl font-bold">Comprehensive Data Collection Disclosure</h2>
                     </div>
-                    <p className="text-sm opacity-80 italic">We collect the following data to provide core product functionality:</p>
+                    <p className="text-sm opacity-80 italic">We disclose every data point collected to provide a seamless, synchronized, and personalized experience:</p>
                     
                     <div className="grid md:grid-cols-2 gap-6">
-                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm transition-all hover:shadow-md">
+                        {/* 1.1 Private Identity */}
+                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm">
                             <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                                Identifiable Information
+                                Identity & Account
                             </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2"><strong>Data:</strong> Google Account ID, Email Address, Profile Name.</p>
-                            <p className="text-sm"><strong>Purpose:</strong> Used for account identity, cross-device synchronization, and verifying subscription status.</p>
+                            <ul className="text-sm space-y-1 opacity-90">
+                                <li>• Google Account ID (Sync Anchor)</li>
+                                <li>• Email Address (Critical for order recovery)</li>
+                                <li>• Profile Name & Avatar URL</li>
+                            </ul>
                         </div>
 
-                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm transition-all hover:shadow-md">
+                        {/* 1.2 Custom Shortcuts */}
+                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm">
                             <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                Location Data
+                                Custom Links (Gateways)
                             </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2"><strong>Data:</strong> Regional location derived from IP address.</p>
-                            <p className="text-sm"><strong>Purpose:</strong> To localize search results, weather updates, and regional time-relevant content in the new tab.</p>
+                            <ul className="text-sm space-y-1 opacity-90">
+                                <li>• Website URLs (Canonicalized)</li>
+                                <li>• Custom Titles (User-defined names)</li>
+                                <li>• Custom Icons (Uploaded images/paths)</li>
+                                <li>• Layout Data (Groups, sorting, folders)</li>
+                            </ul>
                         </div>
 
-                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm transition-all hover:shadow-md">
-                            <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                                User Activity & Environmental Context
-                            </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2"><strong>Data:</strong> Browsing history snapshots, tab count, audio playback status, idle time, and download status.</p>
-                            <p className="text-sm"><strong>Purpose:</strong> To power "Quick Visit" and provide contextually-aware AI responses (e.g., acknowledging if you are listening to music or working late).</p>
-                        </div>
-
-                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm transition-all hover:shadow-md">
+                        {/* 1.3 Subscription & Commerce */}
+                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm">
                             <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                Website Content & Smart Cache
+                                Membership & Commerce
                             </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2"><strong>Data:</strong> Text from active tabs and local generation cache.</p>
-                            <p className="text-sm"><strong>Purpose:</strong> Processed for user-initiated AI summaries. We use a 'Local Smart Cache' to store recent generations for up to 30 days to reduce latency and API costs.</p>
+                            <ul className="text-sm space-y-1 opacity-90">
+                                <li>• Subscription Tier (Free/Pro/Member)</li>
+                                <li>• Redemption Records (Redeem codes used)</li>
+                                <li>• Membership Expiry & Renewal dates</li>
+                                <li>• Payment/Order Anchors (Supabase ID)</li>
+                            </ul>
                         </div>
 
-                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm transition-all hover:shadow-md md:col-span-2 text-indigo-900 dark:text-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/20">
+                        {/* 1.4 Product Usage Context */}
+                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm">
+                            <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                Session & Environment
+                            </h3>
+                            <ul className="text-sm space-y-1 opacity-90">
+                                <li>• Return Time (Heartbeat timestamp)</li>
+                                <li>• Tab Count & Audio/Mute status</li>
+                                <li>• App Settings (Language, Theme, AI persona)</li>
+                                <li>• Pinned Content (Last liked AI quotes)</li>
+                            </ul>
+                        </div>
+
+                        {/* 1.5 Sensitive User Content */}
+                        <div className="p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm md:col-span-2 text-indigo-900 dark:text-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/20">
                             <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                                Personal Records & Emotional Intelligence
+                                Psychological Records & Mood Data
                             </h3>
-                            <p className="text-sm mb-2"><strong>Data:</strong> Mood logs (values/feelings), mental well-being patterns (e.g., 'Late Night Overwork' detection), personal notes, and to-do lists.</p>
-                            <p className="text-sm font-medium"><strong>Purpose:</strong> Core psychological tracking to provide mental well-being reports, baseline analysis, and personalized coaching. These are stored locally and encrypted.</p>
+                            <p className="text-sm mb-2"><strong>Data:</strong> Mood logs (values/feelings), mental well-being patterns (e.g., 'Late Night Overwork'), personal notes, and to-do lists.</p>
+                            <p className="text-sm font-medium"><strong>Privacy Note:</strong> This data is LOCAL-FIRST. While it may sync to your private cloud bucket via Supabase for multi-device access, it is never used for external analytics or training.</p>
                         </div>
                     </div>
                 </section>
@@ -76,17 +96,36 @@ const PrivacyPolicy: React.FC = () => {
                 <section id="processing" className="space-y-6">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">2</div>
-                        <h2 className="text-2xl font-bold">Data Processing Disclosure</h2>
+                        <h2 className="text-2xl font-bold">Data Processing & Purpose</h2>
                     </div>
-                    <div className="space-y-4 text-sm text-gray-600 dark:text-gray-400">
-                        <p>We process your data according to the following principles:</p>
-                        <ul className="list-disc pl-5 space-y-2">
-                            <li><strong>Local Processing:</strong> Browsing history, mood patterns, and environmental sensors (tab count, idle time) are processed locally. We derive "Patterns" (like an afternoon dip) on your device to ensure privacy.</li>
-                            <li><strong>AI Personalization:</strong> When you request AI interaction, we send anonymized environmental context (e.g., "5 tabs open", "working for 2 hours") to the LLM to make its responses feel more human and relevant.</li>
-                            <li><strong>No Public Training:</strong> Data sent to AI features is never used to train public machine learning models and is flushed after each session.</li>
-                        </ul>
+                    <div className="overflow-hidden border border-gray-200 dark:border-white/10 rounded-2xl">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 uppercase text-[10px] tracking-widest font-bold">
+                                <tr>
+                                    <th className="px-6 py-4">Data Pillar</th>
+                                    <th className="px-6 py-4">Core Processing Purpose</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                                {
+                                    [
+                                        { k: "Gateways", v: "Syncing your personalized dashboard across browser instances." },
+                                        { k: "Commerce", v: "Granting Pro feature access and validating redeem codes." },
+                                        { k: "Language", v: "Applying translations and regional setting overrides." },
+                                        { k: "Environment", v: "Informing the 'Sense' of AI generation (detecting work pace)." },
+                                        { k: "Session", v: "Determining 'Return Time' to calculate 48h emotional baselines." }
+                                    ].map((item, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
+                                            <td className="px-6 py-4 font-bold text-indigo-600 dark:text-indigo-400">{item.k}</td>
+                                            <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{item.v}</td>
+                                        </tr>
+                                    ))
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 </section>
+
 
                 {/* 3. DATA STORAGE & RETENTION */}
                 <section id="storage" className="space-y-6">
