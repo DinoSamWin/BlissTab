@@ -16,6 +16,7 @@ import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabase
 import { EmotionType, TrackType } from './types';
 import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns, getEmotionLogs } from './services/emotionService';
 import { updateTrackAffinity } from './services/recommendationEngine';
+import { startTabPresence, getWebTabCount } from './services/tabPresenceService';
 import { useUser } from './contexts/UserContext';
 import Settings from './components/Settings';
 import i18n from './i18n';
@@ -33,10 +34,24 @@ import TheRhythmBlueprint from './components/TheRhythmBlueprint';
 import FAQScreen from './components/FAQScreen';
 import JumpStarLoading from './components/common/JumpStarLoading';
 import SemanticFooter from './components/SemanticFooter';
+import SubscriptionPage from './components/SubscriptionPage';
 import { Activity, Sparkles } from 'lucide-react';
-
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
+
+const getSystemLanguage = (): string => {
+  if (typeof window === 'undefined') return 'English';
+  const lang = navigator.language.toLowerCase();
+  if (lang.startsWith('zh')) return 'Chinese (Simplified)';
+  if (lang.startsWith('ja')) return 'Japanese';
+  if (lang.startsWith('ko')) return 'Korean';
+  if (lang.startsWith('de')) return 'German';
+  if (lang.startsWith('fr')) return 'French';
+  if (lang.startsWith('es')) return 'Spanish';
+  if (lang.startsWith('it')) return 'Italian';
+  if (lang.startsWith('pt')) return 'Portuguese';
+  return 'English';
+};
 
 // --- SHARED UI COMPONENTS (EXTRACTED) ---
 
@@ -201,7 +216,7 @@ const App: React.FC = () => {
             links: REGIONAL_DEFAULT_LINKS['GLOBAL'], // Temporary default, updated in useEffect
             requests: DEFAULT_REQUESTS,
             pinnedSnippetId: null,
-            language: parsed.language || 'English',
+            language: parsed.language || getSystemLanguage(),
             user: savedUser,
             theme: parsed.theme || systemTheme,
             selectedPersona: parsed.selectedPersona || 'soulmate',
@@ -212,6 +227,7 @@ const App: React.FC = () => {
           // Use saved user from authService if available, otherwise null
           return {
             ...parsed,
+            language: parsed.language || getSystemLanguage(),
             user: savedUser,
             selectedPersona: parsed.selectedPersona || 'soulmate'
           };
@@ -223,7 +239,7 @@ const App: React.FC = () => {
       links: REGIONAL_DEFAULT_LINKS['GLOBAL'], // Temporary default, updated in useEffect
       requests: DEFAULT_REQUESTS,
       pinnedSnippetId: null,
-      language: 'English',
+      language: getSystemLanguage(),
       user: savedUser, // Use saved user if available
       theme: systemTheme,
       selectedPersona: 'soulmate'
@@ -284,6 +300,8 @@ const App: React.FC = () => {
   const { user: contextUser, setUser: setContextUser, isAuthChecking: isUserContextChecking } = useUser();
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
+  const [currentNamespace, setCurrentNamespace] = useState<string | null>(null); // For local debugging
+  const sessionRefreshCountRef = useRef<number>(0); // Bug #5 fix: per-session refresh counter
 
   const isAuthenticated = !!appState.user;
   const isVerifiedUser = !!appState.user && appState.user.emailVerified === true;
@@ -316,12 +334,21 @@ const App: React.FC = () => {
   const [lastClickedEmotion, setLastClickedEmotion] = useState<EmotionType | null>(() => {
     return (localStorage.getItem('focus_tab_last_emotion') as EmotionType) || 'neutral';
   });
+  // Sync ref for previousEmotion - avoids React async state delay (Bug #1 root cause fix)
+  const lastClickedEmotionRef = useRef<EmotionType | null>(
+    (localStorage.getItem('focus_tab_last_emotion') as EmotionType) || null
+  );
   const [isCompassHovered, setIsCompassHovered] = useState(false);
   const [isAuraActive, setIsAuraActive] = useState(false);
   const [compassHoverCount, setCompassHoverCount] = useState(0);
   const [hasInteractedWithCompass, setHasInteractedWithCompass] = useState<boolean>(() => {
     return localStorage.getItem('focus_tab_has_interacted_emotion') === 'true';
   });
+
+  // Start web tab presence heartbeat once (web-env fallback for tab count)
+  useEffect(() => {
+    startTabPresence();
+  }, []);
 
   const [useTypewriter, setUseTypewriter] = useState(false);
   const [typewriterKey, setTypewriterKey] = useState(0);
@@ -706,7 +733,7 @@ const App: React.FC = () => {
 
 
 
-  const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false, clickedEmotion?: EmotionType) => {
+  const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false, clickedEmotion?: EmotionType, isUserRefresh: boolean = false, previousEmotionOverride?: EmotionType | null) => {
     if (isGenerating) {
       console.warn('[App] Request rejected: isGenerating is TRUE');
       return;
@@ -863,16 +890,23 @@ const App: React.FC = () => {
           console.warn('[App] Browser extension API access failed', e);
         }
       }
-
+      // --- CRITICAL: Increment refresh count BEFORE building context so router sees correct count ---
       const idleTimeSeconds = Math.floor((Date.now() - lastActivityTimeRef.current) / 1000);
+      if (isUserRefresh) {
+        sessionRefreshCountRef.current += 1;
+      }
 
       // Calculate Router Context
       const now = new Date();
       const context: any = {
-        local_time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), // HH:MM
+        local_time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         weekday: now.getDay(),
         is_weekend: now.getDay() === 0 || now.getDay() === 6,
         session_count_today: getSessionCountToday(history),
+        refresh_count_session: sessionRefreshCountRef.current, // now has correct post-increment value
+        previous_emotion: previousEmotionOverride !== undefined
+            ? previousEmotionOverride
+            : (lastClickedEmotion || undefined),
         minutes_since_last: getMinutesSinceLast(history),
         late_night_streak: getLateNightStreak(history),
         work_mode_disabled: false,
@@ -884,23 +918,25 @@ const App: React.FC = () => {
         clickedEmotion: clickedEmotion,
         emotionalBaseline: calculateEmotionalBaseline(),
         emotionalPatterns: analyzeEmotionalPatterns(),
-        bypassPool: !!clickedEmotion, // Only bypass pool for emotion clicks
+        bypassPool: !!clickedEmotion,
         deepObservationMode: getTodayEmotionClickCount() > 5,
-        // V4.0 Digital Context
-        tab_count: tabCount,
-        audio_playing: audioPlaying,
-        is_muted: isMuted,
-        is_fullscreen: isFullscreen,
-        window_state: windowState,
-        idle_time_seconds: idleTimeSeconds,
-        download_active: downloadActive,
-        selectedPersona: appState.selectedPersona || 'soulmate',
       };
+      // V4.0 Digital Context
+      const webTabCount = getWebTabCount();
+      const resolvedTabCount = tabCount !== undefined ? tabCount : (webTabCount > 0 ? webTabCount : undefined);
+      context.tab_count = resolvedTabCount;
+      context.audio_playing = audioPlaying;
+      context.is_muted = isMuted;
+      context.is_fullscreen = isFullscreen;
+      context.window_state = windowState;
+      context.idle_time_seconds = idleTimeSeconds;
+      context.download_active = downloadActive;
+      context.selectedPersona = appState.selectedPersona || 'soulmate';
 
-      // --- NORMAL MODE: Real AI Generation ---
-      const response = await generateSnippet(context);
+      const response = await generateSnippet(context, isUserRefresh);
       const result = response.text;
       const plan = response.plan;
+      setCurrentNamespace(response.namespace || null);
 
       // Only apply the latest in-flight request result
       if (requestId !== snippetRequestIdRef.current) return;
@@ -928,6 +964,11 @@ const App: React.FC = () => {
       setCurrentSnippet(result);
       setCurrentSnippetIsMemoryEcho(plan?.cached_item?.is_memory_echo || false);
       setCurrentSnippetEchoType(plan?.cached_item?.echo_type);
+
+      if ((plan as any)?.reset_refresh_count) {
+          console.log('[App] Macro environment shift detected by Backend. Resetting session refresh sequence.');
+          sessionRefreshCountRef.current = 0;
+      }
 
       // Only bump revealKey for generic refreshes to trigger 'animate-reveal'
       // For emotions, we use the internal Typewriter/reveal system
@@ -1614,6 +1655,9 @@ const App: React.FC = () => {
 
     // 2. Lock UI & Selected State
     setIsEmotionFrozen(true);
+    // Capture previous BEFORE updating (sync ref ensures no async delay)
+    const previousEmotionBeforeClick = lastClickedEmotionRef.current;
+    lastClickedEmotionRef.current = emotion; // update ref immediately
     setLastClickedEmotion(emotion);
     localStorage.setItem('focus_tab_last_emotion', emotion);
 
@@ -1650,7 +1694,7 @@ const App: React.FC = () => {
 
     // 7. Fetch with Bypass & Generate
     // We already set useTypewriter to true and incremented typewriterKey above
-    await fetchRandomSnippet(true, emotion);
+    await fetchRandomSnippet(true, emotion, false, previousEmotionBeforeClick);
 
     // Ensure users can actually read the sensing prompt
     const elapsed = Date.now() - senseStart;
@@ -2152,7 +2196,7 @@ const App: React.FC = () => {
                     ${(isCompassHovered && !isEmotionFrozen) ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}
                       >
                         <button
-                          onClick={() => fetchRandomSnippet()}
+                          onClick={() => fetchRandomSnippet(false, undefined, true)}
                           disabled={isGenerating || isEmotionFrozen}
                           className={`w-[280px] h-[64px] rounded-full font-bold uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-black/5 flex items-center justify-center transition-all
                         ${isGenerating || isEmotionFrozen
@@ -2425,6 +2469,7 @@ const App: React.FC = () => {
           <VentingModePromo onRequireLogin={() => setIsLoginModalOpen(true)} />
           <TheRhythmBlueprint onRequireLogin={() => setIsLoginModalOpen(true)} />
           <FAQScreen onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <SubscriptionPage user={null} onRequireLogin={() => setIsLoginModalOpen(true)} />
           <SemanticFooter />
         </>
       )}

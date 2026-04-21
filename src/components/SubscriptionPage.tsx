@@ -7,6 +7,7 @@ import { Check, Diamond, Briefcase, Zap, Loader2 } from 'lucide-react';
 interface SubscriptionPageProps {
   user: User | null;
   onSubscriptionUpdate?: (user: User) => void;
+  onRequireLogin?: () => void;
 }
 
 // UI-level plans: Free, Pro (monthly/yearly), Lifetime (one-time)
@@ -107,7 +108,7 @@ const PLANS: PlanMeta[] = [
   },
 ];
 
-const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptionUpdate }) => {
+const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptionUpdate, onRequireLogin }) => {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<DisplayPlanId | null>(null);
   const [currentPlan, setCurrentPlan] = useState<'free' | 'pro' | 'lifetime'>('free');
@@ -115,7 +116,10 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
 
   // Fetch current subscription status
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+       setCurrentPlan('free');
+       return;
+    }
 
     fetchSubscriptionState(user.id).then((data) => {
       // Map existing "lifetime" plan to "career" or now just default to "pro" behavior mentally,
@@ -196,7 +200,16 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
   }, [user, onSubscriptionUpdate]);
 
   const handleSelectPlan = async (planId: DisplayPlanId) => {
-    if (!user?.id || !onSubscriptionUpdate) return;
+    if (!user?.id) {
+       if (onRequireLogin) {
+         // Save the intention so user gets redirected to pricing after login? Or just show login modal.
+         // Let's set a flag that after login we redirect to setup or pricing
+         sessionStorage.setItem('redirect_after_login_to_pricing', 'true');
+         onRequireLogin();
+       }
+       return;
+    }
+    if (!onSubscriptionUpdate) return;
     if (planId === 'free') return; // Free is default
 
     // Prevent re-subscribing to same plan (simplified logic)
@@ -281,13 +294,13 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#AECFE8] to-[#F0F8FF] font-sans text-[#333]">
+    <div className="w-full relative z-[20] min-h-screen font-sans text-[#333] pricing-bg">
       {/* Header Section */}
-      <div className="pt-16 pb-12 text-center text-white">
-        <h1 className="text-4xl md:text-5xl font-medium mb-3 tracking-tight drop-shadow-sm">
+      <div className="pt-24 pb-16 text-center text-white">
+        <h1 className="text-4xl md:text-5xl font-medium mb-4 tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
           Pick your perfect plan
         </h1>
-        <p className="text-white/90 text-sm md:text-base font-medium tracking-wide">
+        <p className="text-white/95 text-sm md:text-base font-medium tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
           Find the one that fits your goals.
         </p>
 
@@ -332,7 +345,7 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
             // Free plan has glass effect, others are solid white
             // Update: Free plan now uses dark text for better visibility on subtle background
             const cardClasses = isFree
-              ? 'bg-black/5 backdrop-blur-md border border-white/20 text-gray-900'
+              ? 'bg-white/40 backdrop-blur-md border border-white/40 text-gray-900'
               : 'bg-white text-gray-800 shadow-xl';
 
             const isPlanLoading = loadingPlan === plan.id;

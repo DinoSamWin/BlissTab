@@ -30,6 +30,13 @@ const GuestRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
   if (user) {
     if (!user.emailVerified) return <Navigate to="/verify-email" replace />;
+    
+    // Redirect to subscription if they clicked a pricing plan before logging in
+    if (sessionStorage.getItem('redirect_after_login_to_pricing') === 'true') {
+      sessionStorage.removeItem('redirect_after_login_to_pricing');
+      return <Navigate to="/subscription" replace />;
+    }
+    
     return <Navigate to="/cove" replace />;
   }
   return <>{children}</>;
@@ -90,6 +97,13 @@ const RootRedirect: React.FC = () => {
   if (user) {
     // If logged in but NOT verified, allow them to stay on the landing page (App)
     if (!user.emailVerified) return <App key="root-app" />;
+    
+    // Redirect to subscription if they clicked a pricing plan before logging in
+    if (sessionStorage.getItem('redirect_after_login_to_pricing') === 'true') {
+      sessionStorage.removeItem('redirect_after_login_to_pricing');
+      return <Navigate to="/subscription" replace />;
+    }
+    
     return <Navigate to="/cove" replace />;
   }
   return <App key="root-app" />;
