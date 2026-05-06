@@ -31,3 +31,11 @@ dist-ssr
 
 # Vercel
 .vercel
+focustab.crx
+focustab-extension.zip
+public/focustab.crx
+
+*.zip
+*.crx
+dist_extension/
+dist/

@@ -149,6 +149,7 @@ export interface PerspectiveRouterContext {
   idle_time_seconds?: number;
   download_active?: boolean;
   selectedPersona?: PersonaType;
+  allow_context_sensing?: boolean;
 }
 
 export interface PerspectivePoolItem {

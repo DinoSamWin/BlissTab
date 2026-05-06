@@ -168,114 +168,168 @@
     <div class="container">
         <header>
             <div class="badge">Chrome Web Store Compliance 2026</div>
-            <h1>Privacy Disclosure</h1>
-            <p class="subtitle">A full mapping of data collection, processing, storage, and sharing.</p>
+            <h1>Privacy Policy</h1>
+            <p class="subtitle">How StartlyTab collects, uses, stores, and shares data.</p>
         </header>
 
-        <!-- 1. COLLECTION -->
         <section>
             <div class="section-header">
                 <div class="number">1</div>
-                <h2>Detailed Data Collection</h2>
+                <h2>What We Collect</h2>
             </div>
             <div class="grid">
                 <div class="card">
-                    <h3>Account Identity</h3>
+                    <h3>Account & Sign-in Data</h3>
                     <ul>
-                        <li>Google Account ID & Email Address</li>
-                        <li>User Profile Name & Avatar</li>
-                        <li>Authentication Session Tokens</li>
+                        <li>Email address, account ID, display name, and avatar</li>
+                        <li>Authentication state and session data needed for sign-in</li>
+                        <li>Subscription and account status returned by our backend</li>
                     </ul>
                 </div>
                 <div class="card">
-                    <h3>Dashboard Objects</h3>
+                    <h3>Saved Content & Settings</h3>
                     <ul>
-                        <li>Canonical Website URLs & Hostnames</li>
-                        <li>User-defined Titles & Link Labels</li>
-                        <li>Custom Favicon Uploads & Storage Paths</li>
+                        <li>Saved shortcuts, URLs, titles, categories, and custom labels</li>
+                        <li>Custom gateway logos and related storage paths</li>
+                        <li>Theme, language, search engine, persona, and snippet preferences</li>
                     </ul>
                 </div>
                 <div class="card">
-                    <h3>Financial & Records</h3>
+                    <h3>User-Triggered Browser Data</h3>
                     <ul>
-                        <li>Subscription Tier & Renewal Status</li>
-                        <li>Redemption Code Usage History</li>
-                        <li>Transactional Reference IDs (Anchors)</li>
+                        <li>Bookmarks, only when you use bookmark import</li>
+                        <li>Current tab URL, title, and favicon, only when you add the active page</li>
+                        <li>Page title and icon requests for websites you save as shortcuts</li>
                     </ul>
                 </div>
                 <div class="card">
-                    <h3>Environmental Context</h3>
+                    <h3>Optional Context-Aware Signals</h3>
                     <ul>
-                        <li>Heartbeat Timestamps (Last Active)</li>
-                        <li>Tab counts & Multimedia status</li>
-                        <li>App settings (Theme, Language)</li>
+                        <li>Open tab count, audio-playing state, download-in-progress state</li>
+                        <li>Focused window state, battery level, and idle time on this page</li>
+                        <li>These signals are collected only if you enable context-aware mode, and are used as aggregated signals rather than a list of all open tab URLs</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>Well-Being & Local History</h3>
+                    <ul>
+                        <li>Emotion selections you explicitly click in the UI</li>
+                        <li>Locally saved perspective history and related timestamps</li>
+                        <li>Local metadata caches used to reduce repeat requests</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>Billing & Support Data</h3>
+                    <ul>
+                        <li>Subscription plan, redemption status, and transaction references</li>
+                        <li>Customer email used for payment portal and billing support</li>
+                        <li>Transactional email delivery status for verification and password reset</li>
                     </ul>
                 </div>
             </div>
         </section>
 
-        <!-- 2. PROCESSING -->
         <section>
             <div class="section-header">
                 <div class="number">2</div>
-                <h2>Data Processing Purpose</h2>
+                <h2>How We Use It</h2>
             </div>
             <div class="box">
-                <p>We process data for the following exclusive reasons:</p>
+                <p>StartlyTab uses data only to provide or improve its user-facing features:</p>
                 <ul style="padding-left:1.5rem; font-size:0.95rem;">
-                    <li style="margin-bottom:1rem;"><strong>Cross-Device Sync:</strong> Matching dashboard objects across multiple browser instances using your Unique ID.</li>
-                    <li style="margin-bottom:1rem;"><strong>AI Calibrated Empathy:</strong> Analyzing environmental telemetry to adjust AI response tone based on work intensity.</li>
-                    <li style="margin-bottom:1rem;"><strong>Membership Validation:</strong> Processing redeem codes and subscriptions to unlock premium capabilities.</li>
-                    <li><strong>Mood Archetyping:</strong> Analyzing local patterns to surface well-being trends (e.g. night-owl work cycles).</li>
+                    <li style="margin-bottom:1rem;"><strong>Sign-in and account management:</strong> authenticate you, keep you signed in, and restore your synced workspace.</li>
+                    <li style="margin-bottom:1rem;"><strong>Shortcut management:</strong> save, sync, import, edit, export, and display your saved links and custom logos.</li>
+                    <li style="margin-bottom:1rem;"><strong>Perspective generation:</strong> generate AI text using your selected language, active prompts, recent in-product history, and emotion selections. If you enable context-aware mode, optional browser-state signals may also be used. For this feature, StartlyTab is designed to use the summarized state itself, such as tab count or whether audio is playing, rather than the full URLs of all open tabs.</li>
+                    <li style="margin-bottom:1rem;"><strong>Billing and entitlements:</strong> verify subscriptions, redemption status, and payment-related access.</li>
+                    <li><strong>Security and operations:</strong> maintain caches, prevent account-sync issues, and send verification or password-reset emails.</li>
                 </ul>
             </div>
         </section>
 
-        <!-- 3. STORAGE & RETENTION -->
         <section>
             <div class="section-header">
                 <div class="number">3</div>
-                <h2>Storage, Security & Retention</h2>
+                <h2>Storage & Retention</h2>
             </div>
-            <div class="grid">
-                <div class="box" style="margin-bottom:0;">
-                    <h3 style="margin-top:0;">Cloud Storage</h3>
-                    <p style="font-size:0.9rem;">Settings, links, and identity are stored on <strong>Supabase (managed via Google Cloud)</strong> with AES-256 encryption at rest.</p>
-                </div>
-                <div class="box" style="margin-bottom:0;">
-                    <h3 style="margin-top:0;">Local Retention</h3>
-                    <p style="font-size:0.9rem;">Sensitive records are stored in <strong>IndexedDB</strong>. Activity logs are purged every <strong>30 days</strong>.</p>
-                </div>
+            <div class="box">
+                <ul style="padding-left:1.5rem; font-size:0.95rem;">
+                    <li style="margin-bottom:1rem;"><strong>On your device:</strong> StartlyTab stores app state, preferences, caches, emotion logs, and perspective history in local browser storage. Firebase authentication may also use IndexedDB persistence.</li>
+                    <li style="margin-bottom:1rem;"><strong>In the cloud:</strong> synced user data, subscription state, feedback submitted through our backend, and uploaded gateway logos may be stored in Supabase.</li>
+                    <li style="margin-bottom:1rem;"><strong>Cloud retention:</strong> account-linked synced records are generally kept while your account remains active and until you delete them or request deletion, unless a longer retention period is required for security, fraud prevention, or legal compliance.</li>
+                    <li style="margin-bottom:1rem;"><strong>Retention examples:</strong> local perspective history is trimmed to recent entries, emotion logs are kept for up to 30 days, and metadata caches expire automatically over time.</li>
+                    <li><strong>Security:</strong> data sent over the network is intended to use HTTPS/TLS. Access to synced cloud records is controlled by our backend and service-provider safeguards.</li>
+                </ul>
             </div>
         </section>
 
-        <!-- 4. SHARING -->
         <section>
             <div class="section-header">
                 <div class="number">4</div>
-                <h2>Sharing & Third-Party Transfers</h2>
+                <h2>Who Data Is Shared With</h2>
             </div>
-            <div class="shoutout">
-                STRICT POLICY: We do NOT share your data with advertisers, data brokers, or marketing networks. Transfers are limited to core infrastructure (Google, Supabase, Vercel) for performance and operations only.
+            <div class="shoutout" style="margin-bottom:1.5rem;">
+                We do not sell your personal data and we do not use it for personalized advertising, creditworthiness decisions, or data brokerage.
+            </div>
+            <div class="box">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Party</th>
+                            <th>Why Data May Be Shared</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Google / Firebase</td>
+                            <td>Google sign-in, Firebase authentication, and related account/session handling.</td>
+                        </tr>
+                        <tr>
+                            <td>Supabase</td>
+                            <td>Cloud sync, database records, storage for user-uploaded gateway logos, and backend functions.</td>
+                        </tr>
+                        <tr>
+                            <td>AI providers (such as DeepSeek, SiliconFlow, or ZhipuAI, depending on configuration)</td>
+                            <td>Generate AI perspectives using the prompts and selected context StartlyTab sends when you request generation, including optional aggregated browser-state signals if you enabled that mode.</td>
+                        </tr>
+                        <tr>
+                            <td>Creem</td>
+                            <td>Subscription checkout, billing portal access, and payment-related customer lookups.</td>
+                        </tr>
+                        <tr>
+                            <td>Resend</td>
+                            <td>Transactional emails such as verification and password reset messages.</td>
+                        </tr>
+                        <tr>
+                            <td>Websites you save or request metadata for</td>
+                            <td>When you add a shortcut, StartlyTab may request that page, its favicon, or related icon endpoints to fetch title or icon data.</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 
-        <!-- 5. RIGHTS -->
         <section>
             <div class="section-header">
                 <div class="number">5</div>
-                <h2>Data Deletion & User Rights</h2>
+                <h2>Your Choices</h2>
             </div>
-            <p>Users maintain full sovereignty over their data. You can erase local caches via Settings. To request a full account wipe from our cloud database, email <a href="mailto:support@startlytab.com">support@startlytab.com</a>. Requests are processed within 7 business days.</p>
+            <div class="box">
+                <ul style="padding-left:1.5rem; font-size:0.95rem;">
+                    <li style="margin-bottom:1rem;"><strong>Context-aware mode is optional:</strong> you can use StartlyTab in basic mode without enabling the optional browser-state signals described above.</li>
+                    <li style="margin-bottom:1rem;"><strong>Local data:</strong> you can remove local app data on this device by clearing your browser storage for StartlyTab or uninstalling the extension. Where available, StartlyTab settings may also help you reset local data.</li>
+                    <li style="margin-bottom:1rem;"><strong>Synced account data:</strong> if you want cloud data deleted, contact <a href="mailto:support@startlytab.com">support@startlytab.com</a>. We use that request to remove account-linked synced records that are not required to be retained for security, fraud prevention, or legal compliance.</li>
+                    <li><strong>Questions:</strong> if you need clarification about our data handling, contact us at <a href="mailto:support@startlytab.com">support@startlytab.com</a>.</li>
+                </ul>
+            </div>
         </section>
 
         <div class="footer-banner">
-            <h3>Limited Use Compliant</h3>
-            <p>We strictly adhere to Chrome's User Data and Limited Use policies. No data is used for credit-worthiness or public model training.</p>
+            <h3>Chrome Limited Use</h3>
+            <p>The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.</p>
         </div>
 
         <footer>
-            <p>© 2026 StartlyTab. Co-pilot for the digital soul.</p>
+            <p>Last updated: April 27, 2026</p>
             <p><a href="mailto:support@startlytab.com">support@startlytab.com</a></p>
         </footer>
     </div>

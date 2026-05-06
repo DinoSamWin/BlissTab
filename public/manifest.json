@@ -8,7 +8,6 @@
         "scripting",
         "management",
         "tabs",
-        "activeTab",
         "favicon",
         "identity",
         "downloads",
@@ -56,7 +55,7 @@
         }
     ],
     "content_security_policy": {
-        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://accounts.google.com https://*.googleapis.com https://*.firebaseapp.com https://*.firebase.com https://*.supabase.co https://open.bigmodel.cn https://api.siliconflow.cn https://api.deepseek.com https://cloud.umami.is https://workers.cloudflare.com;"
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://accounts.google.com https://*.googleapis.com https://*.firebaseapp.com https://*.firebase.com https://*.supabase.co https://open.bigmodel.cn https://api.siliconflow.cn https://api.deepseek.com;"
     },
     "externally_connectable": {
         "matches": [
@@ -64,6 +63,7 @@
             "https://startlytab.com/*"
         ]
     },
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx7b7uP0zZhaejAT9tN7cgtE+ToJ9lXzcAMmOdrCnW5iiVlSSsrbgILDkVTUMlbiil0thZWfuVBEpssZhQ/GK1A7R9przQXJfMKtZQZ26EMBJMDWcGoqYbeIPIJhXdp0J0/KrY68wlXqZBDwQA92OEpXvFeY5xbWr3wQyRlN+R8sLqS04wXzz5PSz8jNKMwNEDSoXVRSbu9jSNNgkSP9Q3VonPLnJKi9/SjEyBKdQegpi8NvH0fPy7Cf6cRIpBTMOZYFwDOAlVzcNtguZKlyucuPZr+t8Nqa72twBw8GO6BrMyy7RDxrm+FcXc+RLLkUICOrHiOlbAXgvqAEdtylKkwIDAQAB",
     "oauth2": {
         "client_id": "4260709449-hvmd55u8rt4vrfrh8sduqkcjr3f35gar.apps.googleusercontent.com",
         "scopes": [

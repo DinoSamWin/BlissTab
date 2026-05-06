@@ -12,10 +12,27 @@ import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
 import LoadingDemo from './components/LoadingDemo';
 import { User } from './types';
+import StoryPage from './pages/StoryPage';
 import { updateSubscriptionState } from './services/subscriptionService';
 import { UserProvider, useUser } from './contexts/UserContext';
 
 import JumpStarLoading from './components/common/JumpStarLoading';
+
+/**
+ * Ensures the page scrolls to top when a new route is navigated to,
+ * but allows the browser to restore scroll position when using back/forward buttons.
+ */
+const ScrollToTop: React.FC = () => {
+  const { pathname, action } = useLocation();
+
+  React.useEffect(() => {
+    if (action !== 'POP') {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, action]);
+
+  return null;
+};
 
 /**
  * Redirects already-authenticated users away from auth pages.
@@ -129,7 +146,9 @@ const SubscriptionRoute: React.FC = () => {
 
 const AppRoutes: React.FC = () => {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       {/* Root: send logged-in users to /cove, others to App (landing) */}
       <Route path="/" element={<RootRedirect />} />
 
@@ -149,10 +168,12 @@ const AppRoutes: React.FC = () => {
       <Route path="/echo-land" element={<EchoLand />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
+      <Route path="/stories/:slug" element={<StoryPage />} />
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </>
   );
 };
 

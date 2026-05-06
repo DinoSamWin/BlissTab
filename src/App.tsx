@@ -26,11 +26,12 @@ import IntegrationGateways from './components/IntegrationGateways';
 import ExtensionInstallPrompt from './components/ExtensionInstallPrompt';
 import { DevFeedbackUI } from './components/DevFeedbackUI';
 import DebugInfo from './components/DebugInfo';
+import PrivacyConsentModal from './components/PrivacyConsentModal';
 import SocialProof from './components/SocialProof';
 import LandingOptimization from './components/LandingOptimization';
-import DailyRhythm from './components/DailyRhythm';
-import VentingModePromo from './components/VentingModePromo';
-import TheRhythmBlueprint from './components/TheRhythmBlueprint';
+import FamiliarScenarios from './components/landing/FamiliarScenarios';
+import HowItHelps from './components/HowItHelps';
+import GentleCheckins from './components/landing/GentleCheckins';
 import FAQScreen from './components/FAQScreen';
 import JumpStarLoading from './components/common/JumpStarLoading';
 import SemanticFooter from './components/SemanticFooter';
@@ -38,6 +39,15 @@ import SubscriptionPage from './components/SubscriptionPage';
 import { Activity, Sparkles } from 'lucide-react';
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
+const CONTEXT_SENSING_CONSENT_KEY = 'startlytab_context_sensing_consent';
+
+type ContextSensingConsent = 'granted' | 'denied' | null;
+
+const readContextSensingConsent = (): ContextSensingConsent => {
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(CONTEXT_SENSING_CONSENT_KEY);
+  return stored === 'granted' || stored === 'denied' ? stored : null;
+};
 
 const getSystemLanguage = (): string => {
   if (typeof window === 'undefined') return 'English';
@@ -341,14 +351,16 @@ const App: React.FC = () => {
   const [isCompassHovered, setIsCompassHovered] = useState(false);
   const [isAuraActive, setIsAuraActive] = useState(false);
   const [compassHoverCount, setCompassHoverCount] = useState(0);
+  const [contextSensingConsent, setContextSensingConsent] = useState<ContextSensingConsent>(() => readContextSensingConsent());
   const [hasInteractedWithCompass, setHasInteractedWithCompass] = useState<boolean>(() => {
     return localStorage.getItem('focus_tab_has_interacted_emotion') === 'true';
   });
 
   // Start web tab presence heartbeat once (web-env fallback for tab count)
   useEffect(() => {
+    if (contextSensingConsent !== 'granted') return;
     startTabPresence();
-  }, []);
+  }, [contextSensingConsent]);
 
   const [useTypewriter, setUseTypewriter] = useState(false);
   const [typewriterKey, setTypewriterKey] = useState(0);
@@ -390,6 +402,8 @@ const App: React.FC = () => {
 
   // Activity Tracking
   useEffect(() => {
+    if (contextSensingConsent !== 'granted') return;
+
     const updateActivity = () => {
       lastActivityTimeRef.current = Date.now();
     };
@@ -403,7 +417,7 @@ const App: React.FC = () => {
       window.removeEventListener('mousemove', updateActivity);
       window.removeEventListener('touchstart', updateActivity);
     };
-  }, []);
+  }, [contextSensingConsent]);
 
   // Handle reporting Dwell Time
   const reportDwellTime = useCallback((exitReason: 'REFRESH' | 'NAVIGATE' | 'EMOTION_CLICK' | 'HIDDEN') => {
@@ -452,6 +466,17 @@ const App: React.FC = () => {
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   }, []);
+
+  const handleContextSensingDecision = useCallback((decision: Exclude<ContextSensingConsent, null>) => {
+    localStorage.setItem(CONTEXT_SENSING_CONSENT_KEY, decision);
+    setContextSensingConsent(decision);
+    addToast(
+      decision === 'granted'
+        ? 'Context-aware mode enabled'
+        : 'Basic mode enabled',
+      'info'
+    );
+  }, [addToast]);
 
   const saveState = useCallback(async (state: AppState | ((prev: AppState) => AppState), skipSync = false) => {
     // Handle functional updates - use setAppState's functional form
@@ -850,10 +875,12 @@ const App: React.FC = () => {
         timestamp: Date.now()
       });
 
+      const hasContextSensingConsent = contextSensingConsent === 'granted';
+
       // Fetch Battery Level (Best Effort)
       let batteryLevel: number | undefined;
       // @ts-ignore
-      if (typeof navigator.getBattery === 'function') {
+      if (hasContextSensingConsent && typeof navigator.getBattery === 'function') {
         try {
           // @ts-ignore
           const battery = await navigator.getBattery();
@@ -873,7 +900,7 @@ const App: React.FC = () => {
 
       // Detect browser state if in chrome extension
       const _chrome = (window as any).chrome;
-      if (typeof _chrome !== 'undefined' && _chrome.tabs) {
+      if (hasContextSensingConsent && typeof _chrome !== 'undefined' && _chrome.tabs) {
         try {
           const tabs = await _chrome.tabs.query({});
           tabCount = tabs.length;
@@ -891,7 +918,9 @@ const App: React.FC = () => {
         }
       }
       // --- CRITICAL: Increment refresh count BEFORE building context so router sees correct count ---
-      const idleTimeSeconds = Math.floor((Date.now() - lastActivityTimeRef.current) / 1000);
+      const idleTimeSeconds = hasContextSensingConsent
+        ? Math.floor((Date.now() - lastActivityTimeRef.current) / 1000)
+        : undefined;
       if (isUserRefresh) {
         sessionRefreshCountRef.current += 1;
       }
@@ -913,24 +942,27 @@ const App: React.FC = () => {
         custom_themes: appState.requests.filter(r => r.active).map(r => r.prompt),
         language: appState.language,
         recent_history: history,
-        weather: 'Unknown',
-        battery_level: batteryLevel,
         clickedEmotion: clickedEmotion,
         emotionalBaseline: calculateEmotionalBaseline(),
         emotionalPatterns: analyzeEmotionalPatterns(),
         bypassPool: !!clickedEmotion,
         deepObservationMode: getTodayEmotionClickCount() > 5,
+        allow_context_sensing: hasContextSensingConsent,
       };
-      // V4.0 Digital Context
-      const webTabCount = getWebTabCount();
-      const resolvedTabCount = tabCount !== undefined ? tabCount : (webTabCount > 0 ? webTabCount : undefined);
-      context.tab_count = resolvedTabCount;
-      context.audio_playing = audioPlaying;
-      context.is_muted = isMuted;
-      context.is_fullscreen = isFullscreen;
-      context.window_state = windowState;
-      context.idle_time_seconds = idleTimeSeconds;
-      context.download_active = downloadActive;
+
+      if (hasContextSensingConsent) {
+        const webTabCount = getWebTabCount();
+        const resolvedTabCount = tabCount !== undefined ? tabCount : (webTabCount > 0 ? webTabCount : undefined);
+        context.weather = 'Unknown';
+        context.battery_level = batteryLevel;
+        context.tab_count = resolvedTabCount;
+        context.audio_playing = audioPlaying;
+        context.is_muted = isMuted;
+        context.is_fullscreen = isFullscreen;
+        context.window_state = windowState;
+        context.idle_time_seconds = idleTimeSeconds;
+        context.download_active = downloadActive;
+      }
       context.selectedPersona = appState.selectedPersona || 'soulmate';
 
       const response = await generateSnippet(context, isUserRefresh);
@@ -984,7 +1016,7 @@ const App: React.FC = () => {
         setIsGenerating(false);
       }
     }
-  }, [appState, reportDwellTime, isAuthenticated, showInlineGuidance, hasLocalPreference, isGenerating]);
+  }, [appState, contextSensingConsent, reportDwellTime, isAuthenticated, showInlineGuidance, hasLocalPreference, isGenerating]);
 
   const renderSnippet = (text: string) => {
     const parts = text.split(/\[h\](.*?)\[\/h\]/g);
@@ -1981,6 +2013,7 @@ const App: React.FC = () => {
       </div>
 
       {/* 2. NAVIGATION BAR - FIXED TO FULL WIDTH SPREAD */}
+      {isVerifiedUser && (
       <nav className="w-full px-8 md:px-12 lg:px-16 py-10 flex justify-between items-center z-20 animate-reveal">
         {/* Left: Branding */}
         <div className="flex items-center gap-4">
@@ -2107,8 +2140,10 @@ const App: React.FC = () => {
           )}
         </div>
       </nav>
+      )}
 
       {/* 3. HERO SECTION */}
+      {isVerifiedUser ? (
       <main className="flex-1 w-full flex flex-col items-center justify-center px-8 z-10 py-10">
         {(() => {
           const isCN = appState.language === 'Chinese (Simplified)';
@@ -2352,127 +2387,26 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </>
-              ) : (
-                <div className="flex flex-col items-center w-full">
-                  <h1 className="serif text-3xl md:text-5xl lg:text-7xl font-normal leading-[1.4] md:leading-[1.3] lg:leading-[1.3] tracking-[-0.01em] text-black dark:text-white transition-all duration-300 max-w-[90rem] px-8 text-center" style={{ textWrap: 'balance' }}>
-                    StartlyTab | <span className="text-purple-600 dark:text-purple-400">A New Tab That Understands Your Mood,</span> Not Only Just Your Tasks
-                  </h1>
-                  <h2 className="mt-8 serif text-2xl md:text-3xl lg:text-4xl text-gray-600 dark:text-gray-400 font-normal max-w-4xl text-center">
-                    Break the Cycle of Work Anxiety and Digital Noise.
-                  </h2>
-
-                  {/* Invisible SEO block */}
-                  <div className="sr-only">
-                    StartlyTab is a mental rhythm adjustment tool designed for high-pressure workers. Get your free emotional workspace and break free from anxious digital noise through gentle reminders and emotional awareness.
-                  </div>
-
-                  <div className="mt-12">
-                    <button
-                      onClick={() => setIsPreferenceModalOpen(true)}
-                      title="Start your mindful journey with StartlyTab"
-                      aria-label="Start your mindful day and get your free emotional workspace"
-                      className="px-12 py-6 bg-black dark:bg-white text-white dark:text-black rounded-full text-sm font-bold uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
-                    >
-                      Start My Mindful Day
-                    </button>
-                  </div>
-
-                  <SocialProof />
-                </div>
-              )}
+              ) : null}
             </div>
           );
         })()}
       </main>
-
-      {!isVerifiedUser && (
-        /* Unauthenticated or Unverified State: Hero Login Prompt */
-        <section className="w-full max-w-7xl px-8 pb-14 z-10 animate-reveal" style={{ animationDelay: '0.4s' }}>
-          <div className="soft-card p-6 md:p-8 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden flex flex-col items-center">
-            <div className="w-full flex flex-col items-center justify-center py-2">
-              <div className="max-w-md w-full flex flex-col items-center text-center">
-                <h2 className="serif text-3xl md:text-4xl text-gray-800 dark:text-gray-100 mb-2 whitespace-nowrap">Start your day softly — with everything ready</h2>
-                <p className="text-gray-400 dark:text-gray-500 text-sm leading-relaxed mb-6">
-                  Unlimited shortcuts, always one click away.
-                </p>
-
-                <div className="w-full flex flex-col items-center gap-4 mt-4">
-                  {(typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id) ? (
-                    <button
-                      onClick={handleSignIn}
-                      disabled={isSyncing}
-                      className="w-full max-w-[280px] h-[48px] bg-white dark:bg-[#131314] text-[#1F1F1F] dark:text-[#E3E3E3] border border-[#747775] dark:border-[#747775] rounded-full text-sm font-medium hover:bg-[#F7F8F8] dark:hover:bg-[#2D2E30] transition-all flex items-center justify-center gap-3 shadow-md active:scale-95 disabled:opacity-80 disabled:cursor-not-allowed group"
-                    >
-                      {isSyncing ? (
-                        <div className="flex items-center gap-3">
-                          <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span className="text-gray-500 font-bold tracking-tight">Signing in...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <svg width="18" height="18" viewBox="0 0 24 24">
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                          </svg>
-                          <span className="font-bold tracking-tight">Sign in with Google</span>
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <div className="relative inline-block group">
-                      {/* New Firebase Auth login button */}
-                      <button
-                        onClick={handleSignIn}
-                        disabled={isSyncing}
-                        className={`flex items-center gap-3 bg-white dark:bg-[#1a1a2e] border border-gray-200 dark:border-white/10 rounded-full px-6 py-3 shadow-sm transition-all ${isSyncing ? 'opacity-40 pointer-events-none scale-95' : 'hover:scale-[1.02] hover:shadow-md active:scale-[0.98]'}`}
-                      >
-                        {isSyncing ? (
-                          <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                        ) : (
-                          <svg width="18" height="18" viewBox="0 0 24 24">
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                          </svg>
-                        )}
-                        <span className="font-bold tracking-tight text-gray-700 dark:text-gray-200 text-sm">
-                          {isSyncing ? 'Signing in...' : 'Sign in'}
-                        </span>
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-center gap-3 mt-4 opacity-60">
-                    <a href="https://startlytab.com/privacy" target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Privacy Policy</a>
-                    <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
-                    <a href="https://startlytab.com/terms" target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium">Terms of Service</a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {!isVerifiedUser && (
+      ) : (
         <>
-          <LandingOptimization />
-          <DailyRhythm />
-          <VentingModePromo onRequireLogin={() => setIsLoginModalOpen(true)} />
-          <TheRhythmBlueprint onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <LandingOptimization onRequireLogin={() => setIsLoginModalOpen(true)} />
+          <FamiliarScenarios />
+          <HowItHelps />
+          <GentleCheckins onRequireLogin={() => setIsLoginModalOpen(true)} />
           <FAQScreen onRequireLogin={() => setIsLoginModalOpen(true)} />
           <SubscriptionPage user={null} onRequireLogin={() => setIsLoginModalOpen(true)} />
           <SemanticFooter />
         </>
       )}
+
+
+
+
 
       {/* 3.5. INTEGRATION GATEWAYS (Real Data) */}
       {isVerifiedUser && (
@@ -2503,6 +2437,13 @@ const App: React.FC = () => {
         addToast={addToast}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
+      />
+
+      <PrivacyConsentModal
+        isOpen={isVerifiedUser && contextSensingConsent === null}
+        onAccept={() => handleContextSensingDecision('granted')}
+        onDecline={() => handleContextSensingDecision('denied')}
+        theme={appState.theme}
       />
 
 

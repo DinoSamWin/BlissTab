@@ -1,0 +1,12 @@
+{
+  "hero": {
+    "title": "A Minimalist Productivity New Tab",
+    "description": "Your Chrome New Tab—as a quiet mental buffer between busy tabs and a calmer workday.",
+    "backgroundImage": "",
+    "cta": {
+      "primary": "Add to Chrome",
+      "secondary": "Try It For Free"
+    }
+  },
+  "sections": []
+}

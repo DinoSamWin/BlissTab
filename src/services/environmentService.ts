@@ -12,28 +12,12 @@ export const CHINA_TIMEZONES = [
 ];
 
 /**
- * Detects if the user is in the China region based on Timezone and Cloudflare Worker GeoIP
- * Heuristic: Timezone is fast and offline-available. GeoIP is more accurate for VPN users.
+ * Detects whether the browser is using a China-related timezone.
+ * This stays local to the device and avoids a network request for region probing.
  */
 export async function isChinaRegion(): Promise<boolean> {
-  // 1. Cloudflare GeoIP Check (Primary for testing VPNs)
-  try {
-    const res = await fetch('https://workers.cloudflare.com/cf.json', { cache: 'no-cache' }).catch(() => null);
-    if (res && res.ok) {
-      const data = await res.json();
-      if (data.country) {
-        return data.country === 'CN';
-      }
-    }
-  } catch (e) {
-    console.warn('[Environment] GeoIP check failed, falling back to timezone');
-  }
-
-  // 2. Timezone Check (Fallback)
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (CHINA_TIMEZONES.includes(tz)) return true;
-
-  return false;
+  return CHINA_TIMEZONES.includes(tz);
 }
 
 export const REGIONAL_SEARCH_ENGINES: Record<'CN' | 'GLOBAL', SearchEngine[]> = {
