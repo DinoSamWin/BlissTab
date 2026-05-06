@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { STORIES } from '../data/stories';
 import SemanticFooter from '../components/SemanticFooter';
 import { ArrowRight, CheckCircle2, Plus, Compass, Coffee, List, Search, Moon, Zap, User } from 'lucide-react';
+import { useSEO } from '../hooks/useSEO';
 
 interface PersonaPreviewProps {
     personaId: string;
@@ -109,34 +110,22 @@ const PersonaPreview: React.FC<PersonaPreviewProps> = ({ personaId }) => {
     return null;
 };
 
-
-
-
-
-
-
-
 const StoryPage: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
     const story = STORIES.find(s => s.slug === slug);
     const [activeSection, setActiveSection] = useState<string>('');
 
+    useSEO({
+        title: story?.seo.title || "StartlyTab Story",
+        description: story?.seo.description || "StartlyTab Story",
+        keywords: story?.id + ", startlytab, productivity, mental health"
+    });
+
     useEffect(() => {
         window.scrollTo(0, 0);
         
         if (story) {
-            document.title = story.seo.title;
-            
-            // Meta tags
-            let metaDesc = document.querySelector('meta[name="description"]');
-            if (!metaDesc) {
-                metaDesc = document.createElement('meta');
-                metaDesc.setAttribute('name', 'description');
-                document.head.appendChild(metaDesc);
-            }
-            metaDesc.setAttribute('content', story.seo.description);
-
             // JSON-LD
             const scriptId = 'story-json-ld';
             let script = document.getElementById(scriptId) as HTMLScriptElement;
@@ -442,7 +431,7 @@ const StoryPage: React.FC = () => {
                                                     {section.features?.map((feature, fIdx) => (
                                                         <div key={fIdx} className="group/card bg-[#1A1D21] rounded-[1.5rem] overflow-hidden shadow-lg hover:scale-[1.01] transition-all duration-500 flex flex-col md:flex-row items-stretch min-h-[140px]">
                                                             <div className="p-6 lg:p-8 flex-1 relative overflow-hidden flex flex-col justify-center">
-                                                                <div className="relative z-10">
+                                                                 <div className="relative z-10">
                                                                     <div className="flex items-center gap-4 mb-2">
                                                                         <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center border border-white/10 group-hover/card:border-[#22C55E]/50 transition-colors flex-shrink-0">
                                                                             {fIdx === 0 && <Plus className="w-5 h-5 text-[#22C55E]" />}
@@ -472,10 +461,6 @@ const StoryPage: React.FC = () => {
                                                     ))}
                                                 </div>
 
-
-
-
-
                                                 <div className="mt-24 pt-12 border-t border-black/5 flex flex-col md:flex-row items-center justify-between gap-8">
                                                     <div className="flex items-center gap-6">
                                                         <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center font-bold text-xl overflow-hidden border border-black/5">
@@ -493,9 +478,6 @@ const StoryPage: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
-
-
-
                                 </section>
                             );
                         })}
