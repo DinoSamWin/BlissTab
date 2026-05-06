@@ -19,7 +19,7 @@ const PersonaPreview: React.FC<PersonaPreviewProps> = ({ personaId }) => {
                 </div>
                 <div className="flex justify-center">
                     <img 
-                        src="/images/redesign/maya sample.png" 
+                        src="/images/redesign/maya sample.webp" 
                         alt="Maya's StartlyTab" 
                         className="max-w-full h-auto"
                     />
@@ -44,14 +44,14 @@ const PersonaPreview: React.FC<PersonaPreviewProps> = ({ personaId }) => {
                     <div className="flex gap-8 px-[15%] min-w-max">
                         <div className="snap-center w-[70vw] md:w-[640px] flex-shrink-0">
                             <img 
-                                src="/images/redesign/Daniel Sample 1.png" 
+                                src="/images/redesign/Daniel Sample 1.webp" 
                                 alt="Daniel's Emotional Buffer" 
                                 className="w-full h-auto"
                             />
                         </div>
                         <div className="snap-center w-[70vw] md:w-[640px] flex-shrink-0">
                             <img 
-                                src="/images/redesign/Daniel Sample 2.png" 
+                                src="/images/redesign/Daniel Sample 2.webp" 
                                 alt="Daniel's Mood Tracking" 
                                 className="w-full h-auto"
                             />
@@ -78,7 +78,7 @@ const PersonaPreview: React.FC<PersonaPreviewProps> = ({ personaId }) => {
                 </div>
                 <div className="flex justify-center">
                     <img 
-                        src="/images/redesign/Rachel Sample.png" 
+                        src="/images/redesign/Rachel Sample.webp" 
                         alt="Rachel's StartlyTab" 
                         className="max-w-full h-auto"
                     />
@@ -97,7 +97,7 @@ const PersonaPreview: React.FC<PersonaPreviewProps> = ({ personaId }) => {
                 </div>
                 <div className="flex justify-center">
                     <img 
-                        src="/images/redesign/Lena Sample.png" 
+                        src="/images/redesign/Lena Sample.webp" 
                         alt="Lena's StartlyTab" 
                         className="max-w-full h-auto"
                     />

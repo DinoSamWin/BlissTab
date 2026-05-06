@@ -67,7 +67,7 @@ const Panel1 = () => (
     <div className="relative rounded-[2rem] overflow-hidden shadow-2xl bg-white aspect-square">
         {/* Product screenshot — fills entire card */}
         <img
-            src="/images/redesign/homepage-3-pic-1.png"
+            src="/images/redesign/homepage-3-pic-1.webp"
             alt="StartlyTab cleaner new tab screen — a calm message and quick-access shortcuts"
             width={820}
             height={820}
@@ -90,7 +90,7 @@ const Panel2 = () => (
     <div className="relative w-full aspect-square">
         {/* Layer 1: Background decoration (ARIA-hidden, empty alt) */}
         <img
-            src="/images/redesign/homepage-moment-card-bg.png"
+            src="/images/redesign/homepage-moment-card-bg.webp"
             alt=""
             aria-hidden="true"
             className="absolute inset-0 w-full h-full object-contain z-0 pointer-events-none"
@@ -110,7 +110,7 @@ const Panel2 = () => (
 
             {/* Layer 3: Tabs Composite Image */}
             <img
-                src="/images/redesign/homepage-moment-tabs-work-stress.png"
+                src="/images/redesign/homepage-moment-tabs-work-stress.webp"
                 alt="StartlyTab moment tabs for morning, afternoon slump, work stress, and late night"
                 className="block w-full h-auto mt-[28px] object-contain"
                 loading="lazy"
@@ -121,7 +121,7 @@ const Panel2 = () => (
 
             {/* Layer 4: Message Card Composite Image */}
             <img
-                src="/images/redesign/homepage-work-stress-message-card.png"
+                src="/images/redesign/homepage-work-stress-message-card.webp"
                 alt="StartlyTab calming message card for work stress"
                 className="block w-full h-auto mt-[16px] object-contain"
                 loading="lazy"
@@ -152,7 +152,7 @@ const Panel3 = () => (
         <div className="flex flex-col flex-1 p-[28px_32px_32px] md:p-[32px_40px_40px]">
             {/* Top: Input Area composite image */}
             <img
-                src="/images/redesign/homepage-3-feel-yours-input.png"
+                src="/images/redesign/homepage-3-feel-yours-input.webp"
                 alt="Custom message input in StartlyTab"
                 className="block w-full h-auto object-contain"
                 loading="lazy"
@@ -161,7 +161,7 @@ const Panel3 = () => (
 
             {/* Hint below input */}
             <p className="flex items-center gap-1.5 mt-2 text-[#4B4B4B] dark:text-gray-500 text-[11px] md:text-[12px] font-medium">
-                <img src="/images/redesign/star3.png" alt="" className="w-3 h-3 object-contain" aria-hidden="true" />
+                <img src="/images/redesign/star3.webp" alt="" className="w-3 h-3 object-contain" aria-hidden="true" />
                 Use any words you want — short or specific.
             </p>
 
@@ -184,13 +184,13 @@ const Panel3 = () => (
 
             {/* Preview Header - Reduced margin */}
             <div className="flex items-center gap-1.5 mt-4 mb-1.5">
-                <img src="/images/redesign/star3.png" alt="" className="w-3 h-3 object-contain" aria-hidden="true" />
+                <img src="/images/redesign/star3.webp" alt="" className="w-3 h-3 object-contain" aria-hidden="true" />
                 <span className="text-[10px] md:text-[11px] font-bold text-[#6466F1] uppercase tracking-widest">Preview</span>
             </div>
 
             {/* Bottom-ish: Preview Area composite image */}
             <img
-                src="/images/redesign/homepage-3-feel-yours-preview.png"
+                src="/images/redesign/homepage-3-feel-yours-preview.webp"
                 alt="StartlyTab preview of a personalized gentle message"
                 className="block w-full h-auto object-contain"
                 loading="lazy"
@@ -254,7 +254,7 @@ const HowItHelps: React.FC = () => {
             <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 bg-cover bg-center"
-                style={{ backgroundImage: `url('/images/redesign/homepage-3-background.png')` }}
+                style={{ backgroundImage: `url('/images/redesign/homepage-3-background.webp')` }}
             />
 
             <div className="max-w-[1120px] w-full mx-auto px-6 lg:px-12 relative z-10">

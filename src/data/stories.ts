@@ -55,7 +55,7 @@ export const STORIES: Story[] = [
     subtitle: "For Maya, opening a new tab used to mean facing another wall of tools, links, and unfinished work. StartlyTab helped her create a calmer space before the next click.",
     hook: "Does opening a new tab feel like facing a wall of work? You aren't alone. Maya found a way to stop the tab ocean from swallowing her day.",
     heroQuote: "Every new tab used to feel like another wall of work. StartlyTab made it feel like someone was saying, breathe first.",
-    image: '/images/redesign/Maya.png',
+    image: '/images/redesign/Maya.webp',
     avatar: '/images/redesign/Maya  Marketing Manager.webp',
     role: "Marketing Manager",
     interviewer: {
@@ -236,7 +236,7 @@ export const STORIES: Story[] = [
     subtitle: "Sometimes it’s not the workload — it’s the feeling you carry after one unfair moment. StartlyTab became a place where Daniel could react, reset, and understand himself better.",
     hook: "When One Comment Ruins Your Entire Workday. Dealing with workplace frustration using a custom new tab.",
     heroQuote: "One unfair comment from my manager can sit in my chest all day.",
-    image: '/images/redesign/Daniel Interview.png',
+    image: '/images/redesign/Daniel Interview.webp',
     avatar: '/images/redesign/Daniel Operations Lead.webp',
     role: "Operations Lead",
     interviewer: {
@@ -420,7 +420,7 @@ export const STORIES: Story[] = [
     subtitle: "Some weeks don’t start with energy — they start with resistance. StartlyTab helped Rachel begin her workday without fighting how she feels.",
     hook: "It’s Monday morning, and I already want to disappear for a while. Dealing with Monday Blues and Post-Holiday Slump.",
     heroQuote: "It’s Monday morning, and I already want to disappear for a while.",
-    image: '/images/redesign/Rachel Interview.png',
+    image: '/images/redesign/Rachel Interview.webp',
     avatar: '/images/redesign/Rachel Account Manager.webp',
     role: "Account Manager",
     interviewer: {
@@ -582,7 +582,7 @@ export const STORIES: Story[] = [
     subtitle: "Messages, meetings, and small requests keep breaking the day apart — until even opening your laptop feels heavy.",
     hook: "By the time I finally pause, I feel like I’ve been bracing all day. Trapped in a fragmented workday.",
     heroQuote: "By the time I finally pause, I feel like I’ve been bracing all day.",
-    image: '/images/redesign/Lena Interview.png',
+    image: '/images/redesign/Lena Interview.webp',
     avatar: '/images/redesign/Lena Project Manager.webp',
     role: "Project Manager",
     interviewer: {

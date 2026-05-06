@@ -53,7 +53,7 @@ export default function GentleCheckins({ onRequireLogin }: Props) {
         <div 
           className="absolute inset-0 pointer-events-none z-0"
           style={{
-            backgroundImage: 'url("/images/redesign/homepage-4-background.png")',
+            backgroundImage: 'url("/images/redesign/homepage-4-background.webp")',
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
@@ -63,7 +63,7 @@ export default function GentleCheckins({ onRequireLogin }: Props) {
         {/* Header Text */}
         <div className={`relative w-full max-w-[1120px] px-6 lg:px-12 z-20 transition-all duration-700 ${isD ? 'text-left' : 'text-center'}`}>
           <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 transition-all duration-500 ${isD ? 'ml-0' : 'mx-auto'}`} style={{ background: '#EFEFFE' }}>
-            <img src="/images/redesign/star4.png" alt="" className="w-4 h-4 object-contain" />
+            <img src="/images/redesign/star4.webp" alt="" className="w-4 h-4 object-contain" />
             <span className="text-base font-normal" style={{ color: '#8A44F3' }}>Gentle Check-ins</span>
           </div>
           
@@ -96,7 +96,7 @@ export default function GentleCheckins({ onRequireLogin }: Props) {
             <div className="absolute inset-0 transition-opacity duration-300" style={{ opacity: op1 }}>
               <div className="w-full h-full relative">
                 <img 
-                  src="/images/redesign/homepage-4-pic-1.png" 
+                  src="/images/redesign/homepage-4-pic-1.webp" 
                   alt="check-in" 
                   className="w-full h-full object-contain"
                 />
@@ -119,7 +119,7 @@ export default function GentleCheckins({ onRequireLogin }: Props) {
                 </div>
                 <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                   <img 
-                    src="/images/redesign/homepage-4-mood-reflection-chart.png" 
+                    src="/images/redesign/homepage-4-mood-reflection-chart.webp" 
                     alt="chart" 
                     className="max-w-full max-h-full object-contain" 
                     style={{ transform: 'scale(1.3)' }} 
@@ -132,7 +132,7 @@ export default function GentleCheckins({ onRequireLogin }: Props) {
             <div className="absolute inset-0 transition-all duration-700" style={{ opacity: op3, transform: isD ? 'translateX(0)' : 'translateX(40px)' }}>
               <div style={{ transform: 'scale(1.75) translateX(28.4px) translateY(-43px)', width: '100%', height: '100%' }}>
                 <img 
-                  src="/images/redesign/homepage-4-deep-care-report.png" 
+                  src="/images/redesign/homepage-4-deep-care-report.webp" 
                   alt="report" 
                   className="w-full h-full object-contain" 
                 />
