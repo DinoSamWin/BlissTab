@@ -5,4 +5,38 @@
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
+  
+  <!-- Story Landing Pages -->
+  <url>
+    <loc>https://www.startlytab.com/stories/maya-tab-overload-mental-buffer</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.startlytab.com/stories/daniel-workplace-frustration-emotional-buffer</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.startlytab.com/stories/rachel-monday-blues-post-holiday-slump</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.startlytab.com/stories/lena-project-manager-fragmented-workday</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Other Public Pages -->
+  <url>
+    <loc>https://www.startlytab.com/privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://www.startlytab.com/terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
 </urlset>
