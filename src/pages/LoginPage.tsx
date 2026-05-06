@@ -9,6 +9,7 @@ import {
   type AuthResult,
 } from '../services/authService';
 import { useUser } from '../contexts/UserContext';
+import { useSEO } from '../hooks/useSEO';
 import AuthLayout from '../components/common/AuthLayout';
 import TypewriterText from '../components/auth/TypewriterText';
 
@@ -21,6 +22,12 @@ const PROVIDER_LABELS: Record<string, string> = {
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, setUser } = useUser();
+
+  useSEO({
+    title: "Login to StartlyTab | Welcome Back",
+    description: "Sign in to your StartlyTab account to access your personalized mental buffer and focus tools. Welcome back to your calmer workspace.",
+    keywords: "login, sign in, startlytab, workspace, focus"
+  });
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -255,6 +262,5 @@ const XIcon = () => (
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
   </svg>
 );
-
 
 export default LoginPage;

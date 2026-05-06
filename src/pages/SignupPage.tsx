@@ -6,6 +6,8 @@ import { useUser } from '../contexts/UserContext';
 import AuthLayout from '../components/common/AuthLayout';
 import TypewriterText from '../components/auth/TypewriterText';
 
+import { useSEO } from '../hooks/useSEO';
+
 const PROVIDER_LABELS: Record<string, string> = {
   'google.com': 'Google',
   'twitter.com': 'X',
@@ -15,6 +17,17 @@ const PROVIDER_LABELS: Record<string, string> = {
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, setUser } = useUser();
+
+  useSEO({
+    title: "Sign Up for StartlyTab | Create Your Calm New Tab",
+    description: "Join StartlyTab today to transform your browser from a wall of work into a calm mental buffer. Start your day softly with AI-assisted focus tools.",
+    keywords: "sign up, register, startlytab, calm new tab, productivity tool"
+  });
+
+  useEffect(() => {
+    if (user && user.emailVerified) navigate('/cove', { replace: true });
+    else if (user && !user.emailVerified) navigate('/verify-email', { replace: true });
+  }, [user, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,10 +40,6 @@ const SignupPage: React.FC = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resending, setResending] = useState(false);
 
-  useEffect(() => {
-    if (user && user.emailVerified) navigate('/cove', { replace: true });
-    else if (user && !user.emailVerified) navigate('/verify-email', { replace: true });
-  }, [user, navigate]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;

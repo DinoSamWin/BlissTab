@@ -1,6 +1,13 @@
 import React from 'react';
+import { useSEO } from '../hooks/useSEO';
 
 const TermsOfService: React.FC = () => {
+    useSEO({
+        title: "Terms of Service | StartlyTab",
+        description: "Review the terms and conditions for using StartlyTab and its AI-assisted productivity tools.",
+        keywords: "terms of service, user agreement, startlytab"
+    });
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-[#0F0F0F] text-gray-800 dark:text-gray-200 p-8 md:p-16">
             <div className="max-w-3xl mx-auto space-y-8 animate-reveal">

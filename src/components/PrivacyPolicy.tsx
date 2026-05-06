@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSEO } from '../hooks/useSEO';
 
 const collectionCards = [
   {
@@ -79,6 +80,12 @@ const providerRows = [
 ];
 
 const PrivacyPolicy: React.FC = () => {
+  useSEO({
+    title: "Privacy Policy | StartlyTab",
+    description: "Read our privacy policy to understand how StartlyTab handles your data. We prioritize your privacy and minimize data collection.",
+    keywords: "privacy policy, data protection, startlytab"
+  });
+
   return (
     <div className="min-h-screen bg-[#FBFBFE] dark:bg-[#0A0A0B] text-gray-900 dark:text-gray-100 px-6 py-10 md:px-10 md:py-16">
       <div className="max-w-5xl mx-auto space-y-12">
