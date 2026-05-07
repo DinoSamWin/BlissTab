@@ -312,6 +312,9 @@ export async function syncToCloud(state: AppState): Promise<void> {
       updatedAt: new Date().toISOString()
     };
     localStorage.setItem(cloudKey, JSON.stringify(dataToSync));
+    if (state.user.email) {
+      localStorage.setItem(`cloud_sync_${state.user.email}`, JSON.stringify(dataToSync));
+    }
     return;
   }
 
@@ -402,13 +405,13 @@ export type SyncResult =
 /**
  * Fetch user data from Supabase
  */
-export async function fetchFromCloud(userId: string): Promise<SyncResult> {
+export async function fetchFromCloud(userId: string, email?: string): Promise<SyncResult> {
   const client = getSupabaseClient();
 
   // Fallback to localStorage if Supabase is not configured
   if (!client) {
     const cloudKey = `cloud_sync_${userId}`;
-    const saved = localStorage.getItem(cloudKey);
+    const saved = localStorage.getItem(cloudKey) || (email ? localStorage.getItem(`cloud_sync_${email}`) : null);
     if (saved) {
       try {
         return { status: 'success', data: JSON.parse(saved) };
@@ -420,10 +423,19 @@ export async function fetchFromCloud(userId: string): Promise<SyncResult> {
   }
 
   try {
-    const { data: list, error } = await client
+    // Try to find by user_id first, then by email (recovery mode)
+    let query = client
       .from('user_data')
-      .select('data, updated_at')
-      .eq('user_id', userId)
+      .select('data, updated_at, user_id, email');
+    
+    if (email) {
+      query = query.or(`user_id.eq.${userId},email.eq.${email}`);
+    } else {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data: list, error } = await query
+      .order('updated_at', { ascending: false })
       .limit(1);
 
     if (error) {
@@ -438,13 +450,17 @@ export async function fetchFromCloud(userId: string): Promise<SyncResult> {
     }
 
     if (data && data.data) {
-      console.log(`[Sync] Fetched data for user ${userId}`, {
+      const isRecovery = data.user_id !== userId;
+      console.log(`[Sync] Fetched data for user ${userId} ${isRecovery ? '(Recovered via email)' : ''}`, {
         links: data.data.links?.length || 0,
         requests: data.data.requests?.length || 0,
         language: data.data.language,
         theme: data.data.theme,
         lastUpdated: data.updated_at
       });
+
+      // If we recovered data from a different UID (via email), we should link it to the current UID
+      // This happens automatically on the next sync call from App.tsx
       return { status: 'success', data: data.data };
     }
 

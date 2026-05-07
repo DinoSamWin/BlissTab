@@ -13,6 +13,7 @@ import TermsOfService from './components/TermsOfService';
 import LoadingDemo from './components/LoadingDemo';
 import { User } from './types';
 import StoryPage from './pages/StoryPage';
+import SeoLandingPage from './pages/SeoLandingPage';
 import { updateSubscriptionState } from './services/subscriptionService';
 import { UserProvider, useUser } from './contexts/UserContext';
 
@@ -169,6 +170,12 @@ const AppRoutes: React.FC = () => {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
       <Route path="/stories/:slug" element={<StoryPage />} />
+
+      {/* SEO Landing Pages */}
+      <Route path="/use-cases/:slug" element={<SeoLandingPage />} />
+      <Route path="/compare/:slug" element={<SeoLandingPage />} />
+      <Route path="/features/:slug" element={<SeoLandingPage />} />
+      <Route path="/workflows/:slug" element={<SeoLandingPage />} />
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

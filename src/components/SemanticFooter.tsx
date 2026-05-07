@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const SemanticFooter: React.FC = () => {
     return (
@@ -41,55 +42,55 @@ const SemanticFooter: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Zone 2: The SEO Silos - Internal Links */}
+                {/* Zone 2: The SEO Silos - Internal Links (Inbound) */}
                 <div className="flex flex-col space-y-5">
                     <h3 className="text-sm font-bold text-white uppercase tracking-widest">Solutions & Use Cases</h3>
                     <ul className="space-y-3.5">
                         <li>
-                            <span className="text-sm text-gray-500 hover:text-purple-400 transition-colors cursor-default">For High-Pressure Developers</span>
+                            <Link to="/use-cases/high-pressure-developers" title="How StartlyTab helps developers focus" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">StartlyTab for High-Pressure Developers</Link>
                         </li>
                         <li>
-                            <span className="text-sm text-gray-500 hover:text-purple-400 transition-colors cursor-default">For Overwhelmed Designers</span>
+                            <Link to="/use-cases/overwhelmed-designers" title="How StartlyTab helps designers reduce overwhelm" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">StartlyTab for Overwhelmed Designers</Link>
                         </li>
                         <li>
-                            <span className="text-sm text-gray-500 hover:text-purple-400 transition-colors cursor-default">Remote Work Sanctuary</span>
+                            <Link to="/use-cases/remote-work-sanctuary" title="Create a calm remote work environment" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">Build a Remote Work Sanctuary</Link>
                         </li>
                         <li>
-                            <span className="text-sm text-gray-500 hover:text-purple-400 transition-colors cursor-default flex items-center gap-2">
+                            <Link to="/compare/startlytab-vs-momentum" title="Compare StartlyTab with Momentum dashboard" className="text-sm text-gray-500 hover:text-purple-400 transition-colors flex items-center gap-2">
                                 StartlyTab vs Momentum
                                 <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded uppercase font-bold tracking-wider">Compare</span>
-                            </span>
+                            </Link>
                         </li>
                     </ul>
                 </div>
 
-                {/* Zone 3: Strategic Gateway - Nofollow Outbound */}
+                {/* Zone 3: Strategic Gateways - Internal Feature Links */}
                 <div className="flex flex-col space-y-5">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Your Calmer Gateways</h3>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Features & Workflows</h3>
                     <ul className="space-y-3.5">
                         <li>
-                            <a href="https://notion.so" rel="nofollow external" aria-label="Access Notion mindfully from StartlyTab" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
+                            <Link to="/features/gentle-check-ins" title="Reduce work anxiety with gentle check-ins" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
+                                <span className="opacity-0 group-hover:opacity-100 text-teal-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
+                                <span className="group-hover:translate-x-1 transition-transform">Gentle check-ins for work anxiety</span>
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/features/minimalist-dashboard" title="Create a calm and minimalist new tab workspace" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
                                 <span className="opacity-0 group-hover:opacity-100 text-purple-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">Mindful access to Notion</span>
-                            </a>
+                                <span className="group-hover:translate-x-1 transition-transform">Minimalist new tab dashboard</span>
+                            </Link>
                         </li>
                         <li>
-                            <a href="https://calendar.google.com" rel="nofollow external" aria-label="Access Google Calendar calmly from StartlyTab" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
-                                <span className="opacity-0 group-hover:opacity-100 text-yellow-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">Stress-free sync with Google Calendar</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="https://figma.com" rel="nofollow external" aria-label="Access Figma focus mode from StartlyTab" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
+                            <Link to="/features/ai-creative-companion" title="Overcome creative blocks with the AI companion" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
                                 <span className="opacity-0 group-hover:opacity-100 text-pink-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">Focus mode for Figma</span>
-                            </a>
+                                <span className="group-hover:translate-x-1 transition-transform">AI companion for creative blocks</span>
+                            </Link>
                         </li>
                         <li>
-                            <a href="https://slack.com" rel="nofollow external" aria-label="Enter Slack quietly from StartlyTab" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
+                            <Link to="/workflows/tab-overload-relief" title="Strategies to manage and relieve browser tab overload" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
                                 <span className="opacity-0 group-hover:opacity-100 text-blue-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">Quiet entry to Slack</span>
-                            </a>
+                                <span className="group-hover:translate-x-1 transition-transform">Relief for browser tab overload</span>
+                            </Link>
                         </li>
                     </ul>
                 </div>

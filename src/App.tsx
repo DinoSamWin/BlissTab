@@ -606,7 +606,7 @@ const App: React.FC = () => {
 
       // Fetch cloud data + user gateway overrides
       const [cloudResult, gatewayOverrides] = await Promise.all([
-        fetchFromCloud(user.id),
+        fetchFromCloud(user.id, user.email),
         fetchUserGatewayOverrides(user.id),
       ]);
 
@@ -625,11 +625,14 @@ const App: React.FC = () => {
           requests = cloudData.requests || DEFAULT_REQUESTS;
           isCloudSyncSafeRef.current = true;
           console.log('[App] Cloud data loaded successfully.');
-        } else if (cloudResult.status === 'not_found' || cloudResult.status === 'error') {
-          // If error (like 406), we still consider it "safe" to sync LATER, 
-          // but we won't overwrite anything now.
-          isCloudSyncSafeRef.current = cloudResult.status === 'not_found';
-          console.log('[App] Cloud data status:', cloudResult.status);
+        } else if (cloudResult.status === 'not_found') {
+          // New user - safe to sync defaults
+          isCloudSyncSafeRef.current = true;
+          console.log('[App] No cloud data found (new user). Sync enabled.');
+        } else if (cloudResult.status === 'error') {
+          // Fetch failed (network/RLS) - DANGEROUS to sync
+          isCloudSyncSafeRef.current = false;
+          console.error('[App] Cloud fetch failed with error. Safety mode enabled: sync DISABLED.');
         }
 
         // Migrate local preference

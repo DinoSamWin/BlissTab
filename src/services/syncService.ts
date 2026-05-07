@@ -31,9 +31,9 @@ export async function syncToCloud(state: AppState): Promise<void> {
 /**
  * Fetch user data from cloud (Supabase) with localStorage fallback
  */
-export async function fetchFromCloud(userId: string): Promise<SyncResult> {
+export async function fetchFromCloud(userId: string, email?: string): Promise<SyncResult> {
   try {
-    const result = await supabaseFetch(userId);
+    const result = await supabaseFetch(userId, email);
 
     // If successful, return immediately
     if (result.status === 'success') {
@@ -63,7 +63,7 @@ export async function fetchFromCloud(userId: string): Promise<SyncResult> {
 
   // Fallback to localStorage
   const cloudKey = `cloud_sync_${userId}`;
-  const saved = localStorage.getItem(cloudKey);
+  const saved = localStorage.getItem(cloudKey) || (email ? localStorage.getItem(`cloud_sync_${email}`) : null);
 
   if (saved) {
     try {
