@@ -12,7 +12,8 @@ const SeoLandingPage: React.FC = () => {
     useSEO({
         title: pageData?.seo.title || "StartlyTab",
         description: pageData?.seo.description || "StartlyTab",
-        keywords: pageData?.id + ", startlytab, productivity, mental health, calm internet"
+        keywords: `${pageData?.id}, startlytab, productivity, mental health, calm internet`,
+        ogImage: pageData?.transformationSection.image
     });
 
     useEffect(() => {

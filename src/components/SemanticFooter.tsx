@@ -44,66 +44,85 @@ const SemanticFooter: React.FC = () => {
 
                 {/* Zone 2: The SEO Silos - Internal Links (Inbound) */}
                 <div className="flex flex-col space-y-5">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Solutions & Use Cases</h3>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Solutions</h3>
                     <ul className="space-y-3.5">
                         <li>
-                            <Link to="/use-cases/high-pressure-developers" title="How StartlyTab helps developers focus" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">StartlyTab for High-Pressure Developers</Link>
+                            <Link to="/use-cases/high-pressure-developers" title="How StartlyTab helps developers focus" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">For Developers</Link>
                         </li>
                         <li>
-                            <Link to="/use-cases/overwhelmed-designers" title="How StartlyTab helps designers reduce overwhelm" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">StartlyTab for Overwhelmed Designers</Link>
+                            <Link to="/use-cases/overwhelmed-designers" title="How StartlyTab helps designers reduce overwhelm" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">For Designers</Link>
                         </li>
                         <li>
-                            <Link to="/use-cases/remote-work-sanctuary" title="Create a calm remote work environment" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">Build a Remote Work Sanctuary</Link>
+                            <Link to="/use-cases/remote-work-sanctuary" title="Create a calm remote work environment" className="text-sm text-gray-500 hover:text-purple-400 transition-colors">Remote Work</Link>
                         </li>
                         <li>
                             <Link to="/compare/startlytab-vs-momentum" title="Compare StartlyTab with Momentum dashboard" className="text-sm text-gray-500 hover:text-purple-400 transition-colors flex items-center gap-2">
-                                StartlyTab vs Momentum
+                                vs Momentum
                                 <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded uppercase font-bold tracking-wider">Compare</span>
                             </Link>
                         </li>
                     </ul>
                 </div>
 
-                {/* Zone 3: Strategic Gateways - Internal Feature Links */}
+                {/* Zone 3: Strategic Gateways - User Stories (NEW for SEO) */}
                 <div className="flex flex-col space-y-5">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Features & Workflows</h3>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">User Stories</h3>
+                    <ul className="space-y-3.5">
+                        <li>
+                            <Link to="/stories/maya-tab-overload-mental-buffer" className="text-sm text-gray-500 hover:text-indigo-400 transition-colors">Maya: Marketing Lead</Link>
+                        </li>
+                        <li>
+                            <Link to="/stories/daniel-workplace-frustration-emotional-buffer" className="text-sm text-gray-500 hover:text-indigo-400 transition-colors">Daniel: Senior Engineer</Link>
+                        </li>
+                        <li>
+                            <Link to="/stories/rachel-monday-blues-post-holiday-slump" className="text-sm text-gray-500 hover:text-indigo-400 transition-colors">Rachel: Freelancer</Link>
+                        </li>
+                        <li>
+                            <Link to="/stories/lena-project-manager-fragmented-workday" className="text-sm text-gray-500 hover:text-indigo-400 transition-colors">Lena: Project Manager</Link>
+                        </li>
+                    </ul>
+                </div>
+
+                {/* Zone 4: Strategic Gateways - Internal Feature Links */}
+                <div className="flex flex-col space-y-5">
+                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Features</h3>
                     <ul className="space-y-3.5">
                         <li>
                             <Link to="/features/gentle-check-ins" title="Reduce work anxiety with gentle check-ins" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
                                 <span className="opacity-0 group-hover:opacity-100 text-teal-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">Gentle check-ins for work anxiety</span>
+                                <span className="group-hover:translate-x-1 transition-transform">Gentle check-ins</span>
                             </Link>
                         </li>
                         <li>
                             <Link to="/features/minimalist-dashboard" title="Create a calm and minimalist new tab workspace" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
                                 <span className="opacity-0 group-hover:opacity-100 text-purple-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">Minimalist new tab dashboard</span>
+                                <span className="group-hover:translate-x-1 transition-transform">Minimalist dashboard</span>
                             </Link>
                         </li>
                         <li>
                             <Link to="/features/ai-creative-companion" title="Overcome creative blocks with the AI companion" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
                                 <span className="opacity-0 group-hover:opacity-100 text-pink-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">AI companion for creative blocks</span>
+                                <span className="group-hover:translate-x-1 transition-transform">AI Companion</span>
                             </Link>
                         </li>
                         <li>
                             <Link to="/workflows/tab-overload-relief" title="Strategies to manage and relieve browser tab overload" className="group flex items-center text-sm text-gray-500 hover:text-white transition-colors">
                                 <span className="opacity-0 group-hover:opacity-100 text-blue-400 mr-2 transition-all -translate-x-2 group-hover:translate-x-0">↳</span>
-                                <span className="group-hover:translate-x-1 transition-transform">Relief for browser tab overload</span>
+                                <span className="group-hover:translate-x-1 transition-transform">Tab Overload Relief</span>
                             </Link>
                         </li>
                     </ul>
                 </div>
 
-                {/* Zone 4: Trust & Legal - E-E-A-T Core */}
+                {/* Zone 5: Trust & Legal - E-E-A-T Core */}
                 <div className="flex flex-col space-y-5">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Trust & Privacy</h3>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Trust</h3>
                     <ul className="space-y-3.5">
                         <li>
-                            <a href="https://startlytab.com/privacy" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Privacy Policy</a>
+                            <Link to="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Privacy Policy</Link>
                         </li>
                         <li>
-                            <a href="https://startlytab.com/terms" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Terms of Service</a>
+                            <Link to="/terms" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Terms of Service</Link>
                         </li>
                         <li>
                             <a href="mailto:support@startlytab.com" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Contact Us</a>

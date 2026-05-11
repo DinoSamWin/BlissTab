@@ -119,7 +119,9 @@ const StoryPage: React.FC = () => {
     useSEO({
         title: story?.seo.title || "StartlyTab Story",
         description: story?.seo.description || "StartlyTab Story",
-        keywords: story?.id + ", startlytab, productivity, mental health"
+        keywords: `${story?.id}, startlytab, productivity, mental health, user story`,
+        ogType: 'article',
+        ogImage: story?.image
     });
 
     useEffect(() => {

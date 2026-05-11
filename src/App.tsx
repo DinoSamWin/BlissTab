@@ -37,6 +37,7 @@ import JumpStarLoading from './components/common/JumpStarLoading';
 import SemanticFooter from './components/SemanticFooter';
 import SubscriptionPage from './components/SubscriptionPage';
 import { Activity, Sparkles } from 'lucide-react';
+import { useSEO } from './hooks/useSEO';
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
 const CONTEXT_SENSING_CONSENT_KEY = 'startlytab_context_sensing_consent';
@@ -194,6 +195,15 @@ if (typeof window !== 'undefined') {
 
 const App: React.FC = () => {
   const navigate = useNavigate();
+
+  // SEO metadata for the home/landing page
+  useSEO({
+    title: "StartlyTab – Your Emotional Workspace in a New Tab",
+    description: "StartlyTab is a minimalist Chrome new tab for focused work, designed as a quiet mental buffer between busy tabs and a calmer workday.",
+    keywords: "minimalist new tab, productivity, mental health, browser extension, focus, calm internet, work anxiety",
+    ogImage: "https://www.startlytab.com/icons/icon-512x512.png"
+  });
+
   const [appState, setAppState] = useState<AppState>(() => {
     const saved = localStorage.getItem('focus_tab_state');
     const systemTheme: Theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
