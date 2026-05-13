@@ -16,6 +16,7 @@ import StoryPage from './pages/StoryPage';
 import SeoLandingPage from './pages/SeoLandingPage';
 import { updateSubscriptionState } from './services/subscriptionService';
 import { UserProvider, useUser } from './contexts/UserContext';
+import { getInternalUrl } from './services/environmentService';
 
 import JumpStarLoading from './components/common/JumpStarLoading';
 
@@ -129,6 +130,22 @@ const RootRedirect: React.FC = () => {
 
 const SubscriptionRoute: React.FC = () => {
   const { user, setUser } = useUser();
+  const isExtension =
+    typeof window !== 'undefined' && window.location.protocol === 'chrome-extension:';
+
+  React.useEffect(() => {
+    if (isExtension) {
+      window.location.replace(getInternalUrl('/subscription'));
+    }
+  }, [isExtension]);
+
+  if (isExtension) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#FBFBFE] dark:bg-[#0A0A0B]">
+        <JumpStarLoading caption="Opening secure checkout on startlytab.com..." />
+      </div>
+    );
+  }
 
   const handleSubscriptionUpdate = async (updatedUser: User) => {
     if (updatedUser.id) {
@@ -145,40 +162,61 @@ const SubscriptionRoute: React.FC = () => {
   return <SubscriptionPage user={user} onSubscriptionUpdate={handleSubscriptionUpdate} />;
 };
 
+const PrivacyRoute: React.FC = () => {
+  const isExtension =
+    typeof window !== 'undefined' && window.location.protocol === 'chrome-extension:';
+
+  React.useEffect(() => {
+    if (!isExtension) {
+      window.location.replace('/privacy.html');
+    }
+  }, [isExtension]);
+
+  if (!isExtension) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#FBFBFE] dark:bg-[#0A0A0B]">
+        <JumpStarLoading caption="Opening privacy policy..." />
+      </div>
+    );
+  }
+
+  return <PrivacyPolicy />;
+};
+
 const AppRoutes: React.FC = () => {
   return (
     <>
       <ScrollToTop />
       <Routes>
-      {/* Root: send logged-in users to /cove, others to App (landing) */}
-      <Route path="/" element={<RootRedirect />} />
+        {/* Root: send logged-in users to /cove, others to App (landing) */}
+        <Route path="/" element={<RootRedirect />} />
 
-      {/* Auth pages — only accessible when NOT logged in */}
-      <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
-      <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
-      <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
-      <Route path="/auth/action" element={<AuthActionPage />} />
+        {/* Auth pages — only accessible when NOT logged in */}
+        <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+        <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
+        <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/auth/action" element={<AuthActionPage />} />
 
-      {/* Main app */}
-      <Route path="/cove/*" element={<ProtectedRoute><App key="cove-app" /></ProtectedRoute>} />
+        {/* Main app */}
+        <Route path="/cove/*" element={<ProtectedRoute><App key="cove-app" /></ProtectedRoute>} />
 
-      {/* Other pages */}
-      <Route path="/subscription" element={<SubscriptionRoute />} />
-      <Route path="/loading-demo" element={<LoadingDemo />} />
-      <Route path="/echo-land" element={<EchoLand />} />
-      <Route path="/privacy" element={<PrivacyPolicy />} />
-      <Route path="/terms" element={<TermsOfService />} />
-      <Route path="/stories/:slug" element={<StoryPage />} />
+        {/* Other pages */}
+        <Route path="/subscription" element={<SubscriptionRoute />} />
+        <Route path="/loading-demo" element={<LoadingDemo />} />
+        <Route path="/echo-land" element={<EchoLand />} />
+        <Route path="/privacy" element={<PrivacyRoute />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/stories/:slug" element={<StoryPage />} />
 
-      {/* SEO Landing Pages */}
-      <Route path="/use-cases/:slug" element={<SeoLandingPage />} />
-      <Route path="/compare/:slug" element={<SeoLandingPage />} />
-      <Route path="/features/:slug" element={<SeoLandingPage />} />
-      <Route path="/workflows/:slug" element={<SeoLandingPage />} />
+        {/* SEO Landing Pages */}
+        <Route path="/use-cases/:slug" element={<SeoLandingPage />} />
+        <Route path="/compare/:slug" element={<SeoLandingPage />} />
+        <Route path="/features/:slug" element={<SeoLandingPage />} />
+        <Route path="/workflows/:slug" element={<SeoLandingPage />} />
 
-      {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   );

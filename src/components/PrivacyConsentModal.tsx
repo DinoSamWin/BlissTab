@@ -1,5 +1,6 @@
 import React from 'react';
 import { Theme } from '../types';
+import { getInternalUrl } from '../services/environmentService';
 
 interface PrivacyConsentModalProps {
   isOpen: boolean;
@@ -16,8 +17,8 @@ const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const privacyHref = typeof chrome !== 'undefined' && chrome.runtime?.id ? '#/privacy' : '/privacy';
   const isDark = theme === 'dark';
+  const privacyHref = getInternalUrl('/privacy');
 
   return (
     <div className="fixed inset-0 z-[180] bg-black/45 backdrop-blur-sm flex items-center justify-center p-5">
@@ -74,7 +75,7 @@ const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
             <p className={`text-sm leading-7 ${isDark ? 'text-amber-100/90' : 'text-amber-900'}`}>
               This prompt is for the optional context-aware mode only. It does not grant permission to sell data or
               use it for advertising. See our{' '}
-              <a href={privacyHref} className="font-bold underline underline-offset-4">
+              <a href={privacyHref} target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4">
                 Privacy Policy
               </a>{' '}
               for the full list of collected data, what is shared, storage locations, retention, and deletion

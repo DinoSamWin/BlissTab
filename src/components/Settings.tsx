@@ -1608,7 +1608,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
             {/* Privacy Policy */}
             <div className="flex justify-start items-center gap-4">
               <a
-                href="https://startlytab.com/privacy"
+                href={getInternalUrl('/privacy')}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"
@@ -1617,7 +1617,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, state, updateState
               </a>
               <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
               <a
-                href="https://startlytab.com/terms"
+                href={getInternalUrl('/terms')}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 uppercase tracking-widest transition-colors"

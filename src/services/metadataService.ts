@@ -175,17 +175,13 @@ async function fetchFavicon(domain: string): Promise<string> {
   // 方案1：直接使用 Google Favicon API（最快，无需验证）
   const googleFavicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
-  // 方案2：DuckDuckGo（备用）
-  const duckduckgoFavicon = `https://icons.duckduckgo.com/ip3/${domain}.ico`;
-
-  // 方案3：直接访问域名 favicon
+  // 方案2：直接访问域名 favicon
   const directFavicon = `https://${domain}/favicon.ico`;
 
-  // 并行竞速：同时尝试多个服务，谁快用谁
+  // 并行竞速：同时尝试 Google 服务和站点自身 favicon
   const attempts = [
     { url: googleFavicon, priority: 1 },
-    { url: duckduckgoFavicon, priority: 2 },
-    { url: directFavicon, priority: 3 }
+    { url: directFavicon, priority: 2 }
   ];
 
   // 并行验证，取第一个成功的
@@ -225,13 +221,12 @@ function resolveUrl(baseUrl: string, relativeUrl: string): string {
 }
 
 async function fetchPageMetadata(url: string): Promise<{ title?: string; icon?: string }> {
-  // 1. 尝试直接请求 (如果是扩展程序环境且有权限)
-  // Check if we are in an extension environment
+  // Only the extension performs direct metadata fetches for arbitrary sites.
+  // The web app intentionally avoids third-party HTML proxy services here.
   const isExtension = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
 
   if (isExtension) {
     try {
-      // 扩展程序可以直接发请求，绕过 CORS代理
       const response = await withTimeout(fetch(url, { method: 'GET' }), 3000);
       if (response.ok) {
         const htmlContent = await response.text();
@@ -240,92 +235,8 @@ async function fetchPageMetadata(url: string): Promise<{ title?: string; icon?: 
         return extractMetadataFromDoc(doc, url);
       }
     } catch (e) {
-      console.log('Direct fetch failed, falling back to proxy:', e);
+      console.log('Direct metadata fetch failed; using favicon/cloud fallback only:', e);
     }
-  }
-
-  // 2. 策略：快速尝试多个 CORS 代理（并行，2秒超时）
-  const proxies = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  ];
-
-  try {
-    const proxyPromises = proxies.map(proxyUrl =>
-      withTimeout(
-        fetch(proxyUrl)
-          .then(r => r.json())
-          .then(data => {
-            // 处理不同代理的响应格式
-            let htmlContent: string;
-            if (data.contents) {
-              // allorigins.win 格式
-              htmlContent = data.contents;
-            } else if (typeof data === 'string') {
-              // corsproxy.io 可能直接返回 HTML
-              htmlContent = data;
-            } else {
-              throw new Error('No content found');
-            }
-
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlContent, 'text/html');
-            const result: { title?: string; icon?: string } = {};
-
-            // --- 1. Extract Title ---
-            // 优先级1: og:site_name
-            const ogSiteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content');
-            if (ogSiteName) {
-              result.title = ogSiteName;
-            } else {
-              // 优先级2: application-name
-              const appName = doc.querySelector('meta[name="application-name"]')?.getAttribute('content');
-              if (appName) {
-                result.title = appName;
-              } else {
-                // 优先级3: title tag
-                const title = doc.querySelector('title')?.textContent;
-                if (title) {
-                  result.title = title.replace(/\s*[-|]\s*.+$/, '').trim();
-                }
-              }
-            }
-
-            // --- 2. Extract Icon ---
-            // Look for link rel="icon", "shortcut icon", "apple-touch-icon"
-            const iconSelectors = [
-              'link[rel="apple-touch-icon"]',
-              'link[rel="icon"]',
-              'link[rel="shortcut icon"]'
-            ];
-
-            for (const selector of iconSelectors) {
-              const el = doc.querySelector(selector);
-              const href = el?.getAttribute('href');
-              if (href) {
-                result.icon = resolveUrl(url, href);
-                break; // Found the best one (selectors are ordered by priority)
-              }
-            }
-
-            if (!result.title && !result.icon) {
-              throw new Error('No metadata found');
-            }
-            return result;
-          }),
-        2500 // 稍微增加超时时间到2.5s，因为解析变通常了
-      )
-    );
-
-    // 并行尝试，取第一个成功的
-    const results = await Promise.allSettled(proxyPromises);
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) {
-        return result.value;
-      }
-    }
-  } catch (error) {
-    console.log('Failed to fetch page metadata:', error);
   }
 
   return {};
@@ -450,8 +361,8 @@ function extractMetadataFromDoc(doc: Document, baseUrl: string): { title?: strin
 // 抽取后台更新逻辑
 function refreshMetadataInBackground(canonicalUrl: string, domain: string, cacheKey: string, currentData: SiteMetadata, onUpdate?: (metadata: SiteMetadata) => void) {
   Promise.all([
-    fetchFavicon(domain),             // 1. Google/DDG API
-    fetchPageMetadata(canonicalUrl),  // 2. HTML parsing (Proxy)
+    fetchFavicon(domain),              // 1. Google / direct favicon
+    fetchPageMetadata(canonicalUrl),   // 2. Direct HTML parsing in extension context
     fetchGatewayMetadata(canonicalUrl) // 3. Supabase global metadata (fallback)
   ]).then(async ([apiFavicon, pageMeta, cloudMeta]) => {
 
@@ -512,4 +423,3 @@ function refreshMetadataInBackground(canonicalUrl: string, domain: string, cache
     console.log(`[Metadata] Background refresh failed for ${domain}:`, err);
   });
 }
-

@@ -1,6 +1,8 @@
 
 import { QuickLink, SearchEngine } from '../types';
 
+const OFFICIAL_WEB_URL = ((import.meta as any).env?.VITE_WEB_URL || 'https://www.startlytab.com').replace(/\/$/, '');
+
 export const CHINA_TIMEZONES = [
   'Asia/Shanghai',
   'Asia/Chongqing',
@@ -267,8 +269,7 @@ export function getInternalUrl(path: string): string {
   // Payment gateways (Creem, Stripe, etc.) do not support chrome-extension:// protocols.
   // We force subscription related links to open on the official website.
   if (normalizedPath === '/subscription') {
-    const webUrl = 'https://www.startlytab.com';
-    return `${webUrl}/subscription`;
+    return `${OFFICIAL_WEB_URL}/subscription`;
   }
 
   const baseUrl = window.location.origin;
@@ -280,4 +281,11 @@ export function getInternalUrl(path: string): string {
   
   // For web (BrowserRouter)
   return `${baseUrl}${normalizedPath}`;
+}
+
+export function getOfficialWebUrl(path: string = ''): string {
+  if (!path) return OFFICIAL_WEB_URL;
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${OFFICIAL_WEB_URL}${normalizedPath}`;
 }

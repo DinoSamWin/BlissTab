@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabaseService';
+import { getOfficialWebUrl } from './environmentService';
 
 // Service for handling Creem payment integration
 
@@ -65,6 +66,11 @@ export async function createCheckoutSession(productId: string, email?: string, u
             'x-client-info': 'supabase-js/2.39.1'
         };
 
+        const isExtension = typeof window !== 'undefined' && window.location.protocol === 'chrome-extension:';
+        const returnBaseUrl = isExtension ? getOfficialWebUrl() : window.location.origin;
+        const successUrl = `${returnBaseUrl}/subscription?payment=success`;
+        const cancelUrl = `${returnBaseUrl}/subscription?payment=canceled`;
+
         const makeRequest = async (currentHeaders: Record<string, string>) => {
             return await fetch(functionsUrl, {
                 method: 'POST',
@@ -73,6 +79,8 @@ export async function createCheckoutSession(productId: string, email?: string, u
                     productId,
                     email,
                     userId,
+                    successUrl,
+                    cancelUrl,
                     action: 'create_checkout',
                     testMode: import.meta.env.VITE_CREEM_TEST_MODE === 'true'
                 })

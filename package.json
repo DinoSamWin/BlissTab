@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "generate:privacy": "node scripts/generate-privacy-html.mjs",
+    "prebuild": "npm run generate:privacy",
+    "prebuild:extension": "npm run generate:privacy",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

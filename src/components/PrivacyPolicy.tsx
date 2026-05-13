@@ -1,83 +1,16 @@
 import React from 'react';
 import { useSEO } from '../hooks/useSEO';
-
-const collectionCards = [
-  {
-    title: 'Account & Sign-in Data',
-    items: [
-      'Email address, account ID, display name, and avatar',
-      'Authentication state and session data needed for sign-in',
-      'Subscription and account status returned by our backend'
-    ]
-  },
-  {
-    title: 'Saved Content & Settings',
-    items: [
-      'Saved shortcuts, URLs, titles, categories, and custom labels',
-      'Custom gateway logos and related storage paths',
-      'Theme, language, search engine, persona, and snippet preferences'
-    ]
-  },
-  {
-    title: 'User-Triggered Browser Data',
-    items: [
-      'Bookmarks, only when you use bookmark import',
-      'Current tab URL, title, and favicon, only when you add the active page',
-      'Page title and icon requests for websites you save as shortcuts'
-    ]
-  },
-  {
-    title: 'Optional Context-Aware Signals',
-    items: [
-      'Open tab count, audio-playing state, and download-in-progress state',
-      'Focused window state, battery level, and idle time on this page',
-      'Collected only if you enable context-aware mode, and used as aggregated signals rather than a list of all open tab URLs'
-    ]
-  },
-  {
-    title: 'Well-Being & Local History',
-    items: [
-      'Emotion selections you explicitly click in the UI',
-      'Locally saved perspective history and related timestamps',
-      'Local metadata caches used to reduce repeat requests'
-    ]
-  },
-  {
-    title: 'Billing & Support Data',
-    items: [
-      'Subscription plan, redemption status, and transaction references',
-      'Customer email used for payment portal and billing support',
-      'Transactional email delivery status for verification and password reset'
-    ]
-  }
-];
-
-const providerRows = [
-  {
-    party: 'Google / Firebase',
-    reason: 'Google sign-in, Firebase authentication, and related account/session handling.'
-  },
-  {
-    party: 'Supabase',
-    reason: 'Cloud sync, database records, storage for user-uploaded gateway logos, and backend functions.'
-  },
-  {
-    party: 'AI providers (such as DeepSeek, SiliconFlow, or ZhipuAI, depending on configuration)',
-    reason: 'Generate AI perspectives using the prompts and selected context StartlyTab sends when you request generation, including optional aggregated browser-state signals if you enabled that mode.'
-  },
-  {
-    party: 'Creem',
-    reason: 'Subscription checkout, billing portal access, and payment-related customer lookups.'
-  },
-  {
-    party: 'Resend',
-    reason: 'Transactional emails such as verification and password reset messages.'
-  },
-  {
-    party: 'Websites you save or request metadata for',
-    reason: 'When you add a shortcut, StartlyTab may request that page, its favicon, or related icon endpoints to fetch title or icon data.'
-  }
-];
+import {
+  privacyChoiceItems,
+  privacyCollectionCards,
+  privacyHandlingItems,
+  privacyLimitedUseStatement,
+  privacyPolicyBadge,
+  privacyPolicyIntro,
+  privacyPolicyLastUpdated,
+  privacyProviderRows,
+  privacyStorageItems,
+} from '../privacyPolicyContent';
 
 const PrivacyPolicy: React.FC = () => {
   useSEO({
@@ -87,36 +20,43 @@ const PrivacyPolicy: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-[#FBFBFE] dark:bg-[#0A0A0B] text-gray-900 dark:text-gray-100 px-6 py-10 md:px-10 md:py-16">
-      <div className="max-w-5xl mx-auto space-y-12">
-        <header className="space-y-4 border-b border-black/5 dark:border-white/10 pb-10">
-          <div className="inline-flex rounded-full bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-300">
-            Chrome Web Store Compliance 2026
+    <div
+      className="relative min-h-screen overflow-hidden bg-[#FBFBFE] px-6 py-10 text-[#1A1A1E] dark:bg-[#0A0A0B] dark:text-[#F3F4F6] md:px-10 md:py-14"
+      style={{ fontFamily: 'Inter, sans-serif' }}
+    >
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-20 left-0 h-72 w-72 rounded-full bg-[#d6e4ed]/70 blur-3xl dark:bg-indigo-900/20" />
+        <div className="absolute -top-10 right-0 h-72 w-72 rounded-full bg-[#ece9ca]/65 blur-3xl dark:bg-amber-900/10" />
+      </div>
+
+      <div className="relative mx-auto max-w-6xl space-y-10">
+        <header className="space-y-4 border-b border-black/10 pb-11 dark:border-white/10">
+          <div className="inline-flex rounded-full bg-indigo-100/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-200">
+            {privacyPolicyBadge}
           </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
+          <h1 className="text-[3.2rem] font-semibold leading-[0.94] tracking-[-0.065em] md:text-[4.6rem]">
             Privacy Policy
           </h1>
-          <p className="max-w-3xl text-sm md:text-base leading-7 text-gray-600 dark:text-gray-400">
-            This page explains how StartlyTab collects, uses, stores, and shares data when you use the
-            extension, website, and related account features.
+          <p className="max-w-4xl text-[18px] leading-8 text-[#556071] dark:text-white/65">
+            {privacyPolicyIntro}
           </p>
         </header>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center">1</div>
-            <h2 className="text-2xl font-bold">What We Collect</h2>
+        <section className="space-y-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-[15px] font-bold text-white shadow-[0_12px_28px_rgba(79,70,229,0.22)]">1</div>
+            <h2 className="text-[1.95rem] font-semibold tracking-[-0.04em]">User Data Collection</h2>
           </div>
-          <div className="grid md:grid-cols-2 gap-5">
-            {collectionCards.map((card) => (
+          <div className="grid gap-6 md:grid-cols-2">
+            {privacyCollectionCards.map((card) => (
               <div
                 key={card.title}
-                className="rounded-3xl border border-black/5 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6 shadow-sm"
+                className="rounded-[1.8rem] border border-black/10 bg-white/75 p-6 shadow-[0_22px_60px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_22px_60px_rgba(0,0,0,0.22)]"
               >
-                <h3 className="text-lg font-bold mb-3">{card.title}</h3>
-                <ul className="space-y-2 text-sm leading-7 text-gray-600 dark:text-gray-400">
+                <h3 className="mb-3 text-[1.15rem] font-semibold tracking-[-0.02em]">{card.title}</h3>
+                <ul className="space-y-2.5 pl-4 text-[15px] leading-8 text-[#556071] dark:text-white/65">
                   {card.items.map((item) => (
-                    <li key={item}>• {item}</li>
+                    <li key={item}>{item}</li>
                   ))}
                 </ul>
               </div>
@@ -124,59 +64,59 @@ const PrivacyPolicy: React.FC = () => {
           </div>
         </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center">2</div>
-            <h2 className="text-2xl font-bold">How We Use It</h2>
+        <section className="space-y-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-[15px] font-bold text-white shadow-[0_12px_28px_rgba(79,70,229,0.22)]">2</div>
+            <h2 className="text-[1.95rem] font-semibold tracking-[-0.04em]">User Data Handling & Processing</h2>
           </div>
-          <div className="rounded-3xl border border-black/5 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6">
-            <ul className="space-y-3 text-sm leading-7 text-gray-600 dark:text-gray-400">
-              <li><strong className="text-gray-900 dark:text-gray-100">Sign-in and account management:</strong> authenticate you, keep you signed in, and restore your synced workspace.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Shortcut management:</strong> save, sync, import, edit, export, and display your saved links and custom logos.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Perspective generation:</strong> generate AI text using your selected language, active prompts, recent in-product history, and emotion selections. If you enable context-aware mode, optional browser-state signals may also be used. For this feature, StartlyTab is designed to use the summarized state itself, such as tab count or whether audio is playing, rather than the full URLs of all open tabs.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Billing and entitlements:</strong> verify subscriptions, redemption status, and payment-related access.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Security and operations:</strong> maintain caches, prevent account-sync issues, and send verification or password-reset emails.</li>
+          <div className="rounded-[1.8rem] border border-black/10 bg-white/75 p-7 shadow-[0_22px_60px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_22px_60px_rgba(0,0,0,0.22)]">
+            <ul className="space-y-3 pl-4 text-[15px] leading-8 text-[#556071] dark:text-white/65">
+              {privacyHandlingItems.map((item) => (
+                <li key={item.label}>
+                  <strong className="font-semibold text-[#1A1A1E] dark:text-[#F3F4F6]">{item.label}:</strong> {item.text}
+                </li>
+              ))}
             </ul>
           </div>
         </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center">3</div>
-            <h2 className="text-2xl font-bold">Storage & Retention</h2>
+        <section className="space-y-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-[15px] font-bold text-white shadow-[0_12px_28px_rgba(79,70,229,0.22)]">3</div>
+            <h2 className="text-[1.95rem] font-semibold tracking-[-0.04em]">User Data Storage & Retention</h2>
           </div>
-          <div className="rounded-3xl border border-black/5 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6">
-            <ul className="space-y-3 text-sm leading-7 text-gray-600 dark:text-gray-400">
-              <li><strong className="text-gray-900 dark:text-gray-100">On your device:</strong> StartlyTab stores app state, preferences, caches, emotion logs, and perspective history in local browser storage. Firebase authentication may also use IndexedDB persistence.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">In the cloud:</strong> synced user data, subscription state, feedback submitted through our backend, and uploaded gateway logos may be stored in Supabase.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Cloud retention:</strong> account-linked synced records are generally kept while your account remains active and until you delete them or request deletion, unless a longer retention period is required for security, fraud prevention, or legal compliance.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Retention examples:</strong> local perspective history is trimmed to recent entries, emotion logs are kept for up to 30 days, and metadata caches expire automatically over time.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Security:</strong> data sent over the network is intended to use HTTPS/TLS. Access to synced cloud records is controlled by our backend and service-provider safeguards.</li>
+          <div className="rounded-[1.8rem] border border-black/10 bg-white/75 p-7 shadow-[0_22px_60px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_22px_60px_rgba(0,0,0,0.22)]">
+            <ul className="space-y-3 pl-4 text-[15px] leading-8 text-[#556071] dark:text-white/65">
+              {privacyStorageItems.map((item) => (
+                <li key={item.label}>
+                  <strong className="font-semibold text-[#1A1A1E] dark:text-[#F3F4F6]">{item.label}:</strong> {item.text}
+                </li>
+              ))}
             </ul>
           </div>
         </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center">4</div>
-            <h2 className="text-2xl font-bold">Who Data Is Shared With</h2>
+        <section className="space-y-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-[15px] font-bold text-white shadow-[0_12px_28px_rgba(79,70,229,0.22)]">4</div>
+            <h2 className="text-[1.95rem] font-semibold tracking-[-0.04em]">User Data Sharing</h2>
           </div>
-          <div className="rounded-3xl border border-rose-100 dark:border-rose-900/30 bg-rose-50 dark:bg-rose-900/10 p-6 text-sm leading-7 text-rose-900 dark:text-rose-100">
+          <div className="rounded-[1.5rem] border border-indigo-200/70 bg-indigo-50/70 p-5 text-[15px] leading-8 text-indigo-950/80 dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-100/90">
             We do not sell your personal data and we do not use it for personalized advertising, creditworthiness decisions, or data brokerage.
           </div>
-          <div className="overflow-hidden rounded-3xl border border-black/5 dark:border-white/10 bg-white dark:bg-white/[0.03]">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 dark:bg-white/[0.04] text-gray-500 dark:text-gray-400 uppercase tracking-[0.16em] text-[10px]">
+          <div className="overflow-hidden rounded-[1.8rem] border border-black/10 bg-white/75 shadow-[0_22px_60px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_22px_60px_rgba(0,0,0,0.22)]">
+            <table className="w-full text-left text-[15px]">
+              <thead className="bg-white/60 text-[#556071] uppercase tracking-[0.16em] text-[11px] dark:bg-white/[0.05] dark:text-white/55">
                 <tr>
-                  <th className="px-6 py-4">Party</th>
-                  <th className="px-6 py-4">Why Data May Be Shared</th>
+                  <th className="px-6 py-4 font-semibold">Party</th>
+                  <th className="px-6 py-4 font-semibold">Why Data May Be Shared</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/5 dark:divide-white/10">
-                {providerRows.map((row) => (
+              <tbody className="divide-y divide-black/10 dark:divide-white/10">
+                {privacyProviderRows.map((row) => (
                   <tr key={row.party}>
-                    <td className="px-6 py-4 align-top font-semibold text-gray-900 dark:text-gray-100">{row.party}</td>
-                    <td className="px-6 py-4 align-top text-gray-600 dark:text-gray-400 leading-7">{row.reason}</td>
+                    <td className="px-6 py-4 align-top font-semibold leading-8 text-[#1A1A1E] dark:text-[#F3F4F6]">{row.party}</td>
+                    <td className="px-6 py-4 align-top leading-8 text-[#556071] dark:text-white/65">{row.reason}</td>
                   </tr>
                 ))}
               </tbody>
@@ -184,29 +124,38 @@ const PrivacyPolicy: React.FC = () => {
           </div>
         </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center">5</div>
-            <h2 className="text-2xl font-bold">Your Choices</h2>
+        <section className="space-y-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-[15px] font-bold text-white shadow-[0_12px_28px_rgba(79,70,229,0.22)]">5</div>
+            <h2 className="text-[1.95rem] font-semibold tracking-[-0.04em]">Your Choices</h2>
           </div>
-          <div className="rounded-3xl border border-black/5 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6">
-            <ul className="space-y-3 text-sm leading-7 text-gray-600 dark:text-gray-400">
-              <li><strong className="text-gray-900 dark:text-gray-100">Context-aware mode is optional:</strong> you can use StartlyTab in basic mode without enabling the optional browser-state signals described above.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Local data:</strong> you can remove local app data on this device by clearing your browser storage for StartlyTab or uninstalling the extension. Where available, StartlyTab settings may also help you reset local data.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Synced account data:</strong> if you want cloud data deleted, contact <a href="mailto:support@startlytab.com" className="text-indigo-600 dark:text-indigo-300 font-bold">support@startlytab.com</a>. We use that request to remove account-linked synced records that are not required to be retained for security, fraud prevention, or legal compliance.</li>
-              <li><strong className="text-gray-900 dark:text-gray-100">Questions:</strong> if you need clarification about our data handling, contact us at <a href="mailto:support@startlytab.com" className="text-indigo-600 dark:text-indigo-300 font-bold">support@startlytab.com</a>.</li>
+          <div className="rounded-[1.8rem] border border-black/10 bg-white/75 p-7 shadow-[0_22px_60px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_22px_60px_rgba(0,0,0,0.22)]">
+            <ul className="space-y-3 pl-4 text-[15px] leading-8 text-[#556071] dark:text-white/65">
+              {privacyChoiceItems.map((item) => (
+                <li key={item.label}>
+                  <strong className="font-semibold text-[#1A1A1E] dark:text-[#F3F4F6]">{item.label}:</strong>{' '}
+                  {item.text.includes('support@startlytab.com') ? (
+                    <>
+                      {item.text.split('support@startlytab.com')[0]}
+                      <a href="mailto:support@startlytab.com" className="font-semibold text-indigo-600 dark:text-indigo-300">support@startlytab.com</a>
+                      {item.text.split('support@startlytab.com').slice(1).join('support@startlytab.com')}
+                    </>
+                  ) : (
+                    item.text
+                  )}
+                </li>
+              ))}
             </ul>
           </div>
         </section>
 
-        <section className="rounded-[2rem] bg-gradient-to-br from-indigo-600 to-indigo-500 text-white p-8 shadow-xl">
-          <h2 className="text-2xl font-bold">Chrome Limited Use</h2>
-          <p className="mt-3 text-sm leading-7 text-white/90">
-            The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy,
-            including the Limited Use requirements.
+        <section className="rounded-[1.8rem] border border-indigo-200/70 bg-[linear-gradient(135deg,rgba(79,70,229,0.12),rgba(99,102,241,0.05))] p-8 shadow-[0_22px_60px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-indigo-400/20 dark:bg-[linear-gradient(135deg,rgba(129,140,248,0.14),rgba(129,140,248,0.05))] dark:shadow-[0_22px_60px_rgba(0,0,0,0.22)]">
+          <h2 className="text-[1.55rem] font-semibold tracking-[-0.03em]">Chrome Limited Use</h2>
+          <p className="mt-3 text-[15px] leading-8 text-[#556071] dark:text-white/70">
+            {privacyLimitedUseStatement}
           </p>
-          <p className="mt-6 text-[11px] uppercase tracking-[0.18em] text-white/70">
-            Last updated: April 27, 2026
+          <p className="mt-6 text-[13px] text-[#556071] dark:text-white/55">
+            Last updated: {privacyPolicyLastUpdated}
           </p>
         </section>
       </div>

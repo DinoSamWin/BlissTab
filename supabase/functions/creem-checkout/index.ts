@@ -10,6 +10,17 @@ const corsHeaders = {
 
 const VERSION = "1.1.6";
 
+function isValidHttpUrl(value?: string | null): boolean {
+    if (!value) return false;
+
+    try {
+        const parsed = new URL(value);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -27,17 +38,22 @@ serve(async (req) => {
         const apiKeyTest = Deno.env.get('CREEM_API_KEY_TEST') || "";
 
         if (normalizedAction === 'create_checkout') {
-            const { productId, testMode, userId } = body;
+            const { productId, testMode, userId, successUrl, cancelUrl } = body;
             const key = testMode ? apiKeyTest : apiKeyLive;
             if (!key) return new Response(JSON.stringify({ success: false, error: "API Key not configured", version: VERSION }), { status: 200, headers: corsHeaders });
 
             try {
                 const creem = createCreem({ apiKey: key, testMode: !!testMode });
+                const appUrl = Deno.env.get('APP_URL') || 'https://www.startlytab.com';
+                const requestOrigin = req.headers.get('origin') || '';
+                const safeBaseUrl = isValidHttpUrl(requestOrigin) ? new URL(requestOrigin).origin : appUrl;
+                const resolvedSuccessUrl = isValidHttpUrl(successUrl) ? successUrl : `${safeBaseUrl}/subscription?payment=success`;
+                const resolvedCancelUrl = isValidHttpUrl(cancelUrl) ? cancelUrl : `${safeBaseUrl}/subscription?payment=canceled`;
                 const session = await creem.checkouts.create({
                     productId: productId,
                     customerEmail: email,
-                    successUrl: `${req.headers.get('origin') || 'http://localhost:3000'}/subscription?payment=success`,
-                    cancelUrl: `${req.headers.get('origin') || 'http://localhost:3000'}/subscription?payment=canceled`,
+                    successUrl: resolvedSuccessUrl,
+                    cancelUrl: resolvedCancelUrl,
                     metadata: { userId: userId }
                 } as any);
 

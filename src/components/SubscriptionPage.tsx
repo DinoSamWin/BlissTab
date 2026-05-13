@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SubscriptionPlan, User } from '../types';
 import { fetchSubscriptionState } from '../services/subscriptionService';
 import { createCheckoutSession } from '../services/creemService';
+import { getInternalUrl, getOfficialWebUrl } from '../services/environmentService';
 import { Check, Diamond, Briefcase, Zap, Loader2 } from 'lucide-react';
 
 interface SubscriptionPageProps {
@@ -109,6 +110,8 @@ const PLANS: PlanMeta[] = [
 ];
 
 const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptionUpdate, onRequireLogin }) => {
+  const isExtension =
+    typeof window !== 'undefined' && window.location.protocol === 'chrome-extension:';
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<DisplayPlanId | null>(null);
   const [currentPlan, setCurrentPlan] = useState<'free' | 'pro' | 'lifetime'>('free');
@@ -199,21 +202,46 @@ const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ user, onSubscriptio
     }
   }, [user, onSubscriptionUpdate]);
 
+  const redirectToLoginForCheckout = () => {
+    sessionStorage.setItem('redirect_after_login_to_pricing', 'true');
+
+    if (onRequireLogin) {
+      onRequireLogin();
+      return;
+    }
+
+    window.location.assign(getInternalUrl('/login'));
+  };
+
   const handleSelectPlan = async (planId: DisplayPlanId) => {
     if (!user?.id) {
-       if (onRequireLogin) {
-         // Save the intention so user gets redirected to pricing after login? Or just show login modal.
-         // Let's set a flag that after login we redirect to setup or pricing
-         sessionStorage.setItem('redirect_after_login_to_pricing', 'true');
-         onRequireLogin();
-       }
-       return;
+      redirectToLoginForCheckout();
+      return;
     }
-    if (!onSubscriptionUpdate) return;
     if (planId === 'free') return; // Free is default
 
     // Prevent re-subscribing to same plan (simplified logic)
     if (currentPlan === planId) return;
+
+    if (isExtension) {
+      const websiteSubscriptionUrl = new URL(getOfficialWebUrl('/subscription'));
+      websiteSubscriptionUrl.searchParams.set('source', 'extension');
+      websiteSubscriptionUrl.searchParams.set('plan', planId);
+      if (planId === 'pro') {
+        websiteSubscriptionUrl.searchParams.set('billing', proBillingCycle);
+      }
+      if (user?.email) {
+        websiteSubscriptionUrl.searchParams.set('prefill_email', user.email);
+      }
+
+      window.open(websiteSubscriptionUrl.toString(), '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (!onSubscriptionUpdate) {
+      window.location.assign(getInternalUrl('/subscription'));
+      return;
+    }
 
     try {
       setLoadingPlan(planId);

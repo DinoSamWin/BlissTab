@@ -128,14 +128,36 @@ export function firebaseUserToAppUser(fbUser: any): User {
     }
   }
 
+  const fallbackLabel = fbUser.displayName || email || 'User';
+  const fallbackAvatar = buildAvatarDataUrl(fallbackLabel);
+
   return {
     id: fbUser.uid,
     email: email || '',
     // Trust social providers or Firebase's own flag
     emailVerified: fbUser.emailVerified || isSocialUser,
     name: fbUser.displayName || email?.split('@')[0] || 'User',
-    picture: fbUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(fbUser.displayName || fbUser.email || 'U')}&background=6366f1&color=fff`,
+    picture: fbUser.photoURL || fallbackAvatar,
   };
+}
+
+function buildAvatarDataUrl(label: string): string {
+  const trimmed = (label || 'User').trim();
+  const initials = trimmed
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part[0]?.toUpperCase() || '')
+    .join('') || 'U';
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="${initials}">
+      <rect width="128" height="128" rx="24" fill="#6366f1"/>
+      <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="700" fill="#ffffff">${initials}</text>
+    </svg>
+  `.trim();
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 // ─────────────────────────────────────────────

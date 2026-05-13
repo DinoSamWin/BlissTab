@@ -1,7 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { getInternalUrl } from '../services/environmentService';
 
 const SemanticFooter: React.FC = () => {
+    const privacyHref = getInternalUrl('/privacy');
+
     return (
         <footer className="w-full bg-[#0B0C1A] text-gray-300 py-20 px-8 relative overflow-hidden border-t border-white/5 z-20">
             {/* Ambient Lighting */}
@@ -119,7 +122,7 @@ const SemanticFooter: React.FC = () => {
                     <h3 className="text-sm font-bold text-white uppercase tracking-widest">Trust</h3>
                     <ul className="space-y-3.5">
                         <li>
-                            <Link to="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Privacy Policy</Link>
+                            <a href={privacyHref} className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Privacy Policy</a>
                         </li>
                         <li>
                             <Link to="/terms" className="text-sm text-gray-500 hover:text-white transition-colors underline decoration-gray-500/30 underline-offset-4">Terms of Service</Link>

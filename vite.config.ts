@@ -95,8 +95,19 @@ export default defineConfig(({ mode }) => {
         },
         output: {
           entryFileNames: 'assets/[name].js',
-          chunkFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name].[hash].js',
           assetFileNames: 'assets/[name].[ext]',
+          manualChunks: (id) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) {
+                return 'vendor-firebase';
+              }
+              if (id.includes('@supabase')) {
+                return 'vendor-supabase';
+              }
+              return 'vendor';
+            }
+          }
         },
       },
     },
