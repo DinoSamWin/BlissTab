@@ -50,6 +50,43 @@ const isDefaultGroupString = (cat: string) => {
     return trimmed === 'Quick Access' || trimmed === 'Shortcuts' || trimmed === '快捷指令' || trimmed === '快捷分组';
 };
 
+const normalizeCategoryName = (category?: string) => {
+    const normalized = (category || 'Quick Access').trim() || 'Quick Access';
+    return isDefaultGroupString(normalized) ? 'Quick Access' : normalized;
+};
+
+const isGhostLink = (link: QuickLink) => link.id.startsWith('ghost-');
+
+const createGhostLink = (category: string): QuickLink => ({
+    id: `ghost-${crypto.randomUUID()}`,
+    title: 'Ghost Link',
+    url: 'about:blank',
+    icon: null,
+    color: 'transparent',
+    category,
+});
+
+const reconcileCategoryGhost = (items: QuickLink[], category?: string) => {
+    const normalizedCategory = normalizeCategoryName(category);
+
+    if (isDefaultGroupString(normalizedCategory)) {
+        return items.filter(link => !(isGhostLink(link) && isDefaultGroupString(normalizeCategoryName(link.category))));
+    }
+
+    const realLinks = items.filter(link => normalizeCategoryName(link.category) === normalizedCategory && !isGhostLink(link));
+    const ghostLinks = items.filter(link => normalizeCategoryName(link.category) === normalizedCategory && isGhostLink(link));
+
+    if (realLinks.length === 0 && ghostLinks.length === 0) {
+        return [...items, createGhostLink(normalizedCategory)];
+    }
+
+    if (realLinks.length > 0 && ghostLinks.length > 0) {
+        return items.filter(link => !(isGhostLink(link) && normalizeCategoryName(link.category) === normalizedCategory));
+    }
+
+    return items;
+};
+
 // --- Droppable Group Container ---
 function DroppableGroupContainer({ id, children, className, style }: { id: string, children: React.ReactNode, className?: string, style?: React.CSSProperties, key?: React.Key }) {
     const { setNodeRef, isOver } = useDroppable({ id: `group-${id}`, data: { type: 'group', category: id } });
@@ -572,9 +609,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
         };
 
         links.forEach(link => {
-            let cat = link.category || "Quick Access";
-            // Normalize variants to English
-            if (isDefaultGroupString(cat)) cat = 'Quick Access';
+            const cat = normalizeCategoryName(link.category);
 
             if (!groups[cat]) groups[cat] = [];
             groups[cat].push(link);
@@ -630,11 +665,11 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
             url: data.url,
             icon: null, // Will be fetched in background
             color: '#cbd5e1',
-            category: data.category,
+            category: normalizeCategoryName(data.category),
             ...logoMetadata, // Spread logo metadata if uploaded
         };
 
-        const newLinks = [...links, newLink];
+        const newLinks = reconcileCategoryGhost([...links, newLink], data.category);
         setLinks(newLinks);
         onUpdate(newLinks);
         setCreateModal({ isOpen: false, category: '' });
@@ -667,13 +702,17 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
         // Check if over is a Group Container
         if (typeof overId === 'string' && overId.startsWith('group-')) {
-            const overCategory = over.data.current?.category;
+            const overCategory = normalizeCategoryName(over.data.current?.category);
             const activeLink = links.find(l => l.id === activeId);
 
-            if (activeLink && overCategory && activeLink.category !== overCategory) {
+            if (activeLink && normalizeCategoryName(activeLink.category) !== overCategory) {
                 setLinks((items) => {
-                    return items.map(l =>
+                    const updatedItems = items.map(l =>
                         l.id === activeId ? { ...l, category: overCategory } : l
+                    );
+                    return reconcileCategoryGhost(
+                        reconcileCategoryGhost(updatedItems, activeLink.category),
+                        overCategory
                     );
                 });
             }
@@ -686,8 +725,8 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
         if (!activeLink || !overLink) return;
 
-        const activeCategory = activeLink.category || "Shortcuts";
-        const overCategory = overLink.category || "Shortcuts";
+        const activeCategory = normalizeCategoryName(activeLink.category);
+        const overCategory = normalizeCategoryName(overLink.category);
 
         if (activeCategory !== overCategory) {
             // Moving between groups via item hover
@@ -697,6 +736,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
             let newLinks = [...links];
             newLinks[activeIndex] = { ...newLinks[activeIndex], category: overCategory };
             newLinks = arrayMove(newLinks, activeIndex, overIndex);
+            newLinks = reconcileCategoryGhost(reconcileCategoryGhost(newLinks, activeCategory), overCategory);
             setLinks(newLinks);
         } else {
             // Same group reordering
@@ -725,9 +765,9 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
             if (!activeLink) return;
 
             const newGroupName = `New Group ${Object.keys(groupedGateways).length}`;
-            const newLinks = links.map(l =>
+            const newLinks = reconcileCategoryGhost(links.map(l =>
                 l.id === activeLink.id ? { ...l, category: newGroupName } : l
-            );
+            ), activeLink.category);
 
             setLinks(newLinks);
             onUpdate(newLinks);
@@ -760,8 +800,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const handleDeleteGroup = () => {
         if (!deletingGroup) return;
         const newLinks = links.filter(l => {
-            const cat = l.category || "Quick Access";
-            const normalizedCat = (cat === 'Shortcuts' || cat === '快捷指令') ? 'Quick Access' : cat;
+            const normalizedCat = normalizeCategoryName(l.category);
             return normalizedCat !== deletingGroup;
         });
         setLinks(newLinks);
@@ -808,7 +847,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                         customLogoPath: undefined,
                         customLogoHash: undefined,
                         canonicalUrl: undefined,
-                        category: params.category
+                        category: normalizeCategoryName(params.category)
                     };
                 }
                 return {
@@ -816,14 +855,19 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                     url: params.url,
                     customTitle: params.customTitle || undefined,
                     ...logoMetadata, // Spread logo metadata if uploaded
-                    category: params.category
+                    category: normalizeCategoryName(params.category)
                 };
             }
             return l;
         });
 
-        setLinks(updatedLinks);
-        onUpdate(updatedLinks);
+        const reconciledLinks = reconcileCategoryGhost(
+            reconcileCategoryGhost(updatedLinks, editLink.category),
+            params.category
+        );
+
+        setLinks(reconciledLinks);
+        onUpdate(reconciledLinks);
         setEditLink(null);
     };
 
@@ -832,16 +876,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
         const newGroupName = `New Group ${Object.keys(groupedGateways).length}`;
         // Create a "Ghost" link to hold the group. 
         // We use a special scheme or ID convention to hide it in the UI.
-        const ghostLink: QuickLink = {
-            id: `ghost-${crypto.randomUUID()}`,
-            title: 'Ghost Link',
-            url: 'about:blank',
-            icon: null,
-            color: 'transparent',
-            category: newGroupName,
-        };
-
-        const newLinks = [...links, ghostLink];
+        const newLinks = [...links, createGhostLink(newGroupName)];
         setLinks(newLinks);
         onUpdate(newLinks);
 
@@ -1296,7 +1331,9 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                             onClose={() => setDeleteId(null)}
                             onConfirm={() => {
                                 if (deleteId) {
-                                    const newLinks = links.filter(l => l.id !== deleteId);
+                                    const deletedLink = links.find(l => l.id === deleteId);
+                                    let newLinks = links.filter(l => l.id !== deleteId);
+                                    newLinks = reconcileCategoryGhost(newLinks, deletedLink?.category);
                                     setLinks(newLinks);
                                     onUpdate(newLinks);
                                     setDeleteId(null);
