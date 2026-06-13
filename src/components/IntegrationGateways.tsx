@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { X, Search, Plus, Edit2, Check, Trash2, GripHorizontal, Lock, Download } from 'lucide-react';
+import { X, Plus, Edit2, Check, Trash2, Lock, Download, ArrowUpDown, GripVertical } from 'lucide-react';
 import QuickImportModule from './QuickImportModule';
 import {
     DndContext,
@@ -25,6 +25,7 @@ import {
     SortableContext,
     sortableKeyboardCoordinates,
     rectSortingStrategy,
+    verticalListSortingStrategy,
     useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -45,14 +46,86 @@ interface Props {
 }
 
 // --- Helper Functions ---
+const DEFAULT_GROUP = 'Quick Access';
+
 const isDefaultGroupString = (cat: string) => {
     const trimmed = (cat || '').trim();
-    return trimmed === 'Quick Access' || trimmed === 'Shortcuts' || trimmed === '快捷指令' || trimmed === '快捷分组';
+    return trimmed === DEFAULT_GROUP || trimmed === 'Shortcuts' || trimmed === '快捷指令' || trimmed === '快捷分组';
 };
 
-const normalizeCategoryName = (category?: string) => {
-    const normalized = (category || 'Quick Access').trim() || 'Quick Access';
-    return isDefaultGroupString(normalized) ? 'Quick Access' : normalized;
+const normalizeGroupCategory = (category?: string | null) => {
+    const trimmed = (category || '').trim();
+    if (!trimmed || isDefaultGroupString(trimmed)) return DEFAULT_GROUP;
+    return trimmed;
+};
+
+const getOrderedCategories = (items: QuickLink[]) => {
+    const orderedCategories = [DEFAULT_GROUP];
+    const seen = new Set(orderedCategories);
+
+    items.forEach((link) => {
+        const category = normalizeGroupCategory(link.category);
+        if (!seen.has(category)) {
+            seen.add(category);
+            orderedCategories.push(category);
+        }
+    });
+
+    return orderedCategories;
+};
+
+const buildGroupedLinks = (items: QuickLink[]) => {
+    const groups = new Map<string, QuickLink[]>([[DEFAULT_GROUP, []]]);
+
+    items.forEach((link) => {
+        const category = normalizeGroupCategory(link.category);
+        const existingLinks = groups.get(category);
+
+        if (existingLinks) {
+            existingLinks.push(link);
+            return;
+        }
+
+        groups.set(category, [link]);
+    });
+
+    return groups;
+};
+
+// Persist group order by rebuilding the flat links array in category blocks.
+const reorderLinksByGroupOrder = (items: QuickLink[], requestedOrder: string[]) => {
+    const groups = buildGroupedLinks(items);
+    const normalizedOrder = [DEFAULT_GROUP, ...requestedOrder.filter((category) => !isDefaultGroupString(category))];
+    const finalOrder: string[] = [];
+    const seen = new Set<string>();
+
+    normalizedOrder.forEach((category) => {
+        if (!seen.has(category) && groups.has(category)) {
+            seen.add(category);
+            finalOrder.push(category);
+        }
+    });
+
+    Array.from(groups.keys()).forEach((category) => {
+        if (!seen.has(category)) {
+            finalOrder.push(category);
+        }
+    });
+
+    return finalOrder.flatMap((category) => groups.get(category) || []);
+};
+
+const getNextUntitledGroupName = (items: QuickLink[]) => {
+    const existingCategories = new Set(getOrderedCategories(items));
+    let nextIndex = existingCategories.size;
+    let nextName = `New Group ${nextIndex}`;
+
+    while (existingCategories.has(nextName)) {
+        nextIndex += 1;
+        nextName = `New Group ${nextIndex}`;
+    }
+
+    return nextName;
 };
 
 const isGhostLink = (link: QuickLink) => link.id.startsWith('ghost-');
@@ -67,21 +140,21 @@ const createGhostLink = (category: string): QuickLink => ({
 });
 
 const reconcileCategoryGhost = (items: QuickLink[], category?: string) => {
-    const normalizedCategory = normalizeCategoryName(category);
+    const normalizedCategory = normalizeGroupCategory(category);
 
     if (isDefaultGroupString(normalizedCategory)) {
-        return items.filter(link => !(isGhostLink(link) && isDefaultGroupString(normalizeCategoryName(link.category))));
+        return items.filter(link => !(isGhostLink(link) && isDefaultGroupString(normalizeGroupCategory(link.category))));
     }
 
-    const realLinks = items.filter(link => normalizeCategoryName(link.category) === normalizedCategory && !isGhostLink(link));
-    const ghostLinks = items.filter(link => normalizeCategoryName(link.category) === normalizedCategory && isGhostLink(link));
+    const realLinks = items.filter(link => normalizeGroupCategory(link.category) === normalizedCategory && !isGhostLink(link));
+    const ghostLinks = items.filter(link => normalizeGroupCategory(link.category) === normalizedCategory && isGhostLink(link));
 
     if (realLinks.length === 0 && ghostLinks.length === 0) {
         return [...items, createGhostLink(normalizedCategory)];
     }
 
     if (realLinks.length > 0 && ghostLinks.length > 0) {
-        return items.filter(link => !(isGhostLink(link) && normalizeCategoryName(link.category) === normalizedCategory));
+        return items.filter(link => !(isGhostLink(link) && normalizeGroupCategory(link.category) === normalizedCategory));
     }
 
     return items;
@@ -94,6 +167,145 @@ function DroppableGroupContainer({ id, children, className, style }: { id: strin
     return (
         <div ref={setNodeRef} style={style} className={`${className} ${isOver ? 'bg-blue-50/30 dark:bg-blue-900/10 rounded-xl transition-colors' : ''}`}>
             {children}
+        </div>
+    );
+}
+
+interface SortableGroupOrderRowProps {
+    category: string;
+    count: number;
+}
+
+function SortableGroupOrderRow({ category, count }: SortableGroupOrderRowProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: category });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+            className={`
+                flex items-center justify-between gap-3 rounded-2xl border px-4 py-3
+                bg-white dark:bg-[#171717] border-black/5 dark:border-white/10
+                transition-all select-none
+                ${isDragging ? 'shadow-2xl scale-[1.02] border-blue-300/60 dark:border-blue-400/40 z-10' : 'hover:border-black/10 dark:hover:border-white/15'}
+            `}
+        >
+            <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-gray-500">
+                    <GripVertical className="w-4 h-4" />
+                </div>
+                <p className="min-w-0 text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{category}</p>
+            </div>
+
+            <div className="rounded-full bg-gray-100 dark:bg-white/5 px-2.5 py-1 text-[10px] font-bold text-gray-500 dark:text-gray-300 min-w-8 text-center">
+                {count}
+            </div>
+        </div>
+    );
+}
+
+interface GroupSorterPanelProps {
+    isOpen: boolean;
+    panelRef: React.RefObject<HTMLDivElement | null>;
+    categories: string[];
+    categoryCounts: Record<string, number>;
+    onReorder: (categories: string[]) => void;
+    title: string;
+    description: string;
+    fixedLabel: string;
+    emptyLabel: string;
+}
+
+function GroupSorterPanel({
+    isOpen,
+    panelRef,
+    categories,
+    categoryCounts,
+    onReorder,
+    title,
+    description,
+    fixedLabel,
+    emptyLabel,
+}: GroupSorterPanelProps) {
+    const movableCategories = categories.filter((category) => !isDefaultGroupString(category));
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        const oldIndex = movableCategories.indexOf(String(active.id));
+        const newIndex = movableCategories.indexOf(String(over.id));
+
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        onReorder([DEFAULT_GROUP, ...arrayMove(movableCategories, oldIndex, newIndex)]);
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div
+            ref={panelRef}
+            className="absolute top-full right-0 mt-3 w-[340px] rounded-[1.75rem] border border-black/5 dark:border-white/10 bg-white/95 dark:bg-[#0F0F0F]/95 backdrop-blur-2xl p-4 shadow-[0_24px_80px_rgba(15,23,42,0.14)]"
+        >
+            <div className="mb-4 px-1">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">{title}</p>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-gray-600 dark:text-gray-300">{description}</p>
+            </div>
+
+            <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/5 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] px-4 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-200/70 dark:bg-white/10 text-gray-500 dark:text-gray-300">
+                            <Lock className="w-4 h-4" />
+                        </div>
+                        <p className="min-w-0 text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{DEFAULT_GROUP}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <div className="rounded-full bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold text-gray-500 dark:text-gray-300 min-w-8 text-center">
+                            {categoryCounts[DEFAULT_GROUP] || 0}
+                        </div>
+                        <div className="rounded-full bg-white dark:bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-300">
+                            {fixedLabel}
+                        </div>
+                    </div>
+                </div>
+
+                {movableCategories.length > 0 ? (
+                    <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={movableCategories} strategy={verticalListSortingStrategy}>
+                            <div className="space-y-2">
+                                {movableCategories.map((category) => (
+                                    <SortableGroupOrderRow
+                                        key={category}
+                                        category={category}
+                                        count={categoryCounts[category] || 0}
+                                    />
+                                ))}
+                            </div>
+                        </SortableContext>
+                    </DndContext>
+                ) : (
+                    <div className="rounded-2xl border border-dashed border-gray-300 dark:border-white/10 px-4 py-5 text-center text-sm font-medium text-gray-500 dark:text-gray-400">
+                        {emptyLabel}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -547,6 +759,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const [isExpanded, setIsExpanded] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [elasticY, setElasticY] = useState(0);
+    const isAuthenticated = Boolean(userId);
 
     // Local state for immediate DnD feedback
     const [links, setLinks] = useState(Array.isArray(propLinks) ? propLinks : []);
@@ -568,6 +781,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const [isEditMode, setIsEditMode] = useState(false);
     const [activeDragId, setActiveDragId] = useState<UniqueIdentifier | null>(null);
     const [editingCategory, setEditingCategory] = useState<string | null>(null); // For renaming groups
+    const [isGroupSortOpen, setIsGroupSortOpen] = useState(false);
 
     // Modals State
     const [createModal, setCreateModal] = useState<{ isOpen: boolean; category: string }>({ isOpen: false, category: '' });
@@ -590,6 +804,8 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const scrollAccumulator = useRef(0);
     const wheelTimeout = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const groupSortButtonRef = useRef<HTMLButtonElement>(null);
+    const groupSortPanelRef = useRef<HTMLDivElement>(null);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -604,36 +820,34 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
     // Grouping Logic
     const groupedGateways = useMemo(() => {
-        const groups: Record<string, QuickLink[]> = {
-            "Quick Access": [] // Default group always first
-        };
-
-        links.forEach(link => {
-            const cat = normalizeCategoryName(link.category);
-
-            if (!groups[cat]) groups[cat] = [];
-            groups[cat].push(link);
-        });
-        return groups;
+        return Object.fromEntries(buildGroupedLinks(links)) as Record<string, QuickLink[]>;
     }, [links]);
 
-    // Enforce Category Order (Shortcuts First)
+    // Keep the group order aligned with the persisted flat links array.
     const sortedCategories = useMemo(() => {
-        return Object.keys(groupedGateways).sort((a, b) => {
-            const isA = isDefaultGroupString(a);
-            const isB = isDefaultGroupString(b);
-            if (isA && !isB) return -1;
-            if (!isA && isB) return 1;
-            return 0;
-        });
-    }, [groupedGateways]);
+        return getOrderedCategories(links);
+    }, [links]);
+
+    const categoryCounts = useMemo(() => {
+        return sortedCategories.reduce<Record<string, number>>((counts, category) => {
+            counts[category] = (groupedGateways[category] || []).filter((link) => !link.id.startsWith('ghost-')).length;
+            return counts;
+        }, {});
+    }, [groupedGateways, sortedCategories]);
+
+    const canReorderGroups = sortedCategories.some((category) => !isDefaultGroupString(category));
 
     // DnD Handlers
     const handleDragStart = (event: DragStartEvent) => {
         setActiveDragId(event.active.id);
     };
 
-
+    const handleGroupOrderChange = useCallback((nextCategoryOrder: string[]) => {
+        const reorderedLinks = reorderLinksByGroupOrder(linksRef.current, nextCategoryOrder);
+        linksRef.current = reorderedLinks;
+        setLinks(reorderedLinks);
+        onUpdate(reorderedLinks);
+    }, [onUpdate]);
 
     // ... inside IntegrationGateways ...
 
@@ -665,7 +879,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
             url: data.url,
             icon: null, // Will be fetched in background
             color: '#cbd5e1',
-            category: normalizeCategoryName(data.category),
+            category: normalizeGroupCategory(data.category),
             ...logoMetadata, // Spread logo metadata if uploaded
         };
 
@@ -702,10 +916,10 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
         // Check if over is a Group Container
         if (typeof overId === 'string' && overId.startsWith('group-')) {
-            const overCategory = normalizeCategoryName(over.data.current?.category);
+            const overCategory = normalizeGroupCategory(over.data.current?.category);
             const activeLink = links.find(l => l.id === activeId);
 
-            if (activeLink && normalizeCategoryName(activeLink.category) !== overCategory) {
+            if (activeLink && normalizeGroupCategory(activeLink.category) !== overCategory) {
                 setLinks((items) => {
                     const updatedItems = items.map(l =>
                         l.id === activeId ? { ...l, category: overCategory } : l
@@ -725,8 +939,8 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
         if (!activeLink || !overLink) return;
 
-        const activeCategory = normalizeCategoryName(activeLink.category);
-        const overCategory = normalizeCategoryName(overLink.category);
+        const activeCategory = normalizeGroupCategory(activeLink.category);
+        const overCategory = normalizeGroupCategory(overLink.category);
 
         if (activeCategory !== overCategory) {
             // Moving between groups via item hover
@@ -764,7 +978,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
             const activeLink = links.find(l => l.id === active.id);
             if (!activeLink) return;
 
-            const newGroupName = `New Group ${Object.keys(groupedGateways).length}`;
+            const newGroupName = getNextUntitledGroupName(links);
             const newLinks = reconcileCategoryGhost(links.map(l =>
                 l.id === activeLink.id ? { ...l, category: newGroupName } : l
             ), activeLink.category);
@@ -788,7 +1002,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
         }
 
         const newLinks = links.map(l =>
-            (l.category === oldName || (!l.category && oldName === 'Shortcuts'))
+            (normalizeGroupCategory(l.category) === oldName)
                 ? { ...l, category: newName }
                 : l
         );
@@ -800,8 +1014,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     const handleDeleteGroup = () => {
         if (!deletingGroup) return;
         const newLinks = links.filter(l => {
-            const normalizedCat = normalizeCategoryName(l.category);
-            return normalizedCat !== deletingGroup;
+            return normalizeGroupCategory(l.category) !== deletingGroup;
         });
         setLinks(newLinks);
         onUpdate(newLinks);
@@ -847,7 +1060,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                         customLogoPath: undefined,
                         customLogoHash: undefined,
                         canonicalUrl: undefined,
-                        category: normalizeCategoryName(params.category)
+                        category: normalizeGroupCategory(params.category)
                     };
                 }
                 return {
@@ -855,7 +1068,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                     url: params.url,
                     customTitle: params.customTitle || undefined,
                     ...logoMetadata, // Spread logo metadata if uploaded
-                    category: normalizeCategoryName(params.category)
+                    category: normalizeGroupCategory(params.category)
                 };
             }
             return l;
@@ -873,7 +1086,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
     // Create New Group Logic (for Shortcuts action)
     const handleCreateNewGroup = () => {
-        const newGroupName = `New Group ${Object.keys(groupedGateways).length}`;
+        const newGroupName = getNextUntitledGroupName(links);
         // Create a "Ghost" link to hold the group. 
         // We use a special scheme or ID convention to hide it in the UI.
         const newLinks = [...links, createGhostLink(newGroupName)];
@@ -916,11 +1129,35 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
         };
     }, [isHovered, isExpanded]);
 
+    useEffect(() => {
+        if (!isGroupSortOpen) return;
+
+        const handlePointerDown = (event: MouseEvent) => {
+            const target = event.target as Node;
+
+            if (groupSortPanelRef.current?.contains(target) || groupSortButtonRef.current?.contains(target)) {
+                return;
+            }
+
+            setIsGroupSortOpen(false);
+        };
+
+        window.addEventListener('mousedown', handlePointerDown);
+        return () => window.removeEventListener('mousedown', handlePointerDown);
+    }, [isGroupSortOpen]);
+
+    useEffect(() => {
+        if (!isExpanded) {
+            setIsGroupSortOpen(false);
+        }
+    }, [isExpanded]);
+
     // ESC to close
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (createModal.isOpen) setCreateModal({ ...createModal, isOpen: false });
+                if (isGroupSortOpen) setIsGroupSortOpen(false);
+                else if (createModal.isOpen) setCreateModal({ ...createModal, isOpen: false });
                 else if (editLink) setEditLink(null);
                 else if (isEditMode) {
                     setIsEditMode(false);
@@ -930,7 +1167,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isExpanded, isEditMode, createModal.isOpen, editLink]);
+    }, [isExpanded, isEditMode, isGroupSortOpen, createModal, editLink]);
 
     const dropAnimation: DropAnimation = {
         sideEffects: defaultDropAnimationSideEffects({
@@ -944,7 +1181,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
 
     // Filter links for Compact View (Only Shortcuts)
     const shortcutsLinks = useMemo(() => {
-        return links.filter(l => (l.category === 'Shortcuts' || l.category === '快捷指令' || l.category === 'Quick Access' || !l.category) && !l.id.startsWith('ghost-'));
+        return links.filter(l => normalizeGroupCategory(l.category) === DEFAULT_GROUP && !l.id.startsWith('ghost-'));
     }, [links]);
 
     return (
@@ -1112,6 +1349,42 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                             <div className="w-px h-8 bg-black/5 dark:bg-white/5 mx-2"></div>
 
                             {/* Window Controls */}
+                            {isAuthenticated && (
+                                <div className="relative">
+                                    <button
+                                        ref={groupSortButtonRef}
+                                        onClick={() => {
+                                            if (!canReorderGroups) return;
+                                            setIsGroupSortOpen((open) => !open);
+                                        }}
+                                        disabled={!canReorderGroups}
+                                        aria-label={t('gateways.reorder_groups') || 'Reorder groups'}
+                                        className={`
+                                            p-2.5 rounded-full transition-all border
+                                            ${isGroupSortOpen
+                                                ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white shadow-lg'
+                                                : canReorderGroups
+                                                    ? 'bg-white/50 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-white/10 border-gray-200/50 dark:border-white/5'
+                                                    : 'bg-gray-100 dark:bg-white/5 text-gray-300 dark:text-gray-600 border-gray-200 dark:border-white/5 cursor-not-allowed opacity-60'}
+                                        `}
+                                    >
+                                        <ArrowUpDown className="w-4 h-4" />
+                                    </button>
+
+                                    <GroupSorterPanel
+                                        isOpen={isGroupSortOpen}
+                                        panelRef={groupSortPanelRef}
+                                        categories={sortedCategories}
+                                        categoryCounts={categoryCounts}
+                                        onReorder={handleGroupOrderChange}
+                                        title={t('gateways.reorder_groups') || 'Reorder groups'}
+                                        description={t('gateways.reorder_groups_desc') || 'Quick Access stays pinned to the top while the rest can be rearranged.'}
+                                        fixedLabel={t('gateways.fixed_group') || 'Fixed'}
+                                        emptyLabel={t('gateways.no_custom_groups') || 'Create another group to change the order.'}
+                                    />
+                                </div>
+                            )}
+
                             <button
                                 onClick={() => {
                                     if (isEditMode) {
@@ -1155,7 +1428,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                         const isDefaultGroup = isDefaultGroupString(category);
                                         const visibleLinks = categoryLinks?.filter(l => !l.id.startsWith('ghost-')) || [];
 
-                                        if (!isEditMode && !isDefaultGroup && (!categoryLinks || categoryLinks.length === 0)) return null;
+                                        if (!isEditMode && !isDefaultGroup && visibleLinks.length === 0) return null;
 
                                         return (
                                             <React.Fragment key={category}>

@@ -19,6 +19,10 @@
         "edit": "EDIT",
         "done": "DONE",
         "delete_group": "Delete Group",
-        "rename_group": "Rename Group"
+        "rename_group": "Rename Group",
+        "reorder_groups": "Reorder Groups",
+        "reorder_groups_desc": "Quick Access stays pinned to the top while the rest can be rearranged.",
+        "fixed_group": "Fixed",
+        "no_custom_groups": "Create another group to change the order."
     }
 }
