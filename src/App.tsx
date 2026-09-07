@@ -41,6 +41,7 @@ import { useSEO } from './hooks/useSEO';
 // Check if running in Chrome Extension environment
 const IS_EXTENSION = typeof window !== 'undefined' && !!(window as any).chrome?.runtime?.id;
 const CONTEXT_SENSING_CONSENT_KEY = 'startlytab_context_sensing_consent';
+const LAST_PERSPECTIVE_OPEN_KEY = 'startlytab_last_perspective_open';
 
 type ContextSensingConsent = 'granted' | 'denied' | null;
 
@@ -48,6 +49,38 @@ const readContextSensingConsent = (): ContextSensingConsent => {
   if (typeof window === 'undefined') return null;
   const stored = localStorage.getItem(CONTEXT_SENSING_CONSENT_KEY);
   return stored === 'granted' || stored === 'denied' ? stored : null;
+};
+
+interface PageOpenContext {
+  openedAt: number;
+  previousOpenAt?: number;
+  firstOpenToday: boolean;
+}
+
+const getLocalDateKey = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-');
+};
+
+const capturePageOpenContext = (): PageOpenContext => {
+  const openedAt = Date.now();
+  let previousOpenAt: number | undefined;
+  try {
+    const stored = Number(localStorage.getItem(LAST_PERSPECTIVE_OPEN_KEY));
+    if (Number.isFinite(stored) && stored > 0 && stored < openedAt) previousOpenAt = stored;
+    localStorage.setItem(LAST_PERSPECTIVE_OPEN_KEY, String(openedAt));
+  } catch {
+    // Storage can be unavailable in hardened browser modes; time-only rules still work.
+  }
+  return {
+    openedAt,
+    previousOpenAt,
+    firstOpenToday: !previousOpenAt || getLocalDateKey(previousOpenAt) !== getLocalDateKey(openedAt)
+  };
 };
 
 const getSystemLanguage = (): string => {
@@ -195,6 +228,7 @@ if (typeof window !== 'undefined') {
 
 const App: React.FC = () => {
   const navigate = useNavigate();
+  const [pageOpenContext] = useState<PageOpenContext>(capturePageOpenContext);
 
   // SEO metadata for the home/landing page
   useSEO({
@@ -322,6 +356,7 @@ const App: React.FC = () => {
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
   const [currentNamespace, setCurrentNamespace] = useState<string | null>(null); // For local debugging
   const sessionRefreshCountRef = useRef<number>(0); // Bug #5 fix: per-session refresh counter
+  const lastManualRefreshAtRef = useRef<number>(0);
 
   const isAuthenticated = !!appState.user;
   const isVerifiedUser = !!appState.user && appState.user.emailVerified === true;
@@ -368,6 +403,12 @@ const App: React.FC = () => {
 
   // Start web tab presence heartbeat once (web-env fallback for tab count)
   useEffect(() => {
+    const extensionStorage = (window as any).chrome?.storage?.local;
+    if (IS_EXTENSION && extensionStorage) {
+      extensionStorage.set({
+        startly_context_sensing_enabled: contextSensingConsent === 'granted'
+      }).catch(() => {});
+    }
     if (contextSensingConsent !== 'granted') return;
     startTabPresence();
   }, [contextSensingConsent]);
@@ -408,27 +449,6 @@ const App: React.FC = () => {
   // Track if cloud sync is safe (prevent overwriting cloud data if fetch failed)
   const isCloudSyncSafeRef = useRef<boolean>(true);
   const hasAttemptedCloudSyncRef = useRef<boolean>(false);
-  const lastActivityTimeRef = useRef<number>(Date.now());
-
-  // Activity Tracking
-  useEffect(() => {
-    if (contextSensingConsent !== 'granted') return;
-
-    const updateActivity = () => {
-      lastActivityTimeRef.current = Date.now();
-    };
-    window.addEventListener('mousedown', updateActivity);
-    window.addEventListener('keydown', updateActivity);
-    window.addEventListener('mousemove', updateActivity);
-    window.addEventListener('touchstart', updateActivity);
-    return () => {
-      window.removeEventListener('mousedown', updateActivity);
-      window.removeEventListener('keydown', updateActivity);
-      window.removeEventListener('mousemove', updateActivity);
-      window.removeEventListener('touchstart', updateActivity);
-    };
-  }, [contextSensingConsent]);
-
   // Handle reporting Dwell Time
   const reportDwellTime = useCallback((exitReason: 'REFRESH' | 'NAVIGATE' | 'EMOTION_CLICK' | 'HIDDEN') => {
     if (!currentSnippetTrackRef.current) return;
@@ -909,8 +929,7 @@ const App: React.FC = () => {
       let isMuted: boolean | undefined;
       let isFullscreen: boolean | undefined;
       let windowState: 'normal' | 'minimized' | 'maximized' | 'fullscreen' | undefined;
-      let downloadActive: boolean | undefined;
-
+      let tabSwitches10m: number | undefined;
       // Detect browser state if in chrome extension
       const _chrome = (window as any).chrome;
       if (hasContextSensingConsent && typeof _chrome !== 'undefined' && _chrome.tabs) {
@@ -924,28 +943,48 @@ const App: React.FC = () => {
           windowState = lastWindow.state;
           isFullscreen = lastWindow.state === 'fullscreen';
 
-          const downloads = await _chrome.downloads.search({ state: 'in_progress' });
-          downloadActive = downloads.length > 0;
+          const aggregateSummary = await _chrome.runtime.sendMessage({ type: 'GET_CONTEXT_SUMMARY' });
+          tabSwitches10m = typeof aggregateSummary?.tabSwitches10m === 'number'
+            ? aggregateSummary.tabSwitches10m
+            : undefined;
         } catch (e) {
           console.warn('[App] Browser extension API access failed', e);
         }
       }
-      // --- CRITICAL: Increment refresh count BEFORE building context so router sees correct count ---
-      const idleTimeSeconds = hasContextSensingConsent
-        ? Math.floor((Date.now() - lastActivityTimeRef.current) / 1000)
-        : undefined;
+      // Refresh streaks are session-local and expire after three quiet minutes.
+      // We intentionally do not report page-local mouse/keyboard inactivity as
+      // system idle: a newly opened tab cannot prove the user was away.
       if (isUserRefresh) {
+        if (Date.now() - lastManualRefreshAtRef.current > 3 * 60 * 1000) {
+          sessionRefreshCountRef.current = 0;
+        }
         sessionRefreshCountRef.current += 1;
+        lastManualRefreshAtRef.current = Date.now();
+      } else if (clickedEmotion) {
+        sessionRefreshCountRef.current = 0;
       }
 
       // Calculate Router Context
       const now = new Date();
       const context: any = {
         local_time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        local_date: getLocalDateKey(now.getTime()),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         weekday: now.getDay(),
         is_weekend: now.getDay() === 0 || now.getDay() === 6,
+        day_kind: now.getDay() === 0 || now.getDay() === 6 ? 'rest_day' : 'workday',
         session_count_today: getSessionCountToday(history),
         refresh_count_session: sessionRefreshCountRef.current, // now has correct post-increment value
+        consecutiveClicks: isUserRefresh ? sessionRefreshCountRef.current : 1,
+        isManualRefresh: isUserRefresh,
+        trigger: clickedEmotion ? 'emotion_click' : isUserRefresh ? 'manual_refresh' : 'initial_open',
+        isNewUser: history.length < 10,
+        first_open_today: pageOpenContext.firstOpenToday,
+        minutes_since_previous_open: pageOpenContext.previousOpenAt
+          ? Math.floor((pageOpenContext.openedAt - pageOpenContext.previousOpenAt) / 60000)
+          : undefined,
+        session_duration_minutes: Math.floor((Date.now() - pageOpenContext.openedAt) / 60000),
+        context_observed_at: Date.now(),
         previous_emotion: previousEmotionOverride !== undefined
             ? previousEmotionOverride
             : (lastClickedEmotion || undefined),
@@ -969,12 +1008,15 @@ const App: React.FC = () => {
         context.weather = 'Unknown';
         context.battery_level = batteryLevel;
         context.tab_count = resolvedTabCount;
+        context.tab_count_scope = tabCount !== undefined
+          ? 'all_browser_tabs'
+          : resolvedTabCount !== undefined ? 'same_origin_startly_tabs' : undefined;
         context.audio_playing = audioPlaying;
         context.is_muted = isMuted;
         context.is_fullscreen = isFullscreen;
         context.window_state = windowState;
-        context.idle_time_seconds = idleTimeSeconds;
-        context.download_active = downloadActive;
+        context.tab_switches_10m = tabSwitches10m;
+        context.browser_context_observed_at = Date.now();
       }
       context.selectedPersona = appState.selectedPersona || 'soulmate';
 
@@ -993,6 +1035,16 @@ const App: React.FC = () => {
         style: plan?.style,
         theme: plan?.selected_theme,
         dimension: plan?.cached_item?.dimension,
+        contentTrack: plan?.cached_item?.content_track || plan?.content_track,
+        semanticCore: plan?.cached_item?.semantic_core,
+        actionTag: plan?.cached_item?.action_tag,
+        objectTag: plan?.cached_item?.object_tag,
+        metaphorTag: plan?.cached_item?.metaphor_tag,
+        openerTag: plan?.cached_item?.opener_tag,
+        sentenceShape: plan?.cached_item?.sentence_shape,
+        stateFingerprint: plan?.state_fingerprint,
+        promptVersion: plan?.prompt_version,
+        timeBlock: plan?.time_block,
         // Hack: infer track from style mapping if backend isn't sending it directly yet
         trackType: (plan?.cached_item?.track as TrackType) || 'A_PHYSICAL'
       });
@@ -1029,7 +1081,7 @@ const App: React.FC = () => {
         setIsGenerating(false);
       }
     }
-  }, [appState, contextSensingConsent, reportDwellTime, isAuthenticated, showInlineGuidance, hasLocalPreference, isGenerating]);
+  }, [appState, contextSensingConsent, reportDwellTime, isAuthenticated, showInlineGuidance, hasLocalPreference, isGenerating, pageOpenContext]);
 
   const renderSnippet = (text: string) => {
     const parts = text.split(/\[h\](.*?)\[\/h\]/g);

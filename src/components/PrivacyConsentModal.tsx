@@ -40,8 +40,8 @@ const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
             To better understand your current rhythm and emotional context, StartlyTab can optionally read a
             small set of aggregated browser-state signals. We recommend enabling this if you want more
             emotionally aware AI reflections. This includes only your open tab count, whether any tab is
-            playing audio, whether a download is in progress, focused window state, battery level, and idle
-            time on this page. It does not use the URLs of all your open tabs for this feature.
+            playing audio, focused window state, battery level, and an aggregate recent tab-switch count in
+            the extension. It does not use the URLs or titles of your open tabs for this feature.
           </p>
         </div>
 

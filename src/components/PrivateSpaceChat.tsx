@@ -284,7 +284,7 @@ Generate a short, gentle, and welcoming greeting to invite them to speak their m
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
+    </div>
   );
 };

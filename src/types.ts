@@ -97,6 +97,41 @@ export interface EmotionLog {
 
 export type TrackType = 'A_PHYSICAL' | 'B_TIME_ECHO' | 'C_EMOTION' | 'D_THEME' | 'E_QUESTION';
 
+/**
+ * User-facing copy angles. These are deliberately separate from TrackType,
+ * which is retained for the existing engagement-affinity system.
+ */
+export type PerspectiveContentTrack =
+  | 'playful_boundary'
+  | 'grounded_observation'
+  | 'life_boundary'
+  | 'sensory_reset'
+  | 'permission_pause'
+  | 'object_humor'
+  | 'unexpected_perspective';
+
+export type PerspectiveTrigger = 'initial_open' | 'manual_refresh' | 'emotion_click' | 'background_refill';
+
+export type ConfirmedWorkStatus = 'workplace_arrival' | 'working' | 'off_work' | 'overtime';
+
+export type DayKind = 'workday' | 'rest_day' | 'public_holiday' | 'adjusted_workday' | 'unknown';
+
+export type HolidayPhase =
+  | 'pre_holiday'
+  | 'holiday_start'
+  | 'holiday_middle'
+  | 'holiday_end'
+  | 'post_holiday'
+  | 'none';
+
+export interface WorkSchedule {
+  workStart?: string; // HH:MM
+  lunchStart?: string; // HH:MM
+  lunchEnd?: string; // HH:MM
+  workEnd?: string; // HH:MM
+  workDays?: number[]; // 0-6
+}
+
 export interface TrackAffinity {
   userId: string;
   trackType: TrackType;
@@ -116,14 +151,37 @@ export interface PerspectiveHistory {
   is_memory_echo?: boolean;
   echo_type?: 'node_2' | 'node_3';
   dimension?: string;
+  contentTrack?: PerspectiveContentTrack;
+  semanticCore?: string;
+  actionTag?: string;
+  objectTag?: string;
+  metaphorTag?: string;
+  openerTag?: string;
+  sentenceShape?: string;
+  stateFingerprint?: string;
+  promptVersion?: string;
+  timeBlock?: string;
 }
 
 export interface PerspectiveRouterContext {
   local_time: string; // HH:MM
+  local_date?: string; // YYYY-MM-DD in the user's timezone
+  timezone?: string;
   weekday: number; // 0-6
   is_weekend: boolean;
+  day_kind?: DayKind;
+  holiday_phase?: HolidayPhase;
+  holiday_day_index?: number;
+  days_to_holiday?: number;
+  days_since_holiday?: number;
+  work_schedule?: WorkSchedule;
+  /** Only set from an explicit user action or trusted calendar/workflow input. */
+  confirmed_work_status?: ConfirmedWorkStatus;
   session_count_today: number;
   minutes_since_last: number;
+  minutes_since_previous_open?: number;
+  first_open_today?: boolean;
+  session_duration_minutes?: number;
   late_night_streak: number;
   work_mode_disabled?: boolean;
   custom_themes?: string[];
@@ -142,23 +200,43 @@ export interface PerspectiveRouterContext {
   emotionalPatterns?: string[];
   // V4.0 Digital Context
   tab_count?: number;
+  tab_count_scope?: 'all_browser_tabs' | 'same_origin_startly_tabs';
   audio_playing?: boolean;
   is_muted?: boolean;
   is_fullscreen?: boolean;
   window_state?: 'normal' | 'minimized' | 'maximized' | 'fullscreen';
   idle_time_seconds?: number;
-  download_active?: boolean;
+  tab_switches_10m?: number;
+  context_observed_at?: number;
+  browser_context_observed_at?: number;
   selectedPersona?: PersonaType;
   allow_context_sensing?: boolean;
+  trigger?: PerspectiveTrigger;
+  isManualRefresh?: boolean;
+
+  // V3 Routing & Strategy Context
+  isNewUser?: boolean;
+  isFirstInTimeBlock?: boolean;
+  consecutiveClicks?: number;
 }
 
 export interface PerspectivePoolItem {
   text: string;
   style: string;
-  track: TrackType | 'A' | 'B';
+  track: TrackType | 'A' | 'B' | 'C' | 'D' | 'E';
   is_memory_echo?: boolean;
   echo_type?: 'node_2' | 'node_3';
   dimension?: string;
+  content_track?: PerspectiveContentTrack;
+  semantic_core?: string;
+  action_tag?: string;
+  object_tag?: string;
+  metaphor_tag?: string;
+  opener_tag?: string;
+  sentence_shape?: string;
+  state_fingerprint?: string;
+  prompt_version?: string;
+  generated_at?: number;
 }
 
 export interface PerspectivePlan {
@@ -170,4 +248,10 @@ export interface PerspectivePlan {
   max_length_chars: number;
   allow_one_comma: boolean;
   cached_item?: PerspectivePoolItem;
+  full_system_prompt?: string;
+  full_user_prompt?: string;
+  state_fingerprint?: string;
+  content_track?: PerspectiveContentTrack;
+  prompt_version?: string;
+  time_block?: string;
 }

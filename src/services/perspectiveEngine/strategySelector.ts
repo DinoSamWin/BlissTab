@@ -1,42 +1,33 @@
-import { SceneResolution, Intent, EmotionBias, ResponseStrategy } from './types';
+import { EmotionBias, Intent, ResponseStrategy, SceneResolution } from './types';
 
-/**
- * Selects the final Response Strategy based on Scene, Intent, and Emotion Bias.
- */
-export function selectResponseStrategy(resolution: SceneResolution, intent: Intent, emotionBias: EmotionBias): ResponseStrategy {
-    // 1. Direct mappings based on override scenes
-    if (resolution.scene === 'quiet_return') {
-        return 'reentry';
-    }
-    
-    if (resolution.scene === 'emotional_checkin') {
-        // Break down emotional_checkin by emotionBias rather than blanket mapping
-        if (emotionBias === 'anxious' || emotionBias === 'scattered') return 'ground';
-        if (emotionBias === 'tired' || emotionBias === 'heavy') return 'soothe';
-        return 'mirror';
-    }
-    
-    if (resolution.scene === 'overloaded_browser') {
-        return 'focus';
-    }
+export function selectResponseStrategy(
+  resolution: SceneResolution,
+  intent: Intent,
+  emotionBias: EmotionBias
+): ResponseStrategy {
+  if (resolution.scene === 'quiet_return') return 'reentry';
+  if (resolution.scene === 'refresh_loop') return 'interrupt';
+  if (resolution.scene === 'overloaded_browser') return 'reduce';
 
-    // 2. Mappings based on Intent / Base Scenes
-    switch (intent) {
-        case 'rhythm_mirroring':
-            return 'rhythm';
-            
-        case 'soft_grounding':
-            return 'ground';
-            
-        case 'soft_closure':
-            return 'soothe'; // Changed from 'rhythm' based on user feedback
-            
-        case 'light_focus_support':
-            return 'focus';
-            
-        case 'contextual_greeting':
-        default:
-            // Standard fallback is Mirror for default cases
-            return 'mirror';
-    }
+  if (resolution.scene === 'emotional_checkin') {
+    if (emotionBias === 'anxious' || emotionBias === 'scattered') return 'ground';
+    if (emotionBias === 'tired' || emotionBias === 'heavy') return 'soothe';
+    return 'mirror';
+  }
+
+  switch (intent) {
+    case 'rhythm_mirroring': return 'rhythm';
+    case 'soft_grounding': return 'ground';
+    case 'reduce_scope': return 'reduce';
+    case 'permission_to_pause':
+    case 'work_life_boundary':
+    case 'soft_closure':
+      return 'release';
+    case 'gentle_re_entry': return 'reentry';
+    case 'interrupt_autopilot': return 'interrupt';
+    case 'emotional_acknowledgment': return 'soothe';
+    case 'contextual_greeting':
+    default:
+      return 'mirror';
+  }
 }

@@ -2,7 +2,7 @@ import { PerspectiveHistory, TrackType } from '../types';
 
 const HISTORY_RETENTION_DAYS = 14;
 const MAX_RETRIES = 3;
-const SIMILARITY_THRESHOLD = 0.7; // 0-1, higher = more strict
+const SIMILARITY_THRESHOLD = 0.58; // 0-1, tuned for short CJK copy
 
 /**
  * Normalizes text for comparison by removing tags and extra whitespace
@@ -12,21 +12,72 @@ function normalizeText(text: string): string {
         .replace(/\[h\](.*?)\[\/h\]/g, '$1') // Remove highlight tags but keep content
         .toLowerCase()
         .trim()
-        .replace(/\s+/g, ' ');
+        .replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
+function createNgrams(text: string, size: number): Set<string> {
+    const result = new Set<string>();
+    if (text.length <= size) {
+        if (text) result.add(text);
+        return result;
+    }
+    for (let i = 0; i <= text.length - size; i += 1) {
+        result.add(text.slice(i, i + size));
+    }
+    return result;
+}
+
+function jaccard(setA: Set<string>, setB: Set<string>): number {
+    if (setA.size === 0 || setB.size === 0) return 0;
+    let intersection = 0;
+    setA.forEach(value => {
+        if (setB.has(value)) intersection += 1;
+    });
+    const union = setA.size + setB.size - intersection;
+    return union === 0 ? 0 : intersection / union;
+}
+
+function longestCommonSubsequenceRatio(text1: string, text2: string): number {
+    if (!text1 || !text2) return 0;
+    const row = new Array<number>(text2.length + 1).fill(0);
+    for (const char of text1) {
+        let diagonal = 0;
+        for (let index = 1; index <= text2.length; index += 1) {
+            const previous = row[index];
+            row[index] = char === text2[index - 1]
+                ? diagonal + 1
+                : Math.max(row[index], row[index - 1]);
+            diagonal = previous;
+        }
+    }
+    return (2 * row[text2.length]) / (text1.length + text2.length);
 }
 
 /**
  * Calculates simple word-based similarity between two texts
  * Returns a value between 0 (completely different) and 1 (identical)
  */
-function calculateSimilarity(text1: string, text2: string): number {
+export function calculateSimilarity(text1: string, text2: string): number {
     const normalized1 = normalizeText(text1);
     const normalized2 = normalizeText(text2);
 
     if (normalized1 === normalized2) return 1.0;
 
-    const words1 = new Set(normalized1.split(/\s+/));
-    const words2 = new Set(normalized2.split(/\s+/));
+    const containsCjk = /[\u3400-\u9fff\uf900-\ufaff]/.test(`${normalized1}${normalized2}`);
+    if (containsCjk) {
+        const bigramScore = jaccard(createNgrams(normalized1, 2), createNgrams(normalized2, 2));
+        const trigramScore = jaccard(createNgrams(normalized1, 3), createNgrams(normalized2, 3));
+        const ngramScore = bigramScore * 0.65 + trigramScore * 0.35;
+        // Short Chinese paraphrases can preserve most of the sentence while
+        // changing enough adjacent pairs to defeat n-gram Jaccard. LCS catches
+        // that case; the discount avoids treating merely shared particles as a
+        // full duplicate.
+        const sequenceScore = longestCommonSubsequenceRatio(normalized1, normalized2) * 0.86;
+        return Math.max(ngramScore, sequenceScore);
+    }
+
+    const words1 = new Set(text1.toLowerCase().trim().split(/\s+/));
+    const words2 = new Set(text2.toLowerCase().trim().split(/\s+/));
 
     const intersection = new Set(Array.from(words1).filter(w => words2.has(w)));
     const union = new Set([...Array.from(words1), ...Array.from(words2)]);
@@ -68,7 +119,23 @@ export function addToHistory(
     text: string,
     promptId: string,
     history: PerspectiveHistory[] = [],
-    metadata?: { intent?: string; style?: string; theme?: string; trackType?: TrackType; dimension?: string }
+    metadata?: {
+        intent?: string;
+        style?: string;
+        theme?: string;
+        trackType?: TrackType;
+        dimension?: string;
+        contentTrack?: PerspectiveHistory['contentTrack'];
+        semanticCore?: string;
+        actionTag?: string;
+        objectTag?: string;
+        metaphorTag?: string;
+        openerTag?: string;
+        sentenceShape?: string;
+        stateFingerprint?: string;
+        promptVersion?: string;
+        timeBlock?: string;
+    }
 ): PerspectiveHistory[] {
     const filtered = filterRecentHistory(history);
     // Synthetic Dimension (Classification Code) for deduplication if missing

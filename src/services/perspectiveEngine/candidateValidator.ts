@@ -1,0 +1,194 @@
+import { PerspectiveHistory, PerspectivePoolItem } from '../../types';
+import { isTooSimilar } from '../perspectiveService';
+import { STARTLY_PROMPT_VERSION } from './generator';
+import { PipelineState } from './types';
+
+export interface CandidateValidation {
+  valid: boolean;
+  reasons: string[];
+  score: number;
+  item: PerspectivePoolItem;
+}
+
+const CLICHE_PATTERNS = [
+  /加油/u,
+  /深呼吸/u,
+  /相信自己/u,
+  /你已经(很|做得).*棒/u,
+  /不要放弃/u,
+  /you('ve| have)? got this/iu,
+  /believe in yourself/iu,
+  /take a deep breath/iu
+];
+const VALID_TRACKS = new Set(['A_PHYSICAL', 'B_TIME_ECHO', 'C_EMOTION', 'D_THEME', 'E_QUESTION']);
+
+function sanitizeText(text: string): string {
+  return text
+    .replace(/^\s*["'“”‘’「」](.*?)["'“”‘’「」]\s*$/u, '$1')
+    .replace(/#/g, '')
+    .trim();
+}
+
+function visibleLength(text: string): number {
+  return text.replace(/\[\/?h\]/g, '').replace(/\s/g, '').length;
+}
+
+function hasRecentTag(
+  history: PerspectiveHistory[],
+  key: keyof PerspectiveHistory,
+  value: string | undefined,
+  lookback: number
+): boolean {
+  if (!value || value === 'none') return false;
+  return history.slice(0, lookback).some(item => item[key] === value);
+}
+
+function factBoundaryViolations(text: string, state: PipelineState): string[] {
+  const reasons: string[] = [];
+  const input = state.input;
+
+  if (input.tabCountBucket === 'unknown' && /(标签页|满屏|这一屏.{0,4}(满|挤)|开着.{0,3}(很多|不少))/u.test(text)) {
+    reasons.push('invented_tab_load');
+  }
+  if (input.tabCountBucket === 'unknown' && /(too many|many|crowded|full).{0,12}(tabs?|screen)|(tabs?|screen).{0,12}(too many|many|crowded|full)/iu.test(text)) {
+    reasons.push('invented_tab_load');
+  }
+  if ((!input.audibleStateKnown || !input.hasAudibleTab) && /(音乐|歌声|耳机|背景音|旋律)/u.test(text)) {
+    reasons.push('invented_audio');
+  }
+  if ((!input.audibleStateKnown || !input.hasAudibleTab) && /(music|song|headphones?|background sound|melody)/iu.test(text)) {
+    reasons.push('invented_audio');
+  }
+  if (!input.weatherKnown && /(下雨|雨声|阳光|晴天|阴天|天气|风声)/u.test(text)) {
+    reasons.push('invented_weather');
+  }
+  if (!input.weatherKnown && /(rain|sunny|sunshine|cloudy|weather|wind)/iu.test(text)) {
+    reasons.push('invented_weather');
+  }
+  if (
+    input.holidayPhase === 'none'
+    && input.dayKind !== 'public_holiday'
+    && /(假期|放假|节前|节后|返工)/u.test(text)
+  ) {
+    reasons.push('invented_holiday');
+  }
+  if (input.holidayPhase === 'none' && input.dayKind !== 'public_holiday' && /(holiday|vacation|back to work)/iu.test(text)) {
+    reasons.push('invented_holiday');
+  }
+  if (input.confirmedWorkStatus !== 'overtime' && /加班/u.test(text)) {
+    reasons.push('invented_overtime');
+  }
+  if (input.confirmedWorkStatus !== 'overtime' && /(overtime|working late)/iu.test(text)) {
+    reasons.push('invented_overtime');
+  }
+  if (!input.clickedEmotion && /(你|看起来|感觉).{0,4}(焦虑|抑郁|难过|生气|烦躁|崩溃|疲惫|累了)/u.test(text)) {
+    reasons.push('invented_emotion');
+  }
+  if (!input.clickedEmotion && /(you|you seem|you look).{0,16}(anxious|tired|exhausted|sad|angry|burned out)/iu.test(text)) {
+    reasons.push('invented_emotion');
+  }
+  if (!input.clickedEmotion && /(刚午睡|睡醒了|你饿了)/u.test(text)) {
+    reasons.push('invented_private_state');
+  }
+  if (!input.clickedEmotion && /(just woke|after your nap|you('re| are) hungry)/iu.test(text)) {
+    reasons.push('invented_private_state');
+  }
+  if (
+    input.confirmedWorkStatus !== 'workplace_arrival'
+    && /(到公司|办公室|工位)/u.test(text)
+  ) {
+    reasons.push('invented_workplace_state');
+  }
+  if (input.confirmedWorkStatus !== 'workplace_arrival' && /(arrived at (the )?(office|work)|at your (office|workstation))/iu.test(text)) {
+    reasons.push('invented_workplace_state');
+  }
+  if (input.confirmedWorkStatus !== 'off_work' && /(刚下班|终于下班了)/u.test(text)) {
+    reasons.push('invented_off_work_state');
+  }
+  if (input.confirmedWorkStatus !== 'off_work' && /(just got off work|just finished work)/iu.test(text)) {
+    reasons.push('invented_off_work_state');
+  }
+  if (/开完会|meeting just ended|after (that|your) meeting/iu.test(text)) reasons.push('invented_meeting_state');
+  return reasons;
+}
+
+export function validatePerspectiveCandidate(
+  rawItem: PerspectivePoolItem,
+  state: PipelineState,
+  history: PerspectiveHistory[] = []
+): CandidateValidation {
+  const item: PerspectivePoolItem = { ...rawItem, text: sanitizeText(rawItem.text || '') };
+  const text = item.text;
+  const reasons: string[] = [];
+  let score = 100;
+
+  if (!text) reasons.push('empty_text');
+  if (/\r|\n/u.test(text)) reasons.push('multiple_lines');
+  if (/[!?！？]/u.test(text)) reasons.push('forbidden_punctuation');
+  if (/\b\d{1,2}:\d{2}\b|\b(?:[1-9]|1[0-2])\s?(?:a\.?m\.?|p\.?m\.?)\b|\d{1,2}点(?:\d{1,2}分)?/iu.test(text)) {
+    reasons.push('exact_clock_time');
+  }
+  if (CLICHE_PATTERNS.some(pattern => pattern.test(text))) reasons.push('cliche_or_coaching');
+
+  const length = visibleLength(text);
+  const isChinese = /[\u3400-\u9fff\uf900-\ufaff]/u.test(text);
+  if (length > state.constraints.maxLengthChars) reasons.push('too_long');
+  if (isChinese && length < 10) reasons.push('too_short');
+  if (isChinese && (length < 12 || length > 28)) score -= 8;
+
+  reasons.push(...factBoundaryViolations(text, state));
+
+  if (item.state_fingerprint && item.state_fingerprint !== state.stateFingerprint) {
+    reasons.push('state_fingerprint_mismatch');
+  }
+  if (item.prompt_version && item.prompt_version !== STARTLY_PROMPT_VERSION) {
+    reasons.push('unsupported_prompt_version');
+  }
+
+  const contentTrack = item.content_track;
+  if (!item.track || !VALID_TRACKS.has(item.track)) reasons.push('missing_or_invalid_track');
+  if (!item.state_fingerprint) reasons.push('missing_state_fingerprint');
+  if (!item.prompt_version) reasons.push('missing_prompt_version');
+  if (contentTrack && !state.noveltyPlan.allowedTracks.includes(contentTrack)) {
+    reasons.push('content_track_not_allowed');
+  }
+  if (!item.semantic_core) reasons.push('missing_semantic_core');
+  if (!contentTrack) reasons.push('missing_content_track');
+  if (!item.action_tag) reasons.push('missing_action_tag');
+  if (!item.object_tag) reasons.push('missing_object_tag');
+  if (!item.metaphor_tag) reasons.push('missing_metaphor_tag');
+  if (!item.opener_tag) reasons.push('missing_opener_tag');
+  if (!item.sentence_shape) reasons.push('missing_sentence_shape');
+  if (contentTrack === state.noveltyPlan.targetTrack) score += 12;
+
+  if (isTooSimilar(text, history, 0.58)) reasons.push('surface_text_duplicate');
+  if (hasRecentTag(history, 'semanticCore', item.semantic_core, 20)) reasons.push('semantic_core_duplicate');
+  if (hasRecentTag(history, 'metaphorTag', item.metaphor_tag, 10)) reasons.push('metaphor_duplicate');
+  if (hasRecentTag(history, 'openerTag', item.opener_tag, 5)) reasons.push('opener_duplicate');
+  if (hasRecentTag(history, 'sentenceShape', item.sentence_shape, 4)) score -= 8;
+  if (hasRecentTag(history, 'actionTag', item.action_tag, 6)) score -= 6;
+  if (hasRecentTag(history, 'objectTag', item.object_tag, 4)) score -= 4;
+
+  return {
+    valid: reasons.length === 0,
+    reasons,
+    score,
+    item
+  };
+}
+
+export function selectBestCandidate(
+  items: PerspectivePoolItem[],
+  state: PipelineState,
+  history: PerspectiveHistory[] = []
+): { selected?: PerspectivePoolItem; accepted: PerspectivePoolItem[]; rejected: CandidateValidation[] } {
+  const reports = items.map(item => validatePerspectiveCandidate(item, state, history));
+  const acceptedReports = reports
+    .filter(report => report.valid)
+    .sort((a, b) => b.score - a.score);
+  return {
+    selected: acceptedReports[0]?.item,
+    accepted: acceptedReports.map(report => report.item),
+    rejected: reports.filter(report => !report.valid)
+  };
+}

@@ -11,7 +11,8 @@
         "favicon",
         "identity",
         "downloads",
-        "search"
+        "search",
+        "storage"
     ],
     "host_permissions": [
         "<all_urls>"

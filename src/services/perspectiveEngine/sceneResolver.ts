@@ -1,85 +1,115 @@
-import { EngineInput, SceneResolution, Scene, BaseTimeScene, OverrideScene } from './types';
+import {
+  BaseTimeScene,
+  EngineInput,
+  Scene,
+  SceneModifier,
+  SceneResolution,
+  SignalConfidence
+} from './types';
 
-// Constants for threshold tuning
-const OVERLOADED_TAB_COUNT = 15;
-const QUIET_RETURN_IDLE_SECONDS = 30 * 60; // 30 minutes
-
-/**
- * Resolves the 8 base time scenes strictly based on time block.
- */
 function resolveBaseTimeScene(input: EngineInput): BaseTimeScene {
-    switch (input.timeBlock) {
-        case 'early_morning':
-            return 'morning_buffer';
-        case 'morning':
-            return 'workday_ramp_up'; // Note: In future, could check late_morning_flow if we refine TimeBlocks
-        case 'midday':
-            return 'midday_transition';
-        case 'afternoon':
-            return 'afternoon_scatter';
-        case 'evening':
-            return 'evening_exhale';
-        case 'night':
-        case 'late_night':
-            // Distinguish late_day_drag from night_overhang based on time or behavior, 
-            // but for simplicity let's map night -> night_overhang
-            return 'night_overhang';
-        default:
-            return 'midday_transition';
-    }
+  switch (input.timeBlock) {
+    case 'early_morning': return 'early_buffer';
+    case 'arrival_window': return 'arrival_buffer';
+    case 'morning_focus': return 'morning_sustained';
+    case 'pre_lunch': return 'pre_lunch_transition';
+    case 'midday_break': return 'midday_release';
+    case 'post_lunch_reset': return 'post_lunch_reentry';
+    case 'afternoon': return 'afternoon_stretch';
+    case 'closing_window': return 'closing_runway';
+    case 'evening': return 'evening_transition';
+    case 'late_evening': return 'late_evening_boundary';
+    case 'late_night': return 'night_guard';
+  }
+}
+
+function resolveModifiers(input: EngineInput): { modifiers: SceneModifier[]; evidence: string[] } {
+  const modifiers: SceneModifier[] = [];
+  const evidence: string[] = [`time_block:${input.timeBlock}`];
+
+  if (input.dayKind === 'adjusted_workday') modifiers.push('adjusted_workday');
+  if (input.dayKind === 'rest_day') modifiers.push('soft_weekend');
+  if (input.dayKind === 'public_holiday') modifiers.push('public_holiday');
+  if ((input.dayKind === 'workday' || input.dayKind === 'adjusted_workday') && input.weekday === 1) {
+    modifiers.push('monday_return');
+  }
+  if ((input.dayKind === 'workday' || input.dayKind === 'adjusted_workday') && input.weekday === 5) {
+    modifiers.push('friday_release');
+  }
+
+  if (input.holidayPhase !== 'none') {
+    modifiers.push(input.holidayPhase);
+    evidence.push(`holiday_phase:${input.holidayPhase}`);
+  }
+
+  if (input.tabCountBucket === 'heavy') {
+    modifiers.push('tab_heavy');
+    evidence.push('tab_bucket:heavy');
+  } else if (input.tabCountBucket === 'overloaded') {
+    modifiers.push('tab_overload');
+    evidence.push('tab_bucket:overloaded');
+  }
+
+  if ((input.tabSwitches10m || 0) >= 12) {
+    modifiers.push('rapid_switching');
+    evidence.push('tab_switches_10m:high');
+  }
+
+  if (input.reentryState === 'recent_return') {
+    modifiers.push('recent_return');
+    evidence.push(`reentry:${input.idleBucket}`);
+  }
+
+  if (input.isManualRefresh) {
+    modifiers.push('manual_refresh');
+    evidence.push(`refresh_streak:${input.consecutiveClicks}`);
+  }
+  if (input.isManualRefresh && input.consecutiveClicks >= 3) modifiers.push('refresh_streak');
+  if (input.hasAudibleTab) modifiers.push('audio_present');
+
+  const hasSustainedLateActivity = (input.sessionDurationMinutes || 0) >= 60
+    || (input.tabSwitches10m || 0) >= 12;
+  if (
+    input.timeBlock === 'late_evening'
+    && (input.dayKind === 'workday' || input.dayKind === 'adjusted_workday')
+    && hasSustainedLateActivity
+  ) {
+    modifiers.push('possible_work_overhang');
+    evidence.push('late_activity:sustained');
+  }
+
+  return { modifiers, evidence };
 }
 
 /**
- * Resolves day-level modifiers (calendar specific tones).
- */
-function resolveDayTone(input: EngineInput): SceneResolution['dayToneModifier'] {
-    if (input.isWeekend) {
-        // Simple trick: Saturday is weekend, Sunday is weekend. 
-        // We might need weekday 0-6 to perfectly distinguish Sunday.
-        // Assuming we pass weekday in the future, but for now we fallback to soft_weekend.
-        return 'soft_weekend';
-    }
-    if (input.isHoliday) {
-        return 'holiday_drift';
-    }
-    return undefined;
-}
-
-/**
- * Resolves the final Scene according to prioritization (Overrides > Base).
+ * Chooses one primary scene while retaining every compatible modifier. A
+ * higher-priority event never erases the underlying time scene.
  */
 export function resolveScene(input: EngineInput): SceneResolution {
-    // 1. Highest Priority Override: explicit emotion check-in
-    if (input.clickedEmotion) {
-        return {
-            scene: 'emotional_checkin',
-            isOverride: true
-        };
-    }
+  const baseScene = resolveBaseTimeScene(input);
+  const { modifiers, evidence } = resolveModifiers(input);
+  let scene: Scene = baseScene;
+  let confidence: SignalConfidence = 'high';
 
-    // 2. Secondary Override: Quiet returning user (Reentry event + Away state)
-    // Now depends on abstracted buckets rather than a hardcoded 30 minutes.
-    if (input.reentryState === 'recent_return' && (input.idleBucket === 'away' || input.idleBucket === 'long_away')) {
-        return {
-            scene: 'quiet_return',
-            isOverride: true,
-            dayToneModifier: resolveDayTone(input)
-        };
-    }
+  if (input.clickedEmotion) {
+    scene = 'emotional_checkin';
+    evidence.unshift(`explicit_emotion:${input.clickedEmotion}`);
+  } else if (modifiers.includes('refresh_streak')) {
+    scene = 'refresh_loop';
+  } else if (modifiers.includes('recent_return')) {
+    scene = 'quiet_return';
+    confidence = input.confidence.reentry;
+  } else if (modifiers.includes('tab_overload') || modifiers.includes('tab_heavy')) {
+    scene = 'overloaded_browser';
+    confidence = input.confidence.browser;
+  }
 
-    // 3. Tertiary Override: Overloaded browser
-    if (input.tabCountBucket === 'heavy' || input.tabCountBucket === 'overloaded') {
-        return {
-            scene: 'overloaded_browser',
-            isOverride: true,
-            dayToneModifier: resolveDayTone(input)
-        };
-    }
-
-    // 4. Fallback exactly to the Base Time Scene
-    return {
-        scene: resolveBaseTimeScene(input),
-        isOverride: false,
-        dayToneModifier: resolveDayTone(input)
-    };
+  return {
+    baseScene,
+    scene,
+    isOverride: scene !== baseScene,
+    modifiers,
+    evidence,
+    confidence
+  };
 }

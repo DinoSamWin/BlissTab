@@ -45,8 +45,25 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     return false;
 });
 
+// Context-aware mode stores only aggregate activation timestamps. It never
+// stores tab ids, titles, URLs, or browsing history.
+const CONTEXT_SENSING_ENABLED_KEY = 'startly_context_sensing_enabled';
+const TAB_ACTIVATIONS_KEY = 'startlytab_tab_activations_10m';
+const TEN_MINUTES_MS = 10 * 60 * 1000;
 
+async function recordAggregateTabActivation() {
+    const enabledState = await chrome.storage.local.get(CONTEXT_SENSING_ENABLED_KEY);
+    if (enabledState[CONTEXT_SENSING_ENABLED_KEY] !== true) return;
 
+    const now = Date.now();
+    const stored = await chrome.storage.local.get(TAB_ACTIVATIONS_KEY);
+    const previous = Array.isArray(stored[TAB_ACTIVATIONS_KEY])
+        ? stored[TAB_ACTIVATIONS_KEY].filter((timestamp: unknown) => (
+            typeof timestamp === 'number' && now - timestamp <= TEN_MINUTES_MS
+        ))
+        : [];
+    await chrome.storage.local.set({ [TAB_ACTIVATIONS_KEY]: [...previous, now].slice(-100) });
+}
 
 // 1. Setup global initialization
 chrome.sidePanel
@@ -60,3 +77,28 @@ chrome.sidePanel.setOptions({
 }).catch((error) => console.error('[Background] Failed to set global options:', error));
 
 console.log('[Background] Native Side Panel controller initialized.');
+
+chrome.tabs.onActivated.addListener(() => {
+    recordAggregateTabActivation().catch(() => {});
+});
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'GET_CONTEXT_SUMMARY') return false;
+
+    (async () => {
+        const enabledState = await chrome.storage.local.get(CONTEXT_SENSING_ENABLED_KEY);
+        if (enabledState[CONTEXT_SENSING_ENABLED_KEY] !== true) {
+            sendResponse({ enabled: false });
+            return;
+        }
+        const now = Date.now();
+        const stored = await chrome.storage.local.get(TAB_ACTIVATIONS_KEY);
+        const recent = Array.isArray(stored[TAB_ACTIVATIONS_KEY])
+            ? stored[TAB_ACTIVATIONS_KEY].filter((timestamp: unknown) => (
+                typeof timestamp === 'number' && now - timestamp <= TEN_MINUTES_MS
+            ))
+            : [];
+        sendResponse({ enabled: true, tabSwitches10m: recent.length });
+    })().catch(() => sendResponse({ enabled: true, tabSwitches10m: undefined }));
+    return true;
+});

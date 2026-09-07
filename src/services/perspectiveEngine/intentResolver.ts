@@ -1,40 +1,33 @@
-import { SceneResolution, Intent, Scene } from './types';
+import { Intent, SceneResolution } from './types';
 
-/**
- * Resolves the Intent (objective) based on the current Scene.
- * Intent is strictly determined by the Scene.
- */
-export function resolveIntent(sceneResolution: SceneResolution): Intent {
-    const { scene } = sceneResolution;
+/** Intent is a response job, not a diagnosis of the user. */
+export function resolveIntent(resolution: SceneResolution): Intent {
+  switch (resolution.scene) {
+    case 'emotional_checkin': return 'emotional_acknowledgment';
+    case 'refresh_loop': return 'interrupt_autopilot';
+    case 'quiet_return': return 'gentle_re_entry';
+    case 'overloaded_browser': return 'reduce_scope';
+  }
 
-    switch (scene) {
-        // Overrides
-        case 'emotional_checkin':
-            return 'emotional_acknowledgment';
-        case 'quiet_return':
-            return 'gentle_re_entry';
-        case 'overloaded_browser':
-            return 'light_focus_support';
-
-        // Time-based specific intents
-        case 'morning_buffer':
-        case 'evening_exhale':
-            return 'rhythm_mirroring';
-
-        case 'late_day_drag':
-        case 'night_overhang':
-            return 'soft_closure';
-
-        case 'afternoon_scatter':
-            return 'soft_grounding';
-
-        // Fallbacks / Contextual Greetings for general time flows
-        case 'workday_ramp_up':
-        case 'late_morning_flow':
-        case 'midday_transition':
-            return 'contextual_greeting';
-            
-        default:
-            return 'contextual_greeting';
-    }
+  switch (resolution.baseScene) {
+    case 'early_buffer':
+    case 'arrival_buffer':
+      return 'rhythm_mirroring';
+    case 'morning_sustained':
+      return 'contextual_greeting';
+    case 'pre_lunch_transition':
+      return 'work_life_boundary';
+    case 'midday_release':
+      return 'permission_to_pause';
+    case 'post_lunch_reentry':
+      return 'gentle_re_entry';
+    case 'afternoon_stretch':
+      return 'soft_grounding';
+    case 'closing_runway':
+    case 'evening_transition':
+      return 'work_life_boundary';
+    case 'late_evening_boundary':
+    case 'night_guard':
+      return 'soft_closure';
+  }
 }

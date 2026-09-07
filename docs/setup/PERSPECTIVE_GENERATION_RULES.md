@@ -1,4 +1,6 @@
-# StartlyTab 轻陪伴生成引擎 V1 规则表 (Perspective Generation Rules)
+# StartlyTab 轻陪伴生成引擎 V1 规则表（历史版本）
+
+> 当前唯一规则见 `docs/CONTEXT_AWARE_COPY_GENERATION_LOOP.md`，运行时 Prompt 仅由 `src/services/perspectiveEngine/generator.ts` 生成。本文件保留用于历史追溯。
 
 ## 一、核心定位与产品原则 (Core Principles)
 **StartlyTab turns passive context into emotionally aware micro-support.**

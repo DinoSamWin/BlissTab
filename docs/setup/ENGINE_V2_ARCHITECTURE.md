@@ -1,4 +1,6 @@
-# StartlyTab 中间层推理引擎 V2 (Intermediate Layer Tech Spec)
+# StartlyTab 中间层推理引擎 V2（历史架构）
+
+> 当前实现见 `docs/CONTEXT_AWARE_COPY_GENERATION_LOOP.md`。本文件保留用于说明旧版设计，不再作为运行时规则。
 
 ## 核心设计理念 (Core Philosophy)
 中间层推理引擎 V2 的核心目标是从“LLM 全权做决策的自由拼装”迁移走向“**确定的强规则决策树 + 动态少样本 Prompt 生成器**”。

@@ -51,9 +51,9 @@ export const privacyCollectionCards = [
   {
     title: "Optional Context-Aware Signals",
     items: [
-      "Open tab count, audio-playing state, mute state, fullscreen/window state, and download-in-progress state",
-      "Battery level and idle time on this page",
-      "Collected only if you enable context-aware mode, and used as aggregated signals rather than a list of all open tab URLs",
+      "Open tab count, audio-playing state, mute state, and fullscreen/window state",
+      "Battery level and an aggregate recent tab-switch count where the extension supports them",
+      "Collected only if you enable context-aware mode; StartlyTab does not store open-tab URLs or titles for this feature",
     ],
   },
   {

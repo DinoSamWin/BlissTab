@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "generate:privacy": "node scripts/generate-privacy-html.mjs",
+    "test:engine": "node --loader ts-node/esm --experimental-specifier-resolution=node test-engine.ts",
     "prebuild": "npm run generate:privacy",
     "prebuild:extension": "npm run generate:privacy",
     "dev": "vite",
