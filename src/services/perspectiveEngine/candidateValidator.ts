@@ -20,6 +20,13 @@ const CLICHE_PATTERNS = [
   /believe in yourself/iu,
   /take a deep breath/iu
 ];
+const VAGUE_LITERARY_PATTERNS = [
+  /把自己(?:全部|一下|也)?叫醒/u,
+  /(?:把)?(?:这段|剩下的|一点)?时间.{0,8}留.{0,3}给.{0,8}自己/u,
+  /把自己(?:也)?拧紧/u,
+  /脑子.{0,6}(?:满格|打卡)/u,
+  /注意力.{0,6}(?:站着|结账)/u
+];
 const VALID_TRACKS = new Set(['A_PHYSICAL', 'B_TIME_ECHO', 'C_EMOTION', 'D_THEME', 'E_QUESTION']);
 
 function sanitizeText(text: string): string {
@@ -112,6 +119,26 @@ function factBoundaryViolations(text: string, state: PipelineState): string[] {
   return reasons;
 }
 
+function repeatsResolvedSceneFraming(text: string, state: PipelineState): boolean {
+  if (!state.input.isManualRefresh) return false;
+
+  const patterns: Partial<Record<PipelineState['sceneResolution']['baseScene'], RegExp>> = {
+    early_buffer: /(天还早|时间还早|这么早|一大早|早到)/u,
+    arrival_buffer: /(刚到今天|今天刚打开|一早|早上刚开始)/u,
+    morning_sustained: /(上午|早上)/u,
+    pre_lunch_transition: /(快到饭点|午饭|中午)/u,
+    midday_release: /(午饭|饭点|中午)/u,
+    post_lunch_reentry: /(午后|午饭后|下午刚开始)/u,
+    afternoon_stretch: /下午/u,
+    closing_runway: /(下班前|快下班|收尾)/u,
+    evening_transition: /(已经到晚上|到了晚上|白天已经|下班)/u,
+    late_evening_boundary: /(这个点|这么晚|深夜|晚上)/u,
+    night_guard: /(夜已经|夜深|深夜|这么晚)/u
+  };
+
+  return patterns[state.sceneResolution.baseScene]?.test(text) || false;
+}
+
 export function validatePerspectiveCandidate(
   rawItem: PerspectivePoolItem,
   state: PipelineState,
@@ -129,6 +156,8 @@ export function validatePerspectiveCandidate(
     reasons.push('exact_clock_time');
   }
   if (CLICHE_PATTERNS.some(pattern => pattern.test(text))) reasons.push('cliche_or_coaching');
+  if (VAGUE_LITERARY_PATTERNS.some(pattern => pattern.test(text))) reasons.push('vague_or_literary_wording');
+  if (repeatsResolvedSceneFraming(text, state)) reasons.push('repeated_scene_framing_on_refresh');
 
   const length = visibleLength(text);
   const isChinese = /[\u3400-\u9fff\uf900-\ufaff]/u.test(text);

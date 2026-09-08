@@ -32,7 +32,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { QuickLink, AppState } from '../types';
 import GatewayEditModal from './GatewayEditModal';
 import {
-    getCachedGatewayIconDataUrl,
+    getGatewayIconCandidates,
     subscribeToGatewayLogoCache,
     upsertLocalLogo,
     warmGatewayIconCache,
@@ -65,13 +65,40 @@ const normalizeGroupCategory = (category?: string | null) => {
     return trimmed;
 };
 
-const getGatewayIconSource = (link: QuickLink): string | null => (
-    getCachedGatewayIconDataUrl(link)
-    || link.customLogoUrl
-    || link.customLogoSignedUrl
-    || link.icon
-    || null
-);
+function GatewayIcon({ link, className = 'w-6 h-6' }: { link: QuickLink; className?: string }) {
+    const candidates = getGatewayIconCandidates(link);
+    const candidateSignature = candidates.join('\n');
+    const [candidateIndex, setCandidateIndex] = useState(0);
+
+    useEffect(() => {
+        setCandidateIndex(0);
+    }, [link.id, candidateSignature]);
+
+    const source = candidates[candidateIndex];
+    if (source) {
+        return (
+            <img
+                key={source}
+                src={source}
+                alt=""
+                draggable={false}
+                className={`${className} object-contain`}
+                onError={() => setCandidateIndex(index => index + 1)}
+            />
+        );
+    }
+
+    const label = (link.customTitle || link.title || '').trim();
+    const initial = Array.from(label)[0]?.toUpperCase() || '•';
+    return (
+        <span
+            aria-hidden="true"
+            className="flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-100 px-1 text-[11px] font-bold text-slate-500 dark:bg-white/10 dark:text-slate-300"
+        >
+            {initial}
+        </span>
+    );
+}
 
 const getOrderedCategories = (items: QuickLink[]) => {
     const orderedCategories = [DEFAULT_GROUP];
@@ -385,43 +412,7 @@ function SortableLinkCard({ link, isEditMode, onDelete, onEdit, index }: Sortabl
         >
             {/* Icon Box */}
             <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-black/5 dark:border-white/5 shrink-0 pointer-events-none">
-                {(() => {
-                    // Resolve logo source
-                    const logoSrc = getGatewayIconSource(link);
-
-                    if (logoSrc) {
-                        return (
-                            <img
-                                src={logoSrc}
-                                alt=""
-                                className="w-6 h-6 object-contain"
-                                onError={(e) => {
-                                    // Fallback to Google Favicon if main icon fails
-                                    try {
-                                        const url = new URL(link.url);
-                                        const googleFavicon = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
-                                        if (e.currentTarget.src !== googleFavicon) {
-                                            e.currentTarget.src = googleFavicon;
-                                            return;
-                                        }
-                                    } catch { } // Ignore invalid URLs
-
-                                    e.currentTarget.style.display = 'none';
-                                    const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                    if (fallback) fallback.style.display = 'block';
-                                }}
-                            />
-                        );
-                    }
-                    return null;
-                })()}
-                <div
-                    className="w-4 h-4 rounded-full"
-                    style={{
-                        backgroundColor: link.color,
-                        display: getGatewayIconSource(link) ? 'none' : 'block'
-                    }}
-                />
+                <GatewayIcon link={link} />
             </div>
 
             {/* Text */}
@@ -1254,40 +1245,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                     className="flex items-center gap-3 px-3 py-3 rounded-xl border border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 h-[64px] w-full cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0">
-                                        {(() => {
-                                            const logoSrc = getGatewayIconSource(link);
-                                            return logoSrc ? (
-                                                <img
-                                                    src={logoSrc}
-                                                    className="w-6 h-6 object-contain"
-                                                    onError={(e) => {
-                                                        // Fallback to Google Favicon if main icon fails
-                                                        try {
-                                                            const url = new URL(link.url);
-                                                            const googleFavicon = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
-                                                            if (e.currentTarget.src !== googleFavicon) {
-                                                                e.currentTarget.src = googleFavicon;
-                                                                return;
-                                                            }
-                                                        } catch { } // Ignore invalid URLs
-
-                                                        // Hide image
-                                                        e.currentTarget.style.display = 'none';
-                                                        // Show fallback div (sibling)
-                                                        // Note: In this compact view structure, the fallback div is rendered conditionally in React, 
-                                                        // but we are in a ternary returning img OR div. 
-                                                        // If img fails, we can't easily switch to the div with just CSS/JS display toggling 
-                                                        // because the div isn't in the DOM.
-                                                        // 
-                                                        // FIX: We should render BOTH and hide one. 
-                                                        // OR: Just accept the broken image handling?
-                                                        // Better approach for Compact View: Render fallback behind? 
-                                                        // For now, simpler to just hide it, but we won't get the colored dot fallback in this specific concise render.
-                                                        // Let's at least try the Google fallback.
-                                                    }}
-                                                />
-                                            ) : <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: link.color }} />;
-                                        })()}
+                                        <GatewayIcon link={link} />
                                     </div>
                                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{link.customTitle || link.title}</span>
                                 </div>
@@ -1579,26 +1537,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                 <div className="opacity-90 scale-105 cursor-grabbing">
                                     <div className="flex items-center gap-4 p-3 pr-5 bg-white dark:bg-[#222] rounded-xl shadow-2xl border border-blue-500/30 h-16 w-[200px]">
                                         <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-black/5 dark:border-white/5 shrink-0">
-                                            {(() => {
-                                                const logoSrc = getGatewayIconSource(activeLink);
-                                                return logoSrc && <img
-                                                    src={logoSrc}
-                                                    className="w-6 h-6 object-contain"
-                                                    onError={(e) => {
-                                                        try {
-                                                            const url = new URL(activeLink.url);
-                                                            const googleFavicon = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
-                                                            if (e.currentTarget.src !== googleFavicon) {
-                                                                e.currentTarget.src = googleFavicon;
-                                                            } else {
-                                                                e.currentTarget.style.display = 'none';
-                                                            }
-                                                        } catch {
-                                                            e.currentTarget.style.display = 'none';
-                                                        }
-                                                    }}
-                                                />;
-                                            })()}
+                                            <GatewayIcon link={activeLink} />
                                         </div>
                                         <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{activeLink.title}</span>
                                     </div>

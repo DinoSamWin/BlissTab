@@ -28,12 +28,12 @@ interface LogoRetryEntry {
 }
 
 const LOGO_CACHE_KEY = 'focus_tab_gateway_logo_cache';
-const LOGO_RETRY_KEY = 'focus_tab_gateway_logo_retry_v1';
+const LOGO_RETRY_KEY = 'focus_tab_gateway_logo_retry_v2';
 const LOGO_CACHE_EVENT = 'focus-tab-gateway-logo-cache-updated';
 
 const REMOTE_ICON_REVALIDATE_MS = 7 * 24 * 60 * 60 * 1000;
 const FAILED_RETRY_COOLDOWN_MS = 15 * 60 * 1000;
-const RETRY_DELAYS_MS = [0, 800, 2400];
+const RETRY_DELAYS_MS = [0, 1200, 4500, 12000];
 const MAX_CACHE_ENTRIES = 120;
 const MAX_CACHE_CHARACTERS = 4_000_000;
 const DEFAULT_WARM_CONCURRENCY = 2;
@@ -304,17 +304,77 @@ function retryInBackground(key: string, task: () => Promise<boolean>): Promise<b
   return request;
 }
 
-function getRemoteIconSources(link: QuickLink): string[] {
+function safeIconSource(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^https?:\/\//i.test(trimmed) || /^blob:/i.test(trimmed) || /^data:image\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+function getSiteIconSources(link: QuickLink): string[] {
   const sources: string[] = [];
-  if (link.icon && /^https?:\/\//i.test(link.icon)) sources.push(link.icon);
+  const storedIcon = safeIconSource(link.icon);
+  const storedIconIsPublicProxy = Boolean(storedIcon && (
+    /\/s2\/favicons/i.test(storedIcon) || /icons\.duckduckgo\.com/i.test(storedIcon)
+  ));
+  if (storedIcon && !storedIconIsPublicProxy) sources.push(storedIcon);
 
   const canonicalUrl = resolveCanonicalUrl(link);
   const hostname = canonicalUrl ? extractHostname(canonicalUrl) : '';
-  if (hostname) {
-    sources.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`);
+  if (canonicalUrl && hostname) {
+    // The extension has Chrome's favicon permission. This source can recover
+    // visited intranet icons that public favicon services cannot reach.
+    const chromeApi = (globalThis as typeof globalThis & {
+      chrome?: { runtime?: { id?: string; getURL?: (path: string) => string } };
+    }).chrome;
+    if (chromeApi?.runtime?.id && chromeApi.runtime.getURL) {
+      const faviconBase = chromeApi.runtime.getURL('/_favicon/');
+      sources.push(`${faviconBase}?pageUrl=${encodeURIComponent(canonicalUrl)}&size=64`);
+    }
+
+    try {
+      const parsed = new URL(canonicalUrl);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        sources.push(
+          `${parsed.origin}/favicon.ico`,
+          `${parsed.origin}/favicon.png`,
+          `${parsed.origin}/apple-touch-icon.png`
+        );
+      }
+    } catch {
+      // External favicon services below can still recover from a hostname.
+    }
+
+    if (storedIconIsPublicProxy && storedIcon) sources.push(storedIcon);
+    sources.push(
+      `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(canonicalUrl)}`,
+      `https://icons.duckduckgo.com/ip3/${encodeURIComponent(hostname)}.ico`
+    );
   }
 
   return Array.from(new Set(sources));
+}
+
+/**
+ * Ordered render candidates. Direct site paths deliberately remain in this
+ * list even when fetch() cannot cache them: an <img> can display an intranet
+ * favicon in the user's browser without requiring CORS access to its bytes.
+ */
+export function getGatewayIconCandidates(link: QuickLink): string[] {
+  const sources = [
+    getCachedGatewayIconDataUrl(link),
+    safeIconSource(link.customLogoUrl),
+    safeIconSource(link.customLogoSignedUrl),
+    ...getSiteIconSources(link),
+  ].filter((source): source is string => Boolean(source));
+
+  return Array.from(new Set(sources));
+}
+
+function getRemoteIconSources(link: QuickLink): string[] {
+  return getSiteIconSources(link).filter(source => /^https?:\/\//i.test(source));
 }
 
 async function fetchAndCacheRemoteIcon(canonicalUrl: string, sourceUrl: string): Promise<boolean> {
@@ -374,12 +434,18 @@ async function ensureRemoteIconCached(link: QuickLink, canonicalUrl: string): Pr
   const sources = getRemoteIconSources(link);
   if (!sources.length) return false;
 
-  const preferredSource = sources[0];
-  const retryKey = `remote:${canonicalUrl}:${preferredSource}`;
+  const existing = getLocalLogoCache()[canonicalUrl];
+  const checkedAt = existing?.checkedAt || existing?.updatedAt || 0;
+  if (existing?.kind === 'remote' && Date.now() - checkedAt < REMOTE_ICON_REVALIDATE_MS) {
+    return true;
+  }
+
+  const orderedSources = existing?.kind === 'remote' && existing.sourceUrl
+    ? [existing.sourceUrl, ...sources.filter(source => source !== existing.sourceUrl)]
+    : sources;
+  const retryKey = `remote:${canonicalUrl}:${orderedSources[0]}`;
   return retryInBackground(retryKey, async () => {
-    const existing = getLocalLogoCache()[canonicalUrl];
-    const sourcesToTry = existing?.kind === 'remote' ? [preferredSource] : sources;
-    for (const source of sourcesToTry) {
+    for (const source of orderedSources) {
       if (await fetchAndCacheRemoteIcon(canonicalUrl, source)) return true;
     }
     return false;
@@ -388,7 +454,7 @@ async function ensureRemoteIconCached(link: QuickLink, canonicalUrl: string): Pr
 
 /**
  * Ensures one gateway has a usable local icon. Missing custom logos are retried
- * three times with backoff; after that they cool down for 15 minutes before a
+ * four times with backoff; after that they cool down for 15 minutes before a
  * later page open can try again. A favicon is recovered as a fallback.
  */
 export async function ensureGatewayIconCached(link: QuickLink): Promise<boolean> {

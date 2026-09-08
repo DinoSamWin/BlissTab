@@ -10,12 +10,12 @@ type Template = Pick<
 
 const BASE_ZH: Record<BaseTimeScene, Template[]> = {
   early_buffer: [
-    { text: '天还早，今天不用一次把自己全部叫醒。', content_track: 'permission_pause', semantic_core: 'early_day_can_load_slowly', action_tag: 'delay_full_start', object_tag: 'day', metaphor_tag: 'loading_the_self', opener_tag: 'early_time_observation', sentence_shape: 'observation_plus_permission' },
-    { text: '早到的一会儿，先留给还没进入状态的自己。', content_track: 'life_boundary', semantic_core: 'early_buffer_belongs_to_self', action_tag: 'keep_buffer', object_tag: 'morning_gap', metaphor_tag: 'time_as_personal_space', opener_tag: 'early_gap', sentence_shape: 'time_reallocation' }
+    { text: '时间还早，先做一件简单的事，不用马上忙起来。', content_track: 'permission_pause', semantic_core: 'early_start_can_stay_simple', action_tag: 'start_simple', object_tag: 'current_thing', metaphor_tag: 'none', opener_tag: 'early_time_observation', sentence_shape: 'observation_plus_direct_permission' },
+    { text: '刚开始不用安排太满，按平常的速度来就行。', content_track: 'grounded_observation', semantic_core: 'start_at_normal_pace', action_tag: 'keep_normal_pace', object_tag: 'starting_rhythm', metaphor_tag: 'none', opener_tag: 'plain_start', sentence_shape: 'direct_permission_plus_action' }
   ],
   arrival_buffer: [
-    { text: '今天刚打开，先别急着把整天一起装进来。', content_track: 'playful_boundary', semantic_core: 'do_not_load_whole_day', action_tag: 'delay_full_day', object_tag: 'day', metaphor_tag: 'day_as_luggage', opener_tag: 'day_opening', sentence_shape: 'observation_plus_light_instruction' },
-    { text: '人已经到今天了，脑子可以晚几分钟打卡。', content_track: 'object_humor', semantic_core: 'mind_can_arrive_later', action_tag: 'delay_mental_start', object_tag: 'mind', metaphor_tag: 'mind_clocking_in', opener_tag: 'person_arrived', sentence_shape: 'contrast_plus_permission' }
+    { text: '刚开始别把事情排得太满，先做最清楚的一件。', content_track: 'playful_boundary', semantic_core: 'start_without_full_schedule', action_tag: 'keep_start_small', object_tag: 'current_thing', metaphor_tag: 'none', opener_tag: 'plain_day_start', sentence_shape: 'direct_boundary_plus_action' },
+    { text: '现在不用马上进入状态，按平常的速度开始就行。', content_track: 'grounded_observation', semantic_core: 'start_at_normal_speed', action_tag: 'keep_normal_speed', object_tag: 'starting_rhythm', metaphor_tag: 'none', opener_tag: 'start_permission', sentence_shape: 'direct_permission_plus_action' }
   ],
   morning_sustained: [
     { text: '上午已经在走了，手里的事不用一起往前挤。', content_track: 'grounded_observation', semantic_core: 'morning_tasks_need_not_crowd', action_tag: 'reduce_scope', object_tag: 'current_tasks', metaphor_tag: 'tasks_crowding_forward', opener_tag: 'morning_in_progress', sentence_shape: 'observation_plus_containment' },
@@ -42,7 +42,7 @@ const BASE_ZH: Record<BaseTimeScene, Template[]> = {
     { text: '下班前这段，不适合把整个世界临时搬过来。', content_track: 'object_humor', semantic_core: 'closing_time_not_for_everything', action_tag: 'refuse_new_scope', object_tag: 'world', metaphor_tag: 'moving_world_into_close', opener_tag: 'before_work_end', sentence_shape: 'time_statement_plus_humor' }
   ],
   evening_transition: [
-    { text: '白天已经走到这里，剩下的时间留一点给自己。', content_track: 'life_boundary', semantic_core: 'evening_time_returns_to_self', action_tag: 'keep_evening_time', object_tag: 'remaining_time', metaphor_tag: 'time_returned_to_self', opener_tag: 'day_reached_evening', sentence_shape: 'observation_plus_reallocation' },
+    { text: '已经到晚上了，工作之外的事情也该排进来。', content_track: 'life_boundary', semantic_core: 'evening_includes_nonwork_life', action_tag: 'make_room_for_nonwork', object_tag: 'evening', metaphor_tag: 'none', opener_tag: 'evening_arrived', sentence_shape: 'observation_plus_direct_boundary' },
     { text: '工作可以留在今天，晚上不用替它继续值班。', content_track: 'playful_boundary', semantic_core: 'evening_not_on_duty_for_work', action_tag: 'leave_work_in_day', object_tag: 'evening', metaphor_tag: 'evening_on_duty', opener_tag: 'work_can_stay', sentence_shape: 'permission_plus_joke' }
   ],
   late_evening_boundary: [
@@ -61,15 +61,48 @@ const OVERRIDE_ZH: Partial<Record<PipelineState['sceneResolution']['scene'], Tem
   ],
   overloaded_browser: [
     { text: '开着的东西不少，先别让它们一起往前挤。', content_track: 'playful_boundary', semantic_core: 'open_items_need_not_crowd', action_tag: 'reduce_scope', object_tag: 'open_items', metaphor_tag: 'items_crowding_forward', opener_tag: 'open_items_observation', sentence_shape: 'observation_plus_containment' }
-  ],
-  refresh_loop: [
-    { text: '看来这句还没对上，先把屏幕晾一会儿。', content_track: 'playful_boundary', semantic_core: 'line_mismatch_invites_screen_break', action_tag: 'brief_screen_exit', object_tag: 'screen', metaphor_tag: 'airing_the_screen', opener_tag: 'line_not_landed', sentence_shape: 'observation_plus_light_action' }
   ]
 };
 
+const REFRESH_ZH: Record<'first' | 'second' | 'third' | 'fourth' | 'fifth' | 'later', Template[]> = {
+  first: [
+    { text: '先只管眼前最简单的一件，其他的晚点再说。', content_track: 'permission_pause', semantic_core: 'refresh_narrow_to_one_simple_thing', action_tag: 'narrow_to_one', object_tag: 'simple_thing', metaphor_tag: 'none', opener_tag: 'first_refresh_scope', sentence_shape: 'direct_action_plus_permission' },
+    { text: '现在不用把事情想全，先顾好眼前这一小步。', content_track: 'unexpected_perspective', semantic_core: 'refresh_drop_full_plan', action_tag: 'drop_full_plan', object_tag: 'next_step', metaphor_tag: 'none', opener_tag: 'first_refresh_now', sentence_shape: 'direct_permission_plus_action' }
+  ],
+  second: [
+    { text: '先把眼睛从屏幕上移开几秒，看看远一点的地方。', content_track: 'sensory_reset', semantic_core: 'refresh_look_far_briefly', action_tag: 'look_far', object_tag: 'view', metaphor_tag: 'none', opener_tag: 'second_refresh_visual', sentence_shape: 'single_direct_action' },
+    { text: '看看桌上随手能摸到的东西，先换一下注意力。', content_track: 'sensory_reset', semantic_core: 'refresh_notice_nearby_object', action_tag: 'notice_object', object_tag: 'nearby_object', metaphor_tag: 'none', opener_tag: 'second_refresh_object', sentence_shape: 'concrete_action_plus_reason' }
+  ],
+  third: [
+    { text: '这句没说到点上也没关系，先去做点别的。', content_track: 'playful_boundary', semantic_core: 'refresh_line_can_miss', action_tag: 'do_something_else', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'third_refresh_line', sentence_shape: 'acknowledgment_plus_direct_action' },
+    { text: '先别急着找下一句，离开屏幕一会儿也可以。', content_track: 'permission_pause', semantic_core: 'refresh_stop_searching', action_tag: 'leave_screen', object_tag: 'screen', metaphor_tag: 'none', opener_tag: 'third_refresh_stop', sentence_shape: 'direct_boundary_plus_permission' }
+  ],
+  fourth: [
+    { text: '喝口水或者走两步，先做点和屏幕无关的事。', content_track: 'sensory_reset', semantic_core: 'refresh_choose_offscreen_action', action_tag: 'brief_offscreen_action', object_tag: 'body', metaphor_tag: 'none', opener_tag: 'fourth_refresh_action', sentence_shape: 'concrete_options_plus_boundary' },
+    { text: '去别的地方待一会儿也行，这个页面可以晚点再看。', content_track: 'permission_pause', semantic_core: 'refresh_change_place', action_tag: 'change_place', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'fourth_refresh_place', sentence_shape: 'permission_plus_direct_boundary' }
+  ],
+  fifth: [
+    { text: '现在可以先关掉这个页面，过一会儿再回来。', content_track: 'permission_pause', semantic_core: 'refresh_close_page_for_now', action_tag: 'close_page', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'fifth_refresh_close', sentence_shape: 'direct_permission_plus_later' },
+    { text: '先离开屏幕一会儿，这里的内容不会跑掉。', content_track: 'playful_boundary', semantic_core: 'refresh_content_will_remain', action_tag: 'leave_screen', object_tag: 'page_content', metaphor_tag: 'content_running_away', opener_tag: 'fifth_refresh_leave', sentence_shape: 'direct_action_plus_light_joke' }
+  ],
+  later: [
+    { text: '今天不用每件事都有结果，没做完的以后再说。', content_track: 'unexpected_perspective', semantic_core: 'refresh_results_can_wait', action_tag: 'allow_unfinished', object_tag: 'unfinished_things', metaphor_tag: 'none', opener_tag: 'later_refresh_results', sentence_shape: 'direct_permission_plus_boundary' },
+    { text: '先去做点和屏幕无关的事，哪怕只有几分钟。', content_track: 'permission_pause', semantic_core: 'refresh_take_offscreen_minutes', action_tag: 'leave_screen', object_tag: 'offscreen_time', metaphor_tag: 'none', opener_tag: 'later_refresh_offscreen', sentence_shape: 'direct_action_plus_small_duration' }
+  ]
+};
+
+function getRefreshTemplates(consecutiveClicks: number): Template[] {
+  if (consecutiveClicks === 1) return REFRESH_ZH.first;
+  if (consecutiveClicks === 2) return REFRESH_ZH.second;
+  if (consecutiveClicks === 3) return REFRESH_ZH.third;
+  if (consecutiveClicks === 4) return REFRESH_ZH.fourth;
+  if (consecutiveClicks === 5) return REFRESH_ZH.fifth;
+  return REFRESH_ZH.later;
+}
+
 const MODIFIER_ZH: Partial<Record<SceneModifier, Template[]>> = {
   monday_return: [
-    { text: '周一只是日历翻了一格，不用把自己也拧紧。', content_track: 'playful_boundary', semantic_core: 'monday_is_one_calendar_step', action_tag: 'soften_week_start', object_tag: 'calendar', metaphor_tag: 'self_as_tightened_object', opener_tag: 'monday_reframe', sentence_shape: 'reframe_plus_permission' }
+    { text: '周一刚开始，按平常节奏来就行，不用一下排满。', content_track: 'playful_boundary', semantic_core: 'monday_can_start_normally', action_tag: 'keep_normal_week_start', object_tag: 'monday', metaphor_tag: 'none', opener_tag: 'monday_plain_start', sentence_shape: 'observation_plus_direct_permission' }
   ],
   friday_release: [
     { text: '周五已经走到这里，剩下的别都塞进今天。', content_track: 'life_boundary', semantic_core: 'friday_need_not_hold_everything', action_tag: 'leave_scope_for_later', object_tag: 'friday', metaphor_tag: 'day_as_container', opener_tag: 'friday_progress', sentence_shape: 'observation_plus_boundary' }
@@ -112,16 +145,16 @@ const REST_DAY_ZH: Template[] = [
 
 const CONFIRMED_WORK_ZH: Record<ConfirmedWorkStatus, Template[]> = {
   workplace_arrival: [
-    { text: '人已经到公司了，脑子可以晚几分钟打卡。', content_track: 'playful_boundary', semantic_core: 'mind_can_clock_in_after_arrival', action_tag: 'delay_mental_start', object_tag: 'mind', metaphor_tag: 'mind_clocking_in', opener_tag: 'person_arrived_at_workplace', sentence_shape: 'fact_plus_playful_permission' }
+    { text: '已经到公司了，先简单收拾一下，不用马上开工。', content_track: 'playful_boundary', semantic_core: 'arrival_allows_simple_setup', action_tag: 'settle_before_start', object_tag: 'workplace', metaphor_tag: 'none', opener_tag: 'confirmed_arrival', sentence_shape: 'fact_plus_direct_permission' }
   ],
   working: [
-    { text: '工作已经在进行，注意力不用一直绷成直线。', content_track: 'grounded_observation', semantic_core: 'attention_need_not_stay_tense', action_tag: 'soften_attention', object_tag: 'attention', metaphor_tag: 'attention_as_tight_line', opener_tag: 'work_in_progress', sentence_shape: 'fact_plus_permission' }
+    { text: '工作已经开始了，先停几秒再接着做也可以。', content_track: 'grounded_observation', semantic_core: 'work_allows_brief_stop', action_tag: 'brief_stop', object_tag: 'current_work', metaphor_tag: 'none', opener_tag: 'work_in_progress', sentence_shape: 'fact_plus_direct_permission' }
   ],
   off_work: [
-    { text: '已经下班了，剩下的时间不用继续替工作值班。', content_track: 'life_boundary', semantic_core: 'off_work_time_not_on_duty', action_tag: 'release_work_role', object_tag: 'remaining_time', metaphor_tag: 'time_on_duty', opener_tag: 'off_work_confirmed', sentence_shape: 'fact_plus_boundary' }
+    { text: '已经下班了，没处理完的先放着，明天再继续。', content_track: 'life_boundary', semantic_core: 'off_work_leaves_unfinished_work', action_tag: 'leave_work_for_tomorrow', object_tag: 'unfinished_work', metaphor_tag: 'none', opener_tag: 'off_work_confirmed', sentence_shape: 'fact_plus_direct_boundary' }
   ],
   overtime: [
-    { text: '加班到了现在，今晚也该留一点位置给你自己。', content_track: 'life_boundary', semantic_core: 'overtime_evening_keeps_personal_space', action_tag: 'keep_personal_space', object_tag: 'evening', metaphor_tag: 'evening_as_space', opener_tag: 'overtime_confirmed', sentence_shape: 'fact_plus_reallocation' }
+    { text: '已经加班到现在了，先确认哪些事情可以明天再做。', content_track: 'life_boundary', semantic_core: 'overtime_can_defer_scope', action_tag: 'defer_nonurgent_work', object_tag: 'remaining_work', metaphor_tag: 'none', opener_tag: 'overtime_confirmed', sentence_shape: 'fact_plus_direct_boundary' }
   ]
 };
 
@@ -188,6 +221,14 @@ export function getStateAwareFallback(
     const emotionCandidates = [EMOTION_ZH[state.input.clickedEmotion]].map(template => hydrate(template, state));
     const emotionSelection = selectBestCandidate(emotionCandidates, state, history);
     return emotionSelection.selected || leastRecentlyUsedFallback(emotionCandidates, state, history);
+  }
+
+  if (state.input.isManualRefresh) {
+    const refreshCandidates = getRefreshTemplates(state.input.consecutiveClicks)
+      .map(template => hydrate(template, state));
+    const refreshSelection = selectBestCandidate(refreshCandidates, state, history);
+    return refreshSelection.selected
+      || leastRecentlyUsedFallback(refreshCandidates, state, history);
   }
 
   if (state.input.confirmedWorkStatus) {

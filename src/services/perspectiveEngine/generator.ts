@@ -1,7 +1,7 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.0.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.1.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -15,6 +15,8 @@ Relationship and voice:
 - Default to light, natural, quietly witty language.
 - Be warm without performing intimacy; clever without trying too hard.
 - Prefer everyday spoken language over poetry, therapy language, or poster copy.
+- The meaning must be obvious on the first read. Prefer literal, concrete wording over metaphor, personification, or elegant-sounding ambiguity.
+- A small joke is welcome only when the practical meaning remains unmistakable.
 - Make the user feel "that fits this moment", never "this app is watching me".
 
 Authority boundary:
@@ -29,6 +31,7 @@ Permanent prohibitions:
 - No fabricated meetings, office arrival, hunger, naps, overtime, weather, memories, or physical symptoms.
 - No exact clock time, exact tab count, battery percentage, URLs, click count, or technical telemetry.
 - No exclamation marks, questions, emojis, hashtags, markdown, or quotation marks.
+- In Chinese, do not use vague literary phrases such as “把自己全部叫醒”, “把时间留给自己”, “把自己拧紧”, or close paraphrases.
 `.trim();
 
 const PERSONA_GUIDANCE: Record<PersonaType, string> = {
@@ -62,11 +65,13 @@ const STRATEGY_GUIDANCE: Record<ResponseStrategy, string> = {
 function refreshGuidance(state: PipelineState): string | undefined {
   if (!state.input.isManualRefresh) return undefined;
   const streak = state.input.consecutiveClicks;
-  if (streak <= 2) return 'The user requested another line. Keep the same scene but use a clearly different angle.';
-  if (streak === 3) return 'Use light, friendly humor to interrupt automatic refreshing without mentioning clicks.';
-  if (streak === 4) return 'Shift from screen/work language toward one ordinary off-screen detail.';
-  if (streak === 5) return 'Offer permission to leave the screen briefly, without sounding concerned or clinical.';
-  return 'Use a concrete wider perspective. Do not become poetic, mystical, dramatic, or philosophical.';
+  const shared = 'This is not the first line in this moment. Do not repeat the time-of-day, weekday, or holiday framing from the initial line. Use direct everyday wording and a different practical job.';
+  if (streak === 1) return `${shared} Narrow the moment to one simple thing; do not tell the user to speed up or optimize.`;
+  if (streak === 2) return `${shared} Shift to one ordinary off-screen detail or a brief visual change.`;
+  if (streak === 3) return `${shared} Lightly interrupt automatic refreshing without mentioning clicks or sounding annoyed.`;
+  if (streak === 4) return `${shared} Move decisively away from screen and work language toward ordinary life.`;
+  if (streak === 5) return `${shared} Give clear permission to leave the page for a while, without sounding concerned or clinical.`;
+  return `${shared} Use a concrete wider perspective. Do not become poetic, mystical, dramatic, or philosophical.`;
 }
 
 /** Builds the compact, auditable policy packet sent to the existing model. */
@@ -116,6 +121,7 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       first_item_must_use_target_track: true,
       remaining_items_should_rotate_allowed_tracks: true,
       every_item_must_have_distinct_semantic_core: true,
+      directness_check: 'A user must understand the literal point immediately. Rewrite any line that mainly relies on metaphor, personification, or an abstract phrase.',
       json_shape: {
         text: 'final user-facing sentence',
         style: 'short style label',

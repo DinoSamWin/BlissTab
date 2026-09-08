@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { calculateSimilarity } from './src/services/perspectiveService.ts';
 import {
+  STARTLY_PROMPT_VERSION,
   getStateAwareFallback,
   runCompanionPipeline,
   validatePerspectiveCandidate
@@ -43,6 +44,9 @@ const earlyArrival = stateFor({ local_time: '07:00' });
 assert.equal(earlyArrival.sceneResolution.baseScene, 'early_buffer');
 assert.equal(earlyArrival.sceneResolution.scene, 'early_buffer');
 assert.equal(earlyArrival.input.confirmedWorkStatus, undefined);
+const earlyInitialFallback = getStateAwareFallback(earlyArrival, 'Chinese (Simplified)');
+assert.ok(earlyInitialFallback);
+assert.doesNotMatch(earlyInitialFallback.text, /(把自己.*叫醒|时间.*留.*给.*自己)/u);
 
 const confirmedEarlyArrival = stateFor({
   local_time: '07:00',
@@ -51,7 +55,7 @@ const confirmedEarlyArrival = stateFor({
 assert.ok(confirmedEarlyArrival.knownFacts.includes('confirmed_work_status:workplace_arrival'));
 assert.equal(
   getStateAwareFallback(confirmedEarlyArrival, 'Chinese (Simplified)')?.text,
-  '人已经到公司了，脑子可以晚几分钟打卡。'
+  '已经到公司了，先简单收拾一下，不用马上开工。'
 );
 
 const preLunch = stateFor({ local_time: '11:50' });
@@ -113,6 +117,44 @@ assert.equal(anxious.sceneResolution.scene, 'emotional_checkin');
 assert.equal(anxious.emotionBias, 'anxious');
 assert.equal(anxious.strategy, 'ground');
 
+const firstRefresh = stateFor({
+  local_time: '07:00',
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 1
+});
+assert.equal(firstRefresh.sceneResolution.scene, 'refresh_loop');
+assert.equal(firstRefresh.strategy, 'interrupt');
+
+const firstRefreshFallback = getStateAwareFallback(firstRefresh, 'Chinese (Simplified)');
+assert.ok(firstRefreshFallback);
+assert.notEqual(firstRefreshFallback.text, earlyInitialFallback.text);
+assert.doesNotMatch(firstRefreshFallback.text, /(天还早|时间还早|这么早|一大早|早到)/u);
+
+const secondRefresh = stateFor({
+  local_time: '07:00',
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 2,
+  recent_history: [{
+    text: firstRefreshFallback.text,
+    timestamp: Date.now(),
+    promptId: 'first-refresh',
+    contentTrack: firstRefreshFallback.content_track,
+    semanticCore: firstRefreshFallback.semantic_core,
+    actionTag: firstRefreshFallback.action_tag,
+    objectTag: firstRefreshFallback.object_tag,
+    metaphorTag: firstRefreshFallback.metaphor_tag,
+    openerTag: firstRefreshFallback.opener_tag,
+    sentenceShape: firstRefreshFallback.sentence_shape,
+    timeBlock: 'early_morning'
+  }]
+});
+const secondRefreshFallback = getStateAwareFallback(secondRefresh, 'Chinese (Simplified)');
+assert.ok(secondRefreshFallback);
+assert.notEqual(secondRefreshFallback.text, firstRefreshFallback.text);
+assert.doesNotMatch(secondRefreshFallback.text, /(天还早|时间还早|这么早|一大早|早到)/u);
+
 const refreshLoop = stateFor({
   local_time: '15:20',
   trigger: 'manual_refresh',
@@ -133,6 +175,7 @@ assert.match(promptCase.system, /You are StartlyTab/);
 assert.match(promptCase.user, /forbidden_assumptions/);
 assert.match(promptCase.user, /prompt_version/);
 assert.doesNotMatch(promptCase.user, /"state_fingerprint"\s*:/);
+assert.match(promptCase.system, /meaning must be obvious on the first read/i);
 
 const invalidCandidate = validatePerspectiveCandidate({
   text: '你刚到公司，先深呼吸一下。',
@@ -146,10 +189,28 @@ const invalidCandidate = validatePerspectiveCandidate({
   opener_tag: 'arrival_claim',
   sentence_shape: 'claim_plus_action',
   state_fingerprint: promptCase.state.stateFingerprint,
-  prompt_version: 'context-loop-v1.0.0'
+  prompt_version: STARTLY_PROMPT_VERSION
 }, promptCase.state);
 assert.equal(invalidCandidate.valid, false);
 assert.ok(invalidCandidate.reasons.includes('cliche_or_coaching'));
 assert.ok(invalidCandidate.reasons.includes('invented_workplace_state'));
+
+const vagueRefreshCandidate = validatePerspectiveCandidate({
+  text: '天还早，今天不用一次把自己全部叫醒。',
+  style: 'permission_pause',
+  track: 'D_THEME',
+  content_track: 'permission_pause',
+  semantic_core: 'repeat_early_message',
+  action_tag: 'delay_full_start',
+  object_tag: 'day',
+  metaphor_tag: 'loading_the_self',
+  opener_tag: 'early_time_observation',
+  sentence_shape: 'observation_plus_permission',
+  state_fingerprint: firstRefresh.stateFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, firstRefresh);
+assert.equal(vagueRefreshCandidate.valid, false);
+assert.ok(vagueRefreshCandidate.reasons.includes('vague_or_literary_wording'));
+assert.ok(vagueRefreshCandidate.reasons.includes('repeated_scene_framing_on_refresh'));
 
 console.log('Perspective engine deterministic checks passed.');
