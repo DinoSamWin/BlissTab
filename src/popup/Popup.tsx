@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { QuickLink, AppState } from '../types';
 import { canonicalizeUrl } from '../services/urlCanonicalService';
-import { getLocalLogoDataUrl, downloadAndCacheLogo } from '../services/gatewayLogoCacheService';
+import {
+    ensureGatewayIconCached,
+    getCachedGatewayIconDataUrl,
+    upsertLocalLogo,
+} from '../services/gatewayLogoCacheService';
 import { DEFAULT_LINKS, DEFAULT_REQUESTS } from '../constants';
 import { ExternalLink, Plus, Settings, X, Check, Search } from 'lucide-react';
 
@@ -60,15 +64,21 @@ const Popup: React.FC = () => {
                                     setCategory(found.category || 'Shortcuts');
 
                                     // Load existing logo
-                                    const localLogo = found.customLogoHash
-                                        ? getLocalLogoDataUrl(canonical, found.customLogoHash)
-                                        : null;
+                                    const localLogo = getCachedGatewayIconDataUrl(found);
 
                                     if (localLogo) {
                                         setLogoPreview(localLogo);
-                                    } else if (found.customLogoUrl) {
-                                        setLogoPreview(found.customLogoUrl);
+                                    } else if (found.customLogoUrl || found.customLogoSignedUrl) {
+                                        setLogoPreview(found.customLogoUrl || found.customLogoSignedUrl || null);
                                     }
+
+                                    // The popup may open before the dashboard has warmed its cache.
+                                    // Recover the missing icon here too, without blocking the UI.
+                                    ensureGatewayIconCached(found).then((cached) => {
+                                        if (!cached) return;
+                                        const recoveredLogo = getCachedGatewayIconDataUrl(found);
+                                        if (recoveredLogo) setLogoPreview(recoveredLogo);
+                                    }).catch(() => {});
                                 }
                             }
                         } catch (e) {
@@ -159,14 +169,12 @@ const Popup: React.FC = () => {
                 // But verify they are available.
                 // Actually, we can just save it to the cache manually or use the service if it stores to localStorage.
                 try {
-                    const cacheKey = 'focus_tab_gateway_logo_cache';
-                    const cache = JSON.parse(localStorage.getItem(cacheKey) || '{}');
-                    cache[canonical] = {
+                    upsertLocalLogo(canonical, {
                         dataUrl,
                         hash,
-                        updatedAt: Date.now()
-                    };
-                    localStorage.setItem(cacheKey, JSON.stringify(cache));
+                        kind: 'custom',
+                        updatedAt: Date.now(),
+                    });
                 } catch (e) {
                     console.error("Failed to save logo locally", e);
                 }

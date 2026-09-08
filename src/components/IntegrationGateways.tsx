@@ -31,7 +31,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { QuickLink, AppState } from '../types';
 import GatewayEditModal from './GatewayEditModal';
-import { getLocalLogoDataUrl, upsertLocalLogo } from '../services/gatewayLogoCacheService';
+import {
+    getCachedGatewayIconDataUrl,
+    subscribeToGatewayLogoCache,
+    upsertLocalLogo,
+    warmGatewayIconCache,
+} from '../services/gatewayLogoCacheService';
 import { uploadGatewayLogo } from '../services/supabaseService';
 import { canonicalizeUrl } from '../services/urlCanonicalService';
 import { canAddGateway, isSubscribed, SUBSCRIPTION_LIMITS } from '../services/usageLimitsService';
@@ -47,6 +52,7 @@ interface Props {
 
 // --- Helper Functions ---
 const DEFAULT_GROUP = 'Quick Access';
+const ICON_CACHE_RETRY_INTERVAL_MS = 15 * 60 * 1000;
 
 const isDefaultGroupString = (cat: string) => {
     const trimmed = (cat || '').trim();
@@ -58,6 +64,14 @@ const normalizeGroupCategory = (category?: string | null) => {
     if (!trimmed || isDefaultGroupString(trimmed)) return DEFAULT_GROUP;
     return trimmed;
 };
+
+const getGatewayIconSource = (link: QuickLink): string | null => (
+    getCachedGatewayIconDataUrl(link)
+    || link.customLogoUrl
+    || link.customLogoSignedUrl
+    || link.icon
+    || null
+);
 
 const getOrderedCategories = (items: QuickLink[]) => {
     const orderedCategories = [DEFAULT_GROUP];
@@ -373,11 +387,7 @@ function SortableLinkCard({ link, isEditMode, onDelete, onEdit, index }: Sortabl
             <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-black/5 dark:border-white/5 shrink-0 pointer-events-none">
                 {(() => {
                     // Resolve logo source
-                    let logoSrc = link.customLogoUrl || link.customLogoSignedUrl || link.icon;
-                    if (link.canonicalUrl && link.customLogoHash) {
-                        const local = getLocalLogoDataUrl(link.canonicalUrl, link.customLogoHash);
-                        if (local) logoSrc = local;
-                    }
+                    const logoSrc = getGatewayIconSource(link);
 
                     if (logoSrc) {
                         return (
@@ -409,7 +419,7 @@ function SortableLinkCard({ link, isEditMode, onDelete, onEdit, index }: Sortabl
                     className="w-4 h-4 rounded-full"
                     style={{
                         backgroundColor: link.color,
-                        display: (link.customLogoUrl || link.customLogoSignedUrl || link.icon || (link.canonicalUrl && link.customLogoHash && getLocalLogoDataUrl(link.canonicalUrl, link.customLogoHash))) ? 'none' : 'block'
+                        display: getGatewayIconSource(link) ? 'none' : 'block'
                     }}
                 />
             </div>
@@ -764,6 +774,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     // Local state for immediate DnD feedback
     const [links, setLinks] = useState(Array.isArray(propLinks) ? propLinks : []);
     const linksRef = useRef(links);
+    const [, setLogoCacheVersion] = useState(0);
 
     // Sync prop changes to local state (e.g. from DB updates)
     useEffect(() => {
@@ -775,6 +786,29 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
     // Keep ref in sync ensuring handleDragEnd has latest data
     useEffect(() => {
         linksRef.current = links;
+    }, [links]);
+
+    // Cache icons after render. Matching custom-logo hashes are skipped with
+    // zero network work; missing icons retry quietly in the background.
+    useEffect(() => subscribeToGatewayLogoCache(() => {
+        setLogoCacheVersion(version => version + 1);
+    }), []);
+
+    useEffect(() => {
+        const warmCache = () => {
+            warmGatewayIconCache(links).catch(error => {
+                console.warn('[IntegrationGateways] Background icon cache warm-up failed:', error);
+            });
+        };
+
+        warmCache();
+        const retryTimer = window.setInterval(warmCache, ICON_CACHE_RETRY_INTERVAL_MS);
+        window.addEventListener('online', warmCache);
+
+        return () => {
+            window.clearInterval(retryTimer);
+            window.removeEventListener('online', warmCache);
+        };
     }, [links]);
 
     // Edit Mode State
@@ -1221,11 +1255,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center border border-black/5 dark:border-white/5 flex-shrink-0">
                                         {(() => {
-                                            let logoSrc = link.customLogoUrl || link.customLogoSignedUrl || link.icon;
-                                            if (link.canonicalUrl && link.customLogoHash) {
-                                                const local = getLocalLogoDataUrl(link.canonicalUrl, link.customLogoHash);
-                                                if (local) logoSrc = local;
-                                            }
+                                            const logoSrc = getGatewayIconSource(link);
                                             return logoSrc ? (
                                                 <img
                                                     src={logoSrc}
@@ -1550,11 +1580,7 @@ export default function IntegrationGateways({ links: propLinks, userId, onUpdate
                                     <div className="flex items-center gap-4 p-3 pr-5 bg-white dark:bg-[#222] rounded-xl shadow-2xl border border-blue-500/30 h-16 w-[200px]">
                                         <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-black/5 dark:border-white/5 shrink-0">
                                             {(() => {
-                                                let logoSrc = activeLink.customLogoUrl || activeLink.icon; // drag overlay might not need signed url if it's transient, but consistent is better
-                                                if (activeLink.canonicalUrl && activeLink.customLogoHash) {
-                                                    const local = getLocalLogoDataUrl(activeLink.canonicalUrl, activeLink.customLogoHash);
-                                                    if (local) logoSrc = local;
-                                                }
+                                                const logoSrc = getGatewayIconSource(activeLink);
                                                 return logoSrc && <img
                                                     src={logoSrc}
                                                     className="w-6 h-6 object-contain"
