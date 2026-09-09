@@ -10,12 +10,17 @@ import {
   selectBestCandidate,
   validatePerspectiveCandidate
 } from "./perspectiveEngine";
+import {
+  clearEnvironmentCacheScope,
+  resolveEnvironmentCacheScope
+} from "./perspectiveEnvironmentCache";
 
-const BATCH_SIZE = 8;
-const REFILL_THRESHOLD = 3;
+// One request covers the current line plus the six product-defined
+// New Perspective dimensions for the same environment.
+const BATCH_SIZE = 7;
 const FIRST_PAINT_BUDGET_MS = 1500;
 const REFILL_LEASE_MS = 45_000;
-const refillsInFlight = new Map<string, Promise<{ text: string; plan: PerspectivePlan }>>();
+const refillsInFlight = new Set<string>();
 
 // --- Pool Management ---
 
@@ -28,9 +33,13 @@ function compactHash(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function getPoolKey(ctx: PerspectiveRouterContext, stateFingerprint: string): string {
+function getPoolKey(
+  ctx: PerspectiveRouterContext,
+  environmentFingerprint: string,
+  environmentScopeId: string
+): string {
   const localDate = (ctx.local_date || new Date().toLocaleDateString('en-CA')).replace(/-/g, '');
-  return `v5_pool_${localDate}_${compactHash(`${stateFingerprint}|${STARTLY_PROMPT_VERSION}`)}`;
+  return `v6_pool_${localDate}_${compactHash(`${environmentFingerprint}|${environmentScopeId}|${STARTLY_PROMPT_VERSION}`)}`;
 }
 
 function getPool(key: string): PerspectivePoolItem[] {
@@ -51,6 +60,12 @@ function savePool(key: string, pool: PerspectivePoolItem[]) {
   } catch (e) {
     console.warn('Failed to save perspective pool:', e);
   }
+}
+
+function isSamePoolItem(left: PerspectivePoolItem, right: PerspectivePoolItem): boolean {
+  return left.text === right.text
+    && (left.semantic_core || '') === (right.semantic_core || '')
+    && (left.generated_at || 0) === (right.generated_at || 0);
 }
 
 function acquireRefillLease(poolKey: string): string | undefined {
@@ -88,6 +103,7 @@ function applyPipelineStateToPlan(plan: PerspectivePlan, state: PipelineState): 
   plan.style = state.noveltyPlan.targetTrack;
   plan.content_track = state.noveltyPlan.targetTrack;
   plan.state_fingerprint = state.stateFingerprint;
+  plan.environment_fingerprint = state.environmentFingerprint;
   plan.prompt_version = STARTLY_PROMPT_VERSION;
   plan.time_block = state.input.timeBlock;
 }
@@ -117,9 +133,11 @@ function getStateAwareFallbackResult(
 
   if (item) {
     plan.cached_item = item;
+    plan.generation_source = 'fallback';
     return { text: item.text, plan };
   }
 
+  plan.generation_source = 'fallback';
   return { text: getRandomFallback(ctx.language, plan), plan };
 }
 
@@ -154,6 +172,7 @@ export function clearAllPerspectivePools() {
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
+    clearEnvironmentCacheScope();
     console.log(`[GeminiService] Force-cleared ${keysToRemove.length} perspective pools.`);
   } catch (e) {
     console.warn('Failed to clear perspective pools:', e);
@@ -178,25 +197,33 @@ export async function generateSnippet(
 
     const pipeline = runCompanionPipeline(normalizedContext, normalizedContext.language, finalBatchSize);
     const plan = createPerspectivePlan(normalizedContext, pipeline.state);
+    const environmentDecision = resolveEnvironmentCacheScope(pipeline.state.environmentFingerprint);
+    plan.environment_changed = environmentDecision.changed;
+    plan.environment_change_reason = environmentDecision.reason;
 
-    const poolKey = getPoolKey(normalizedContext, pipeline.state.stateFingerprint);
+    const poolKey = getPoolKey(
+      normalizedContext,
+      pipeline.state.environmentFingerprint,
+      environmentDecision.scopeId
+    );
     const pool = getPool(poolKey);
 
     const poolSelection = selectBestCandidate(pool, pipeline.state, normalizedContext.recent_history || []);
-    if (poolSelection.selected && !normalizedContext.bypassPool) {
-      plan.cached_item = poolSelection.selected;
-      const remainingPool = poolSelection.accepted.filter(item => item !== poolSelection.selected);
+    if (poolSelection.selected && !environmentDecision.changed && !normalizedContext.bypassPool) {
+      const selectedItem: PerspectivePoolItem = {
+        ...poolSelection.selected,
+        state_fingerprint: pipeline.state.stateFingerprint,
+        environment_fingerprint: pipeline.state.environmentFingerprint
+      };
+      plan.cached_item = selectedItem;
+      plan.generation_source = 'cache';
+      // Keep candidates from other dimensions. They can be invalid for the
+      // current click stage while remaining ideal for the next one.
+      const remainingPool = pool.filter(item => !isSamePoolItem(item, poolSelection.selected!));
       savePool(poolKey, remainingPool);
-
-      if (remainingPool.length < REFILL_THRESHOLD) {
-        startPoolRefill(normalizedContext, plan, poolKey, undefined, finalBatchSize, pipeline.state, true)
-          .catch(console.error);
-      }
-      return { text: poolSelection.selected.text, plan, namespace: pipeline.state.sceneResolution.scene };
+      return { text: selectedItem.text, plan, namespace: pipeline.state.sceneResolution.scene };
     }
 
-    // Remove stale or invalid cached items before an on-demand refill.
-    if (pool.length > 0) savePool(poolKey, poolSelection.accepted);
     const deliveryGate = { open: true };
     const generation = startPoolRefill(
       normalizedContext,
@@ -205,7 +232,6 @@ export async function generateSnippet(
       onChunk,
       finalBatchSize,
       pipeline.state,
-      false,
       deliveryGate
     );
     const generated = await withFirstPaintBudget(
@@ -231,16 +257,25 @@ function startPoolRefill(
   onImmediateChunk?: (text: string) => void,
   batchSize: number = BATCH_SIZE,
   resolvedState?: PipelineState,
-  backgroundOnly: boolean = false,
   deliveryGate: { open: boolean } = { open: true }
 ): Promise<{ text: string; plan: PerspectivePlan }> {
-  const existing = refillsInFlight.get(poolKey);
-  if (existing) return existing;
+  if (refillsInFlight.has(poolKey)) {
+    return Promise.resolve(getStateAwareFallbackResult(ctx, { ...plan }, resolvedState));
+  }
 
   const leaseToken = acquireRefillLease(poolKey);
   if (!leaseToken) {
     return Promise.resolve(getStateAwareFallbackResult(ctx, { ...plan }, resolvedState));
   }
+
+  refillsInFlight.add(poolKey);
+  let streamSettled = false;
+  const markStreamSettled = () => {
+    if (streamSettled) return;
+    streamSettled = true;
+    refillsInFlight.delete(poolKey);
+    releaseRefillLease(poolKey, leaseToken);
+  };
 
   const refill = fetchAndRefillPool(
     ctx,
@@ -249,13 +284,10 @@ function startPoolRefill(
     onImmediateChunk,
     batchSize,
     resolvedState,
-    backgroundOnly,
-    deliveryGate
-  ).finally(() => {
-    if (refillsInFlight.get(poolKey) === refill) refillsInFlight.delete(poolKey);
-    releaseRefillLease(poolKey, leaseToken);
-  });
-  refillsInFlight.set(poolKey, refill);
+    deliveryGate,
+    markStreamSettled
+  );
+  void refill.catch(markStreamSettled);
   return refill;
 }
 
@@ -266,8 +298,8 @@ async function fetchAndRefillPool(
   onImmediateChunk?: (text: string) => void,
   batchSize: number = BATCH_SIZE,
   resolvedState?: PipelineState,
-  backgroundOnly: boolean = false,
-  deliveryGate: { open: boolean } = { open: true }
+  deliveryGate: { open: boolean } = { open: true },
+  onStreamSettled: () => void = () => undefined
 ): Promise<{ text: string, plan: PerspectivePlan }> {
 
   // API Configuration - Prioritize DeepSeek API
@@ -307,6 +339,7 @@ async function fetchAndRefillPool(
 
   if (!apiKey) {
     console.error("StartlyTab: No active API key found.");
+    onStreamSettled();
     return getStateAwareFallbackResult(ctx, plan, resolvedState);
   }
 
@@ -421,6 +454,7 @@ async function fetchAndRefillPool(
                           // Cache identity is application-owned metadata, not a
                           // claim delegated to the language model.
                           parsedItem.state_fingerprint = pipelineState.stateFingerprint;
+                          parsedItem.environment_fingerprint = pipelineState.environmentFingerprint;
                           parsedItem.prompt_version = STARTLY_PROMPT_VERSION;
                           parsedItem.generated_at = Date.now();
 
@@ -454,13 +488,13 @@ async function fetchAndRefillPool(
 
                               if (
                                 !firstItemFound
-                                && !backgroundOnly
                                 && deliveryGate.open
                                 && item.content_track === pipelineState.noveltyPlan.targetTrack
                               ) {
                                 firstItemFound = true;
                                 servedItem = item;
                                 plan.cached_item = item;
+                                plan.generation_source = 'network';
                                 if (onImmediateChunk) onImmediateChunk(item.text);
                                 returnResolver({ text: item.text, plan });
                               }
@@ -497,27 +531,20 @@ async function fetchAndRefillPool(
         if (newItems.length > 0) {
           console.log(`[StartlyTab] Refilled pool with ${newItems.length} items.`);
           const currentPool = getPool(poolKey);
-          const itemsToCache = backgroundOnly
-            ? newItems
-            : newItems.filter(item => item !== servedItem);
-          const uniqueItems = [...currentPool, ...itemsToCache].filter((item, index, all) => {
+          const itemsToCache = newItems.filter(item => item !== servedItem);
+          // Fresh candidates lead so a temporarily unusable older dimension
+          // cannot crowd a new batch out of the capped local pool.
+          const uniqueItems = [...itemsToCache, ...currentPool].filter((item, index, all) => {
             const key = `${item.text}|${item.semantic_core || ''}`;
             return all.findIndex(other => `${other.text}|${other.semantic_core || ''}` === key) === index;
           });
           savePool(poolKey, uniqueItems);
         }
 
-        if (backgroundOnly && !firstItemFound) {
-          firstItemFound = true;
-          const backgroundResult = newItems[0]
-            ? { text: newItems[0].text, plan }
-            : getStateAwareFallbackResult(ctx, plan, pipelineState);
-          returnResolver(backgroundResult);
-        }
-
         if (!firstItemFound) {
           returnResolver(getStateAwareFallbackResult(ctx, plan, pipelineState));
         }
+        onStreamSettled();
       }
     })();
 
@@ -525,6 +552,7 @@ async function fetchAndRefillPool(
 
   } catch (e) {
     console.error("Batch Fetch Failed", e);
+    onStreamSettled();
     return getStateAwareFallbackResult(ctx, plan, resolvedState);
   }
 }

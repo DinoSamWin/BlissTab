@@ -160,6 +160,7 @@ export interface PerspectiveHistory {
   openerTag?: string;
   sentenceShape?: string;
   stateFingerprint?: string;
+  environmentFingerprint?: string;
   promptVersion?: string;
   timeBlock?: string;
 }
@@ -237,6 +238,7 @@ export interface PerspectivePoolItem {
   opener_tag?: string;
   sentence_shape?: string;
   state_fingerprint?: string;
+  environment_fingerprint?: string;
   prompt_version?: string;
   generated_at?: number;
 }
@@ -253,6 +255,10 @@ export interface PerspectivePlan {
   full_system_prompt?: string;
   full_user_prompt?: string;
   state_fingerprint?: string;
+  environment_fingerprint?: string;
+  environment_changed?: boolean;
+  environment_change_reason?: 'first_observation' | 'same_environment' | 'environment_changed' | 'significant_time_gap';
+  generation_source?: 'cache' | 'network' | 'fallback';
   content_track?: PerspectiveContentTrack;
   prompt_version?: string;
   time_block?: string;

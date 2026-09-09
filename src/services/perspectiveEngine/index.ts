@@ -45,27 +45,49 @@ function refreshStage(input: PipelineState['input']): string {
   return 'leave_permission';
 }
 
-function buildStateFingerprint(state: Omit<PipelineState, 'stateFingerprint'>): string {
+type StateWithoutFingerprints = Omit<PipelineState, 'environmentFingerprint' | 'stateFingerprint'>;
+
+/**
+ * Only includes facts that materially change what can safely be said. Page
+ * reloads and New Perspective clicks are deliberately excluded: they change
+ * the requested angle, not the user's real environment.
+ */
+function buildEnvironmentFingerprint(state: StateWithoutFingerprints): string {
   const { input, sceneResolution } = state;
+  const hasRapidSwitching = sceneResolution.modifiers.includes('rapid_switching');
+  const hasWorkOverhang = sceneResolution.modifiers.includes('possible_work_overhang');
   return [
     input.localDate,
+    input.timezone,
     input.dayKind,
     input.weekday,
+    input.timeBlock,
     sceneResolution.baseScene,
-    sceneResolution.scene,
-    [...sceneResolution.modifiers].sort().join('+') || 'plain',
     input.clickedEmotion || 'no_emotion',
     input.tabCountBucket,
-    input.tabCountScope,
     input.reentryState,
     input.confirmedWorkStatus || 'work_status_unknown',
-    `refresh:${refreshStage(input)}`,
+    `audio:${input.audibleStateKnown ? (input.hasAudibleTab ? 'present' : 'absent') : 'unknown'}`,
+    `rapid_switching:${hasRapidSwitching ? 'yes' : 'no'}`,
+    `work_overhang:${hasWorkOverhang ? 'possible' : 'none'}`,
+    `holiday_phase:${input.holidayPhase}`,
     `holiday_day:${input.holidayDayIndex ?? 'none'}`,
     `days_to_holiday:${input.daysToHoliday ?? 'none'}`,
     `days_since_holiday:${input.daysSinceHoliday ?? 'none'}`,
     input.selectedPersona,
     `themes:${compactHash([...input.customThemes].sort().join('|') || 'none')}`,
     input.userLanguage
+  ].join('|');
+}
+
+function buildStateFingerprint(state: StateWithoutFingerprints, environmentFingerprint: string): string {
+  const { input, sceneResolution } = state;
+  return [
+    environmentFingerprint,
+    `render_scene:${sceneResolution.scene}`,
+    `trigger:${input.trigger}`,
+    `refresh:${refreshStage(input)}`,
+    `first_in_block:${input.isFirstInTimeBlock ? 'yes' : 'no'}`
   ].join('|');
 }
 
@@ -132,7 +154,7 @@ export function resolveCompanionState(context: PerspectiveRouterContext): Pipeli
   const { knownFacts, forbiddenAssumptions } = buildFactBoundary(input, sceneResolution);
   const isChinese = /chinese|zh/i.test(input.userLanguage);
 
-  const stateWithoutFingerprint: Omit<PipelineState, 'stateFingerprint'> = {
+  const stateWithoutFingerprints: StateWithoutFingerprints = {
     input,
     sceneResolution,
     intent,
@@ -149,9 +171,12 @@ export function resolveCompanionState(context: PerspectiveRouterContext): Pipeli
     }
   };
 
+  const environmentFingerprint = buildEnvironmentFingerprint(stateWithoutFingerprints);
+
   return {
-    ...stateWithoutFingerprint,
-    stateFingerprint: buildStateFingerprint(stateWithoutFingerprint)
+    ...stateWithoutFingerprints,
+    environmentFingerprint,
+    stateFingerprint: buildStateFingerprint(stateWithoutFingerprints, environmentFingerprint)
   };
 }
 

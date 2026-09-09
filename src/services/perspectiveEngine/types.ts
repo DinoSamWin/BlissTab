@@ -29,6 +29,7 @@ export type IdleBucket = 'unknown' | 'active' | 'away' | 'long_away';
 
 export interface EngineInput {
   localDate: string;
+  timezone: string;
   weekday: number;
   timeBlock: TimeBlock;
   dayKind: DayKind;
@@ -175,6 +176,7 @@ export type Dimension = 'dictionary' | 'sensory' | 'ritual' | 'philosophical' | 
 export interface NoveltyPlan {
   targetTrack: PerspectiveContentTrack;
   allowedTracks: PerspectiveContentTrack[];
+  cacheFillTracks: PerspectiveContentTrack[];
   avoidSemanticCores: string[];
   avoidActions: string[];
   avoidObjects: string[];
@@ -196,6 +198,9 @@ export interface PipelineState {
   emotionBias: EmotionBias;
   strategy: ResponseStrategy;
   dimension: Dimension;
+  /** Stable across reload/New Perspective triggers while the real environment is unchanged. */
+  environmentFingerprint: string;
+  /** Exact rendering state, including the current interaction/rotation stage. */
   stateFingerprint: string;
   noveltyPlan: NoveltyPlan;
   knownFacts: string[];

@@ -133,6 +133,7 @@ export function addToHistory(
         openerTag?: string;
         sentenceShape?: string;
         stateFingerprint?: string;
+        environmentFingerprint?: string;
         promptVersion?: string;
         timeBlock?: string;
     }

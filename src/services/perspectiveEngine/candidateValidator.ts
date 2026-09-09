@@ -195,8 +195,8 @@ export function validatePerspectiveCandidate(
 
   reasons.push(...factBoundaryViolations(text, state));
 
-  if (item.state_fingerprint && item.state_fingerprint !== state.stateFingerprint) {
-    reasons.push('state_fingerprint_mismatch');
+  if (item.environment_fingerprint && item.environment_fingerprint !== state.environmentFingerprint) {
+    reasons.push('environment_fingerprint_mismatch');
   }
   if (item.prompt_version && item.prompt_version !== STARTLY_PROMPT_VERSION) {
     reasons.push('unsupported_prompt_version');
@@ -213,6 +213,7 @@ export function validatePerspectiveCandidate(
   }
   if (!item.track || !VALID_TRACKS.has(item.track)) reasons.push('missing_or_invalid_track');
   if (!item.state_fingerprint) reasons.push('missing_state_fingerprint');
+  if (!item.environment_fingerprint) reasons.push('missing_environment_fingerprint');
   if (!item.prompt_version) reasons.push('missing_prompt_version');
   if (contentTrack && !state.noveltyPlan.allowedTracks.includes(contentTrack)) {
     reasons.push('content_track_not_allowed');

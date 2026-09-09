@@ -10,6 +10,10 @@ import {
 } from './src/services/perspectiveEngine/index.ts';
 import type { PerspectiveRouterContext } from './src/types.ts';
 import {
+  resolveEnvironmentCacheScope,
+  SIGNIFICANT_ENVIRONMENT_GAP_MS
+} from './src/services/perspectiveEnvironmentCache.ts';
+import {
   advanceRefreshStreak,
   initializePageRefreshStreak,
   isPageReloadNavigation,
@@ -59,6 +63,120 @@ assert.equal(advanceRefreshStreak(1000, refreshStorage).count, 1);
 assert.equal(initializePageRefreshStreak(true, 2000, refreshStorage).count, 1);
 assert.equal(advanceRefreshStreak(2000, refreshStorage).count, 2);
 assert.equal(advanceRefreshStreak(2000 + REFRESH_STREAK_WINDOW_MS + 1, refreshStorage).count, 1);
+
+const stableInitialState = stateFor({ local_time: '09:58' });
+const stableReloadState = stateFor({
+  local_time: '10:20',
+  trigger: 'page_reload',
+  isPageReload: true,
+  consecutiveClicks: 2
+});
+const stableManualState = stateFor({
+  local_time: '10:20',
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 4
+});
+assert.equal(stableInitialState.environmentFingerprint, stableReloadState.environmentFingerprint);
+assert.equal(stableInitialState.environmentFingerprint, stableManualState.environmentFingerprint);
+assert.notEqual(stableInitialState.stateFingerprint, stableReloadState.stateFingerprint);
+assert.notEqual(stableReloadState.stateFingerprint, stableManualState.stateFingerprint);
+assert.equal(stableInitialState.noveltyPlan.cacheFillTracks.length, 6);
+assert.equal(stableManualState.noveltyPlan.cacheFillTracks.length, 0);
+
+const nextTimeBlockState = stateFor({ local_time: '11:21' });
+assert.notEqual(stableInitialState.environmentFingerprint, nextTimeBlockState.environmentFingerprint);
+
+const changedTimezoneState = stateFor({ local_time: '10:20', timezone: 'America/Los_Angeles' });
+assert.notEqual(stableInitialState.environmentFingerprint, changedTimezoneState.environmentFingerprint);
+
+const heavyBrowserState = stateFor({
+  local_time: '10:20',
+  allow_context_sensing: true,
+  browser_context_observed_at: Date.now(),
+  tab_count: 12,
+  tab_count_scope: 'all_browser_tabs'
+});
+assert.notEqual(stableInitialState.environmentFingerprint, heavyBrowserState.environmentFingerprint);
+
+const environmentStorage = memoryStorage();
+const firstEnvironment = resolveEnvironmentCacheScope(
+  stableInitialState.environmentFingerprint,
+  10_000,
+  environmentStorage
+);
+assert.equal(firstEnvironment.changed, true);
+assert.equal(firstEnvironment.reason, 'first_observation');
+
+const sameEnvironment = resolveEnvironmentCacheScope(
+  stableManualState.environmentFingerprint,
+  20_000,
+  environmentStorage
+);
+assert.equal(sameEnvironment.changed, false);
+assert.equal(sameEnvironment.reason, 'same_environment');
+assert.equal(sameEnvironment.scopeId, firstEnvironment.scopeId);
+
+const changedTimeBlock = resolveEnvironmentCacheScope(
+  nextTimeBlockState.environmentFingerprint,
+  30_000,
+  environmentStorage
+);
+assert.equal(changedTimeBlock.changed, true);
+assert.equal(changedTimeBlock.reason, 'environment_changed');
+assert.notEqual(changedTimeBlock.scopeId, firstEnvironment.scopeId);
+
+const returnedEnvironment = resolveEnvironmentCacheScope(
+  stableInitialState.environmentFingerprint,
+  40_000,
+  environmentStorage
+);
+assert.equal(returnedEnvironment.changed, true);
+assert.equal(returnedEnvironment.reason, 'environment_changed');
+assert.notEqual(returnedEnvironment.scopeId, firstEnvironment.scopeId);
+
+const expiredEnvironment = resolveEnvironmentCacheScope(
+  stableInitialState.environmentFingerprint,
+  40_000 + SIGNIFICANT_ENVIRONMENT_GAP_MS,
+  environmentStorage
+);
+assert.equal(expiredEnvironment.changed, true);
+assert.equal(expiredEnvironment.reason, 'significant_time_gap');
+assert.notEqual(expiredEnvironment.scopeId, returnedEnvironment.scopeId);
+
+const firstManualInStableEnvironment = stateFor({
+  local_time: '10:20',
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 1
+});
+const reusableCachedCandidate = {
+  text: '先看几秒远处，让眼睛从屏幕上换个焦点。',
+  style: 'sensory_reset',
+  track: 'A_PHYSICAL' as const,
+  content_track: 'sensory_reset' as const,
+  semantic_core: 'cached_stable_environment_gaze_shift',
+  action_tag: 'look_far',
+  object_tag: 'distant_view',
+  metaphor_tag: 'none',
+  opener_tag: 'cached_visual_shift',
+  sentence_shape: 'direct_visual_action',
+  state_fingerprint: stableInitialState.stateFingerprint,
+  environment_fingerprint: stableInitialState.environmentFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+};
+const reusedAcrossTrigger = validatePerspectiveCandidate(
+  reusableCachedCandidate,
+  firstManualInStableEnvironment
+);
+assert.equal(reusedAcrossTrigger.valid, true);
+
+const rejectedAcrossEnvironment = validatePerspectiveCandidate(
+  reusableCachedCandidate,
+  nextTimeBlockState
+);
+assert.equal(rejectedAcrossEnvironment.valid, false);
+assert.ok(rejectedAcrossEnvironment.reasons.includes('environment_fingerprint_mismatch'));
 
 const mondayEvening = stateFor({
   local_date: '2026-09-07',
@@ -354,6 +472,7 @@ const abstractPhilosophy = validatePerspectiveCandidate({
   opener_tag: 'cosmic_claim',
   sentence_shape: 'abstract_claim',
   state_fingerprint: fifthRefresh.stateFingerprint,
+  environment_fingerprint: fifthRefresh.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
 }, fifthRefresh);
 assert.equal(abstractPhilosophy.valid, false);
@@ -372,6 +491,7 @@ const abstractTodayPhilosophy = validatePerspectiveCandidate({
   opener_tag: 'today_abstract_claim',
   sentence_shape: 'abstract_claim',
   state_fingerprint: fifthRefresh.stateFingerprint,
+  environment_fingerprint: fifthRefresh.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
 }, fifthRefresh);
 assert.equal(abstractTodayPhilosophy.valid, false);
@@ -390,6 +510,7 @@ const groundedPhilosophy = validatePerspectiveCandidate({
   opener_tag: 'week_scale',
   sentence_shape: 'time_scale_plus_plain_conclusion',
   state_fingerprint: fifthRefresh.stateFingerprint,
+  environment_fingerprint: fifthRefresh.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
 }, fifthRefresh);
 assert.equal(groundedPhilosophy.valid, true);
@@ -406,7 +527,7 @@ assert.match(promptCase.user, /forbidden_assumptions/);
 assert.match(promptCase.user, /prompt_version/);
 assert.doesNotMatch(promptCase.user, /"state_fingerprint"\s*:/);
 assert.match(promptCase.system, /meaning must be obvious on the first read/i);
-assert.match(promptCase.user, /at least five distinct allowed tracks/i);
+assert.match(promptCase.user, /every cache_fill_priority_track/i);
 assert.match(promptCase.user, /No more than two items may discuss prioritizing/i);
 
 const invalidCandidate = validatePerspectiveCandidate({
@@ -421,6 +542,7 @@ const invalidCandidate = validatePerspectiveCandidate({
   opener_tag: 'arrival_claim',
   sentence_shape: 'claim_plus_action',
   state_fingerprint: promptCase.state.stateFingerprint,
+  environment_fingerprint: promptCase.state.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
 }, promptCase.state);
 assert.equal(invalidCandidate.valid, false);
@@ -439,6 +561,7 @@ const vagueRefreshCandidate = validatePerspectiveCandidate({
   opener_tag: 'early_time_observation',
   sentence_shape: 'observation_plus_permission',
   state_fingerprint: firstRefresh.stateFingerprint,
+  environment_fingerprint: firstRefresh.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
 }, firstRefresh);
 assert.equal(vagueRefreshCandidate.valid, false);
@@ -457,6 +580,7 @@ const repeatedPaceCandidate = validatePerspectiveCandidate({
   opener_tag: 'pace_permission',
   sentence_shape: 'permission_plus_boundary',
   state_fingerprint: firstRefresh.stateFingerprint,
+  environment_fingerprint: firstRefresh.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
 }, firstRefresh);
 assert.equal(repeatedPaceCandidate.valid, false);

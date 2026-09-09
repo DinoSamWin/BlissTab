@@ -102,7 +102,7 @@ export function buildNoveltyPlan(
   strategy: ResponseStrategy,
   history: PerspectiveHistory[] = []
 ): NoveltyPlan {
-  const allowedTracks = allowedTracksFor(input, resolution, strategy);
+  const sceneAllowedTracks = allowedTracksFor(input, resolution, strategy);
   const recentTracks = history
     .slice(0, 2)
     .map(item => item.contentTrack)
@@ -123,28 +123,37 @@ export function buildNoveltyPlan(
   if (forcedRefreshTrack) {
     targetTrack = forcedRefreshTrack;
   } else if (input.isPageReload) {
-    const rankedTracks = allowedTracks.map((track) => {
+    const rankedTracks = sceneAllowedTracks.map((track) => {
       const recency = history.findIndex(item => item.contentTrack === track);
       return { track, recency: recency === -1 ? Number.POSITIVE_INFINITY : recency };
     });
     const oldestRecency = Math.max(...rankedTracks.map(item => item.recency));
     const leastRecentlyUsed = rankedTracks.filter(item => item.recency === oldestRecency);
-    targetTrack = leastRecentlyUsed[seed % leastRecentlyUsed.length]?.track || allowedTracks[0];
+    targetTrack = leastRecentlyUsed[seed % leastRecentlyUsed.length]?.track || sceneAllowedTracks[0];
   } else {
-    let selectedIndex = seed % allowedTracks.length;
-    for (let offset = 0; offset < allowedTracks.length; offset += 1) {
-      const candidateIndex = (selectedIndex + offset) % allowedTracks.length;
-      if (!recentTracks.includes(allowedTracks[candidateIndex])) {
+    let selectedIndex = seed % sceneAllowedTracks.length;
+    for (let offset = 0; offset < sceneAllowedTracks.length; offset += 1) {
+      const candidateIndex = (selectedIndex + offset) % sceneAllowedTracks.length;
+      if (!recentTracks.includes(sceneAllowedTracks[candidateIndex])) {
         selectedIndex = candidateIndex;
         break;
       }
     }
-    targetTrack = allowedTracks[selectedIndex];
+    targetTrack = sceneAllowedTracks[selectedIndex];
   }
+
+  const cacheFillTracks = !input.isManualRefresh && !input.clickedEmotion
+    ? REFRESH_TRACK_SEQUENCE
+    : [];
+  const allowedTracks = [
+    ...sceneAllowedTracks,
+    ...cacheFillTracks.filter(track => !sceneAllowedTracks.includes(track))
+  ];
 
   return {
     targetTrack,
     allowedTracks: [targetTrack, ...allowedTracks.filter(track => track !== targetTrack)],
+    cacheFillTracks,
     avoidSemanticCores: recentUnique(history, 'semanticCore', 20).slice(0, 10),
     avoidActions: recentUnique(history, 'actionTag', 8).slice(0, 6),
     avoidObjects: recentUnique(history, 'objectTag', 6).slice(0, 5),

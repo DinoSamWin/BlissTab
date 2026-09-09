@@ -1,7 +1,7 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.5.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.6.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -116,6 +116,7 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       target_content_track: state.noveltyPlan.targetTrack,
       target_instruction: TRACK_GUIDANCE[state.noveltyPlan.targetTrack],
       allowed_content_tracks: state.noveltyPlan.allowedTracks,
+      cache_fill_priority_tracks: state.noveltyPlan.cacheFillTracks,
       avoid_semantic_cores: state.noveltyPlan.avoidSemanticCores,
       avoid_actions: state.noveltyPlan.avoidActions,
       avoid_objects: state.noveltyPlan.avoidObjects,
@@ -139,7 +140,7 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       first_item_must_use_target_track: true,
       remaining_items_should_rotate_allowed_tracks: !state.input.isManualRefresh,
       non_refresh_batch_variety_rule: !state.input.isManualRefresh
-        ? 'Across the batch, use every allowed content track when five or fewer are allowed; otherwise use at least five distinct allowed tracks. Use at least four visibly different sentence constructions. When allowed, spread the batch across sensory, ordinary-object, off-screen-life, clear-permission, and unexpected-concrete angles. No more than two items may discuss prioritizing, reducing, arranging, queuing, filling, or crowding work/tasks. Different tags alone do not count as variety; the user-facing meanings and tones must feel different.'
+        ? 'The batch is also the cache for later interactions in this unchanged environment. Include at least one item from every cache_fill_priority_track when batch size permits, while keeping the first item on the target track. Use at least four visibly different sentence constructions. No more than two items may discuss prioritizing, reducing, arranging, queuing, filling, or crowding work/tasks. Different tags alone do not count as variety; the user-facing meanings and tones must feel different.'
         : undefined,
       manual_refresh_rule: state.input.isManualRefresh
         ? 'Every item in this batch must use the single assigned content track. Vary wording and semantic core within that dimension only.'
@@ -162,7 +163,7 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
         opener_tag: 'snake_case opener pattern',
         sentence_shape: 'snake_case sentence pattern'
       },
-      envelope_note: 'Do not output state_fingerprint or prompt_version; the application binds those trusted fields after validation.'
+      envelope_note: 'Do not output state_fingerprint, environment_fingerprint, or prompt_version; the application binds those trusted fields after validation.'
     }
   };
 }

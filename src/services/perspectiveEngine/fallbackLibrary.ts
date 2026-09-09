@@ -210,6 +210,7 @@ function hydrate(template: Template, state: PipelineState): PerspectivePoolItem 
     track: template.content_track === 'sensory_reset' ? 'A_PHYSICAL' : 'D_THEME',
     dimension: template.semantic_core || 'local_fallback',
     state_fingerprint: state.stateFingerprint,
+    environment_fingerprint: state.environmentFingerprint,
     prompt_version: STARTLY_PROMPT_VERSION,
     generated_at: Date.now()
   };

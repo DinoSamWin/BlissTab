@@ -1028,7 +1028,6 @@ const App: React.FC = () => {
         clickedEmotion: clickedEmotion,
         emotionalBaseline: calculateEmotionalBaseline(),
         emotionalPatterns: analyzeEmotionalPatterns(),
-        bypassPool: !!clickedEmotion,
         deepObservationMode: getTodayEmotionClickCount() > 5,
         allow_context_sensing: hasContextSensingConsent,
       };
@@ -1074,6 +1073,7 @@ const App: React.FC = () => {
         openerTag: plan?.cached_item?.opener_tag,
         sentenceShape: plan?.cached_item?.sentence_shape,
         stateFingerprint: plan?.state_fingerprint,
+        environmentFingerprint: plan?.environment_fingerprint,
         promptVersion: plan?.prompt_version,
         timeBlock: plan?.time_block,
         // Hack: infer track from style mapping if backend isn't sending it directly yet

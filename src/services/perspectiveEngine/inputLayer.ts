@@ -131,6 +131,7 @@ export function buildEngineInput(context: PerspectiveRouterContext): EngineInput
 
   return {
     localDate: context.local_date || localDateString(),
+    timezone: context.timezone || 'unknown',
     weekday: Number.isInteger(context.weekday) ? context.weekday : new Date().getDay(),
     timeBlock,
     dayKind: inferredDayKind,
