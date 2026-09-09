@@ -108,6 +108,7 @@ export type PerspectiveContentTrack =
   | 'sensory_reset'
   | 'permission_pause'
   | 'object_humor'
+  | 'philosophical_zoom_out'
   | 'unexpected_perspective';
 
 export type PerspectiveTrigger = 'initial_open' | 'manual_refresh' | 'emotion_click' | 'background_refill';

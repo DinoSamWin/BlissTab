@@ -169,7 +169,7 @@ const expectedRefreshTracks = [
   'object_humor',
   'playful_boundary',
   'life_boundary',
-  'unexpected_perspective',
+  'philosophical_zoom_out',
   'permission_pause'
 ] as const;
 const refreshFingerprints: string[] = [];
@@ -191,6 +191,72 @@ const refreshDimensionTexts = expectedRefreshTracks.map((expectedTrack, index) =
 });
 assert.equal(new Set(refreshDimensionTexts).size, expectedRefreshTracks.length);
 assert.equal(new Set(refreshFingerprints).size, expectedRefreshTracks.length);
+
+const fifthRefresh = stateFor({
+  local_time: '09:01',
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 5
+});
+assert.equal(fifthRefresh.dimension, 'philosophical');
+assert.match(runCompanionPipeline(context({
+  local_time: '09:01',
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 5
+}), 'Chinese (Simplified)', 4).user, /GROUNDED PHILOSOPHY/);
+
+const abstractPhilosophy = validatePerspectiveCandidate({
+  text: '宇宙浩瀚，存在的意义终将归于无常。',
+  style: 'philosophical_zoom_out',
+  track: 'D_THEME',
+  content_track: 'philosophical_zoom_out',
+  semantic_core: 'cosmic_impermanence',
+  action_tag: 'none',
+  object_tag: 'universe',
+  metaphor_tag: 'cosmic_scale',
+  opener_tag: 'cosmic_claim',
+  sentence_shape: 'abstract_claim',
+  state_fingerprint: fifthRefresh.stateFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, fifthRefresh);
+assert.equal(abstractPhilosophy.valid, false);
+assert.ok(abstractPhilosophy.reasons.includes('grand_philosophy_cliche'));
+assert.ok(abstractPhilosophy.reasons.includes('ungrounded_philosophical_zoom_out'));
+
+const abstractTodayPhilosophy = validatePerspectiveCandidate({
+  text: '今天的意义，不由存在的本质决定。',
+  style: 'philosophical_zoom_out',
+  track: 'D_THEME',
+  content_track: 'philosophical_zoom_out',
+  semantic_core: 'abstract_meaning_of_today',
+  action_tag: 'none',
+  object_tag: 'today',
+  metaphor_tag: 'none',
+  opener_tag: 'today_abstract_claim',
+  sentence_shape: 'abstract_claim',
+  state_fingerprint: fifthRefresh.stateFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, fifthRefresh);
+assert.equal(abstractTodayPhilosophy.valid, false);
+assert.ok(abstractTodayPhilosophy.reasons.includes('grand_philosophy_cliche'));
+assert.ok(abstractTodayPhilosophy.reasons.includes('ungrounded_philosophical_zoom_out'));
+
+const groundedPhilosophy = validatePerspectiveCandidate({
+  text: '眼前这件事放到一周里看，晚几分钟真的没什么。',
+  style: 'philosophical_zoom_out',
+  track: 'D_THEME',
+  content_track: 'philosophical_zoom_out',
+  semantic_core: 'current_task_is_small_in_week',
+  action_tag: 'allow_a_few_minutes',
+  object_tag: 'current_task',
+  metaphor_tag: 'none',
+  opener_tag: 'week_scale',
+  sentence_shape: 'time_scale_plus_plain_conclusion',
+  state_fingerprint: fifthRefresh.stateFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, fifthRefresh);
+assert.equal(groundedPhilosophy.valid, true);
 
 const similarity = calculateSimilarity(
   '人已经到今天了，脑子可以晚几分钟打卡。',

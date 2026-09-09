@@ -82,8 +82,10 @@ const REFRESH_ZH: Record<'first' | 'second' | 'third' | 'fourth' | 'fifth' | 'la
     { text: '先整理一下手边的东西，几分钟后再回来。', content_track: 'life_boundary', semantic_core: 'refresh_tidy_something_nearby', action_tag: 'tidy_nearby', object_tag: 'nearby_things', metaphor_tag: 'none', opener_tag: 'fourth_refresh_tidy', sentence_shape: 'ordinary_action_plus_return' }
   ],
   fifth: [
-    { text: '换再多句，也不如真的离开屏幕几分钟。', content_track: 'unexpected_perspective', semantic_core: 'refresh_more_lines_are_not_a_break', action_tag: 'take_real_break', object_tag: 'new_lines', metaphor_tag: 'none', opener_tag: 'fifth_refresh_more_lines', sentence_shape: 'contrast_plus_concrete_reframe' },
-    { text: '下一句话不是必需的，几分钟不看屏幕也可以。', content_track: 'unexpected_perspective', semantic_core: 'refresh_next_line_not_required', action_tag: 'skip_next_line', object_tag: 'next_line', metaphor_tag: 'none', opener_tag: 'fifth_refresh_not_required', sentence_shape: 'direct_reframe_plus_permission' }
+    { text: '眼前这件事放到一周里看，晚几分钟真的没什么。', content_track: 'philosophical_zoom_out', semantic_core: 'current_task_is_small_in_week', action_tag: 'allow_a_few_minutes', object_tag: 'current_task', metaphor_tag: 'none', opener_tag: 'fifth_refresh_week_scale', sentence_shape: 'time_scale_plus_plain_conclusion' },
+    { text: '今天没做完一件事，不等于你把这一天过坏了。', content_track: 'philosophical_zoom_out', semantic_core: 'unfinished_task_does_not_define_day', action_tag: 'separate_task_from_day', object_tag: 'unfinished_task', metaphor_tag: 'none', opener_tag: 'fifth_refresh_day_reframe', sentence_shape: 'concrete_fact_plus_identity_boundary' },
+    { text: '工作只是生活的一部分，不值得占满你全部注意力。', content_track: 'philosophical_zoom_out', semantic_core: 'work_is_only_part_of_life', action_tag: 'release_attention', object_tag: 'work', metaphor_tag: 'none', opener_tag: 'fifth_refresh_work_boundary', sentence_shape: 'plain_proportion_plus_boundary' },
+    { text: '大多数事情过一会儿还在，少看几分钟不会改变结果。', content_track: 'philosophical_zoom_out', semantic_core: 'brief_pause_does_not_change_result', action_tag: 'look_away_briefly', object_tag: 'current_things', metaphor_tag: 'none', opener_tag: 'fifth_refresh_result_reframe', sentence_shape: 'ordinary_truth_plus_concrete_permission' }
   ],
   later: [
     { text: '这个页面可以先关掉，想回来时再回来。', content_track: 'permission_pause', semantic_core: 'refresh_page_can_close', action_tag: 'close_page', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'later_refresh_close', sentence_shape: 'direct_permission_plus_return' },

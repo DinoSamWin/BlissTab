@@ -16,7 +16,7 @@ const REFRESH_TRACK_SEQUENCE: PerspectiveContentTrack[] = [
   'object_humor',
   'playful_boundary',
   'life_boundary',
-  'unexpected_perspective',
+  'philosophical_zoom_out',
   'permission_pause'
 ];
 

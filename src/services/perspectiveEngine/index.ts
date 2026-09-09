@@ -21,6 +21,7 @@ import { Dimension, PipelineState } from './types';
 
 function dimensionForTrack(track: PipelineState['noveltyPlan']['targetTrack']): Dimension {
   if (track === 'sensory_reset') return 'sensory';
+  if (track === 'philosophical_zoom_out') return 'philosophical';
   return 'mixed';
 }
 
@@ -39,7 +40,7 @@ function refreshStage(input: PipelineState['input']): string {
   if (input.consecutiveClicks === 2) return 'object_focus';
   if (input.consecutiveClicks === 3) return 'playful_interrupt';
   if (input.consecutiveClicks === 4) return 'offscreen_life';
-  if (input.consecutiveClicks === 5) return 'concrete_reframe';
+  if (input.consecutiveClicks === 5) return 'grounded_philosophy';
   return 'leave_permission';
 }
 

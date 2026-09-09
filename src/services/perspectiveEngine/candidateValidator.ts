@@ -36,6 +36,14 @@ const REFRESH_PACE_PATTERNS = [
   /按.{0,4}(?:平常|正常).{0,3}(?:速度|节奏)/u,
   /节奏.{0,5}(?:放慢|慢|接满|排满)/u
 ];
+const GRAND_PHILOSOPHY_PATTERNS = [
+  /(?:宇宙|星河|星辰|光年|尘埃|时间长河|永恒|存在|意义|无常|虚无|本质|真理|命运|宿命|灵魂|叔本华|尼采|道法自然|万物)/u,
+  /(?:cosmos|cosmic|universe|galax(?:y|ies)|starlight|light[- ]years?|speck of dust|river of time|eternity|eternal|existence|meaning|impermanence|nihilis|essence|ultimate truth|schopenhauer|nietzsche|destiny|fate|soul)/iu
+];
+const CONCRETE_PHILOSOPHY_ANCHORS = [
+  /(?:屏幕|页面|浏览器|眼前|手里|(?:这|一)(?:件|点|项)事|事情|任务|工作|做完|没做完|一周|明天|几分钟|十分钟|生活|吃饭|休息|下班)/u,
+  /(?:screen|page|browser|in front of you|at hand|this (?:thing|task)|unfinished|finish(?:ed)?|work|task|week|tomorrow|minutes?|ordinary life|meal|rest)/iu
+];
 const VALID_TRACKS = new Set(['A_PHYSICAL', 'B_TIME_ECHO', 'C_EMOTION', 'D_THEME', 'E_QUESTION']);
 
 function sanitizeText(text: string): string {
@@ -187,6 +195,14 @@ export function validatePerspectiveCandidate(
   }
 
   const contentTrack = item.content_track;
+  if (contentTrack === 'philosophical_zoom_out') {
+    if (GRAND_PHILOSOPHY_PATTERNS.some(pattern => pattern.test(text))) {
+      reasons.push('grand_philosophy_cliche');
+    }
+    if (!CONCRETE_PHILOSOPHY_ANCHORS.some(pattern => pattern.test(text))) {
+      reasons.push('ungrounded_philosophical_zoom_out');
+    }
+  }
   if (!item.track || !VALID_TRACKS.has(item.track)) reasons.push('missing_or_invalid_track');
   if (!item.state_fingerprint) reasons.push('missing_state_fingerprint');
   if (!item.prompt_version) reasons.push('missing_prompt_version');

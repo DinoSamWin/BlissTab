@@ -1,7 +1,7 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.2.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.3.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -48,6 +48,7 @@ const TRACK_GUIDANCE: Record<PerspectiveContentTrack, string> = {
   sensory_reset: 'Offer at most one safe, tiny physical or visual shift; never claim a symptom.',
   permission_pause: 'Give permission to leave something unfinished or to do nothing briefly.',
   object_humor: 'Let one ordinary object carry a light joke; avoid sentimental personification.',
+  philosophical_zoom_out: 'Use one plainspoken big-picture reframe, then land it in a concrete part of ordinary life. Keep the logic obvious and practical. Do not name philosophers or use cosmic imagery, spiritual language, or abstract claims about existence, meaning, eternity, destiny, or the soul.',
   unexpected_perspective: 'Give a fresh, concrete angle that makes the current work concern feel smaller without using grand clichés.'
 };
 
@@ -70,7 +71,7 @@ function refreshGuidance(state: PipelineState): string | undefined {
   if (streak === 2) return `${shared} OBJECT: use one ordinary visible object as the focus. Do not assume a specific object is present; invite the user to pick one.`;
   if (streak === 3) return `${shared} PLAYFUL INTERRUPTION: use a clear browser or page joke to break the loop without mentioning clicks or sounding annoyed.`;
   if (streak === 4) return `${shared} LIFE OUTSIDE THE SCREEN: name one small, concrete off-screen activity. Do not turn it into work advice.`;
-  if (streak === 5) return `${shared} UNEXPECTED PERSPECTIVE: offer one concrete reframe about why another sentence is not necessary.`;
+  if (streak === 5) return `${shared} GROUNDED PHILOSOPHY: zoom out using a plain, everyday truth about time, work, attention, or an imperfect day, then land on this page, the current task, today, tomorrow, or a few minutes. The line must still make literal sense if all philosophical decoration is removed. Do not name philosophers. Do not use the universe, stars, dust, eternity, destiny, souls, the river of time, existentialism, nihilism, or the meaning of life.`;
   return `${shared} PERMISSION: clearly say the page can be left or closed for now.`;
 }
 
@@ -87,6 +88,7 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       intent: state.intent,
       strategy: state.strategy,
       strategy_instruction: STRATEGY_GUIDANCE[state.strategy],
+      dimension: state.dimension,
       emotional_bias_for_tone_only: state.emotionBias,
       scene_confidence: state.sceneResolution.confidence,
       persona: state.input.selectedPersona,
@@ -124,6 +126,9 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
         ? 'Every item in this batch must use the single assigned content track. Vary wording and semantic core within that dimension only.'
         : undefined,
       every_item_must_have_distinct_semantic_core: true,
+      philosophical_grounding_rule: state.noveltyPlan.targetTrack === 'philosophical_zoom_out'
+        ? 'Every item must contain at least one concrete everyday anchor and one immediately understandable implication. Reject a line that is only an abstract observation, a grand quotation, or decorative wisdom.'
+        : undefined,
       directness_check: 'A user must understand the literal point immediately. Rewrite any line that mainly relies on metaphor, personification, or an abstract phrase.',
       json_shape: {
         text: 'final user-facing sentence',
