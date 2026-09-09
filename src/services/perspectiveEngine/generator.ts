@@ -1,7 +1,7 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.3.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.4.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -122,6 +122,9 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       sentence_count: 1,
       first_item_must_use_target_track: true,
       remaining_items_should_rotate_allowed_tracks: !state.input.isManualRefresh,
+      non_refresh_batch_variety_rule: !state.input.isManualRefresh
+        ? 'Across the batch, use every allowed content track when five or fewer are allowed; otherwise use at least five distinct allowed tracks. Use at least four visibly different sentence constructions. When allowed, spread the batch across sensory, ordinary-object, off-screen-life, clear-permission, and unexpected-concrete angles. No more than two items may discuss prioritizing, reducing, arranging, queuing, filling, or crowding work/tasks. Different tags alone do not count as variety; the user-facing meanings and tones must feel different.'
+        : undefined,
       manual_refresh_rule: state.input.isManualRefresh
         ? 'Every item in this batch must use the single assigned content track. Vary wording and semantic core within that dimension only.'
         : undefined,

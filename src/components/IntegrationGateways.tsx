@@ -81,6 +81,9 @@ function GatewayIcon({ link, className = 'w-6 h-6' }: { link: QuickLink; classNa
                 key={source}
                 src={source}
                 alt=""
+                loading="eager"
+                decoding="sync"
+                fetchPriority="high"
                 draggable={false}
                 className={`${className} object-contain`}
                 onError={() => setCandidateIndex(index => index + 1)}

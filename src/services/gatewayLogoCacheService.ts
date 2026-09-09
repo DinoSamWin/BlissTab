@@ -373,8 +373,8 @@ export function getGatewayIconCandidates(link: QuickLink): string[] {
   return Array.from(new Set(sources));
 }
 
-function getRemoteIconSources(link: QuickLink): string[] {
-  return getSiteIconSources(link).filter(source => /^https?:\/\//i.test(source));
+function getCacheableIconSources(link: QuickLink): string[] {
+  return getSiteIconSources(link).filter(source => /^(https?|chrome-extension):\/\//i.test(source));
 }
 
 async function fetchAndCacheRemoteIcon(canonicalUrl: string, sourceUrl: string): Promise<boolean> {
@@ -431,7 +431,10 @@ async function fetchAndCacheRemoteIcon(canonicalUrl: string, sourceUrl: string):
 }
 
 async function ensureRemoteIconCached(link: QuickLink, canonicalUrl: string): Promise<boolean> {
-  const sources = getRemoteIconSources(link);
+  // Chrome's own _favicon endpoint is same-origin to the extension and works
+  // for public sites as well as visited intranet pages. Persisting its bytes as
+  // a data URL means future new-tab reloads paint without another favicon load.
+  const sources = getCacheableIconSources(link);
   if (!sources.length) return false;
 
   const existing = getLocalLogoCache()[canonicalUrl];

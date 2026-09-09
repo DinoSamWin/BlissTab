@@ -7,6 +7,12 @@ import {
   validatePerspectiveCandidate
 } from './src/services/perspectiveEngine/index.ts';
 import type { PerspectiveRouterContext } from './src/types.ts';
+import {
+  advanceRefreshStreak,
+  initializePageRefreshStreak,
+  isPageReloadNavigation,
+  REFRESH_STREAK_WINDOW_MS,
+} from './src/services/refreshStreakService.ts';
 
 function context(overrides: Partial<PerspectiveRouterContext>): PerspectiveRouterContext {
   return {
@@ -29,6 +35,28 @@ function context(overrides: Partial<PerspectiveRouterContext>): PerspectiveRoute
 function stateFor(overrides: Partial<PerspectiveRouterContext>) {
   return runCompanionPipeline(context(overrides), 'Chinese (Simplified)', 4).state;
 }
+
+function memoryStorage() {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) || null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); }
+  };
+}
+
+const refreshStorage = memoryStorage();
+assert.equal(isPageReloadNavigation({ getEntriesByType: () => [{ type: 'reload' }] }), true);
+assert.equal(isPageReloadNavigation({ getEntriesByType: () => [{ type: 'navigate' }] }), false);
+assert.deepEqual(initializePageRefreshStreak(false, 1000, refreshStorage), {
+  count: 0,
+  lastAt: 0,
+  isReload: false
+});
+assert.equal(advanceRefreshStreak(1000, refreshStorage).count, 1);
+assert.equal(initializePageRefreshStreak(true, 2000, refreshStorage).count, 1);
+assert.equal(advanceRefreshStreak(2000, refreshStorage).count, 2);
+assert.equal(advanceRefreshStreak(2000 + REFRESH_STREAK_WINDOW_MS + 1, refreshStorage).count, 1);
 
 const mondayEvening = stateFor({
   local_date: '2026-09-07',
@@ -192,6 +220,32 @@ const refreshDimensionTexts = expectedRefreshTracks.map((expectedTrack, index) =
 assert.equal(new Set(refreshDimensionTexts).size, expectedRefreshTracks.length);
 assert.equal(new Set(refreshFingerprints).size, expectedRefreshTracks.length);
 
+const morningFallbackTracks = new Set<string>();
+const morningHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [];
+for (let index = 0; index < 6; index += 1) {
+  const morningState = stateFor({
+    local_time: '09:58',
+    recent_history: morningHistory
+  });
+  const fallback = getStateAwareFallback(morningState, 'Chinese (Simplified)', morningHistory);
+  assert.ok(fallback);
+  morningFallbackTracks.add(fallback.content_track || '');
+  morningHistory.unshift({
+    text: fallback.text,
+    timestamp: Date.now() + index,
+    promptId: `morning-${index}`,
+    contentTrack: fallback.content_track,
+    semanticCore: fallback.semantic_core,
+    actionTag: fallback.action_tag,
+    objectTag: fallback.object_tag,
+    metaphorTag: fallback.metaphor_tag,
+    openerTag: fallback.opener_tag,
+    sentenceShape: fallback.sentence_shape,
+    timeBlock: 'morning_focus'
+  });
+}
+assert.ok(morningFallbackTracks.size >= 5, `expected at least five morning fallback styles, received ${morningFallbackTracks.size}`);
+
 const fifthRefresh = stateFor({
   local_time: '09:01',
   trigger: 'manual_refresh',
@@ -270,6 +324,8 @@ assert.match(promptCase.user, /forbidden_assumptions/);
 assert.match(promptCase.user, /prompt_version/);
 assert.doesNotMatch(promptCase.user, /"state_fingerprint"\s*:/);
 assert.match(promptCase.system, /meaning must be obvious on the first read/i);
+assert.match(promptCase.user, /at least five distinct allowed tracks/i);
+assert.match(promptCase.user, /No more than two items may discuss prioritizing/i);
 
 const invalidCandidate = validatePerspectiveCandidate({
   text: '你刚到公司，先深呼吸一下。',

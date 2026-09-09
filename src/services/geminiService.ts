@@ -444,19 +444,26 @@ async function fetchAndRefillPool(
 
                           if (validation.valid) {
                             const item = validation.item;
-                            newItems.push(item);
+                            const sameTrackCount = newItems.filter(candidate => (
+                              candidate.content_track === item.content_track
+                            )).length;
+                            if (!pipelineState.input.isManualRefresh && sameTrackCount >= 2) {
+                              console.debug('[PerspectiveValidator] Candidate rejected: content_track_overrepresented_in_batch');
+                            } else {
+                              newItems.push(item);
 
-                            if (
-                              !firstItemFound
-                              && !backgroundOnly
-                              && deliveryGate.open
-                              && item.content_track === pipelineState.noveltyPlan.targetTrack
-                            ) {
-                              firstItemFound = true;
-                              servedItem = item;
-                              plan.cached_item = item;
-                              if (onImmediateChunk) onImmediateChunk(item.text);
-                              returnResolver({ text: item.text, plan });
+                              if (
+                                !firstItemFound
+                                && !backgroundOnly
+                                && deliveryGate.open
+                                && item.content_track === pipelineState.noveltyPlan.targetTrack
+                              ) {
+                                firstItemFound = true;
+                                servedItem = item;
+                                plan.cached_item = item;
+                                if (onImmediateChunk) onImmediateChunk(item.text);
+                                returnResolver({ text: item.text, plan });
+                              }
                             }
                           } else {
                             console.debug('[PerspectiveValidator] Candidate rejected:', validation.reasons);

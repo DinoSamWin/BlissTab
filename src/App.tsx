@@ -17,6 +17,11 @@ import { EmotionType, TrackType } from './types';
 import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns, getEmotionLogs } from './services/emotionService';
 import { updateTrackAffinity } from './services/recommendationEngine';
 import { startTabPresence, getWebTabCount } from './services/tabPresenceService';
+import {
+  advanceRefreshStreak,
+  initializePageRefreshStreak,
+  resetRefreshStreak,
+} from './services/refreshStreakService';
 import { useUser } from './contexts/UserContext';
 import Settings from './components/Settings';
 import i18n from './i18n';
@@ -355,8 +360,8 @@ const App: React.FC = () => {
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
   const [currentNamespace, setCurrentNamespace] = useState<string | null>(null); // For local debugging
-  const sessionRefreshCountRef = useRef<number>(0); // Bug #5 fix: per-session refresh counter
-  const lastManualRefreshAtRef = useRef<number>(0);
+  const [pageRefreshStreak] = useState(initializePageRefreshStreak);
+  const sessionRefreshCountRef = useRef<number>(pageRefreshStreak.count);
 
   const isAuthenticated = !!appState.user;
   const isVerifiedUser = !!appState.user && appState.user.emailVerified === true;
@@ -951,17 +956,14 @@ const App: React.FC = () => {
           console.warn('[App] Browser extension API access failed', e);
         }
       }
-      // Refresh streaks are session-local and expire after three quiet minutes.
-      // We intentionally do not report page-local mouse/keyboard inactivity as
-      // system idle: a newly opened tab cannot prove the user was away.
+      // Browser reloads and the New Perspective button share one sessionStorage
+      // streak, so F5 does not restart the copy at the same morning framing.
       if (isUserRefresh) {
-        if (Date.now() - lastManualRefreshAtRef.current > 3 * 60 * 1000) {
-          sessionRefreshCountRef.current = 0;
-        }
-        sessionRefreshCountRef.current += 1;
-        lastManualRefreshAtRef.current = Date.now();
+        const streak = advanceRefreshStreak();
+        sessionRefreshCountRef.current = streak.count;
       } else if (clickedEmotion) {
         sessionRefreshCountRef.current = 0;
+        resetRefreshStreak();
       }
 
       // Calculate Router Context
@@ -1065,6 +1067,7 @@ const App: React.FC = () => {
       if ((plan as any)?.reset_refresh_count) {
           console.log('[App] Macro environment shift detected by Backend. Resetting session refresh sequence.');
           sessionRefreshCountRef.current = 0;
+          resetRefreshStreak();
       }
 
       // Only bump revealKey for generic refreshes to trigger 'animate-reveal'
@@ -1843,13 +1846,13 @@ const App: React.FC = () => {
 
     if (didInitialSnippetFetchRef.current === false) {
       didInitialSnippetFetchRef.current = true;
-      fetchRandomSnippet();
+      fetchRandomSnippet(false, undefined, pageRefreshStreak.isReload);
     }
 
     if (!isUserContextChecking && !appState.user) {
       console.log('[App] No user, directing to /login page for authentication');
     }
-  }, [isUserContextChecking, appState.user]);
+  }, [isUserContextChecking, appState.user, fetchRandomSnippet, pageRefreshStreak.isReload]);
 
   // Listen for cross-tab storage changes (when user logs in/out in another tab)
   useEffect(() => {
