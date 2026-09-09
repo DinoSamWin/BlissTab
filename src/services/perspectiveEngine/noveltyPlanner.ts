@@ -61,7 +61,7 @@ function allowedTracksFor(
 
   // A browser reload is an ordinary revisit, not a New Perspective button
   // click. It gets a broad, history-aware pool instead of the fixed sequence.
-  if (input.isPageReload) return PAGE_RELOAD_TRACKS;
+  if (input.isPageReload && !input.isNewEnvironment) return PAGE_RELOAD_TRACKS;
 
   if (resolution.scene === 'refresh_loop') {
     return [getRefreshTargetTrack(input.consecutiveClicks)];
@@ -122,7 +122,7 @@ export function buildNoveltyPlan(
 
   if (forcedRefreshTrack) {
     targetTrack = forcedRefreshTrack;
-  } else if (input.isPageReload) {
+  } else if (input.isPageReload && !input.isNewEnvironment) {
     const rankedTracks = sceneAllowedTracks.map((track) => {
       const recency = history.findIndex(item => item.contentTrack === track);
       return { track, recency: recency === -1 ? Number.POSITIVE_INFINITY : recency };
@@ -142,7 +142,7 @@ export function buildNoveltyPlan(
     targetTrack = sceneAllowedTracks[selectedIndex];
   }
 
-  const cacheFillTracks = !input.isManualRefresh && !input.clickedEmotion
+  const cacheFillTracks = (!input.isManualRefresh || input.isNewEnvironment) && !input.clickedEmotion
     ? REFRESH_TRACK_SEQUENCE
     : [];
   const allowedTracks = [
@@ -164,7 +164,7 @@ export function buildNoveltyPlan(
     recentProductivityCount: countRecentProductivityLines(history),
     rotationReason: forcedRefreshTrack
       ? `manual_refresh_${Math.min(input.consecutiveClicks, REFRESH_TRACK_SEQUENCE.length)}:${forcedRefreshTrack}`
-      : input.isPageReload
+      : input.isPageReload && !input.isNewEnvironment
         ? `page_reload_variety:${targetTrack}`
         : recentTracks.length > 0
           ? `rotated_away_from:${recentTracks.join(',')}`

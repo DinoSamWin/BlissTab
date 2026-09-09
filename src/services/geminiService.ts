@@ -195,9 +195,17 @@ export async function generateSnippet(
         : (context.isManualRefresh ?? isManualRefresh) ? 'manual_refresh' : 'initial_open')
     };
 
-    const pipeline = runCompanionPipeline(normalizedContext, normalizedContext.language, finalBatchSize);
-    const plan = createPerspectivePlan(normalizedContext, pipeline.state);
-    const environmentDecision = resolveEnvironmentCacheScope(pipeline.state.environmentFingerprint);
+    // Resolve the material environment before applying click/reload copy
+    // behavior. A new environment always gets a scene-first entry line,
+    // regardless of what action happened to reveal it.
+    const preliminaryState = resolveCompanionState(normalizedContext);
+    const environmentDecision = resolveEnvironmentCacheScope(preliminaryState.environmentFingerprint);
+    const renderingContext: PerspectiveRouterContext = {
+      ...normalizedContext,
+      isNewEnvironment: environmentDecision.changed
+    };
+    const pipeline = runCompanionPipeline(renderingContext, renderingContext.language, finalBatchSize);
+    const plan = createPerspectivePlan(renderingContext, pipeline.state);
     plan.environment_changed = environmentDecision.changed;
     plan.environment_change_reason = environmentDecision.reason;
 
@@ -481,7 +489,10 @@ async function fetchAndRefillPool(
                             const sameTrackCount = newItems.filter(candidate => (
                               candidate.content_track === item.content_track
                             )).length;
-                            if (!pipelineState.input.isManualRefresh && sameTrackCount >= 2) {
+                            if (
+                              (!pipelineState.input.isManualRefresh || pipelineState.input.isNewEnvironment)
+                              && sameTrackCount >= 2
+                            ) {
                               console.debug('[PerspectiveValidator] Candidate rejected: content_track_overrepresented_in_batch');
                             } else {
                               newItems.push(item);

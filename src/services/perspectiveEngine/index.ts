@@ -86,6 +86,7 @@ function buildStateFingerprint(state: StateWithoutFingerprints, environmentFinge
     environmentFingerprint,
     `render_scene:${sceneResolution.scene}`,
     `trigger:${input.trigger}`,
+    `environment_entry:${input.isNewEnvironment ? 'yes' : 'no'}`,
     `refresh:${refreshStage(input)}`,
     `first_in_block:${input.isFirstInTimeBlock ? 'yes' : 'no'}`
   ].join('|');

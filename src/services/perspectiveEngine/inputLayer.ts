@@ -161,6 +161,7 @@ export function buildEngineInput(context: PerspectiveRouterContext): EngineInput
     isFirstInTimeBlock: context.isFirstInTimeBlock ?? lastHistoryBlock !== timeBlock,
     isManualRefresh: trigger === 'manual_refresh',
     isPageReload: trigger === 'page_reload',
+    isNewEnvironment: context.isNewEnvironment === true,
     tabSwitches10m: browserSignalsFresh ? context.tab_switches_10m : undefined,
 
     weather: weatherKnown ? context.weather : undefined,

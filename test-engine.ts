@@ -406,6 +406,126 @@ for (let index = 0; index < 8; index += 1) {
 assert.equal(pageReloadTracks.size, 8, `expected all eight page-reload styles, received ${pageReloadTracks.size}`);
 assert.ok(countRecentProductivityLines(pageReloadHistory) <= 2);
 
+const closingEntryReload = runCompanionPipeline(context({
+  local_time: '17:55',
+  trigger: 'page_reload',
+  isPageReload: true,
+  consecutiveClicks: 4,
+  isNewEnvironment: true
+}), 'Chinese (Simplified)', 7);
+assert.equal(closingEntryReload.state.input.timeBlock, 'closing_window');
+assert.equal(closingEntryReload.state.sceneResolution.baseScene, 'closing_runway');
+assert.equal(closingEntryReload.state.sceneResolution.scene, 'closing_runway');
+assert.ok(!closingEntryReload.state.sceneResolution.modifiers.includes('page_reload'));
+assert.match(closingEntryReload.user, /first line for a newly resolved environment/i);
+assert.doesNotMatch(closingEntryReload.user, /NOT a New Perspective button click/);
+const closingEntryFallback = getStateAwareFallback(
+  closingEntryReload.state,
+  'Chinese (Simplified)'
+);
+assert.ok(closingEntryFallback);
+assert.match(closingEntryFallback.text, /(快到下班|下班时间|收尾)/u);
+
+const middayEntryManual = runCompanionPipeline(context({
+  local_time: '12:05',
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 5,
+  isNewEnvironment: true
+}), 'Chinese (Simplified)', 7);
+assert.equal(middayEntryManual.state.input.timeBlock, 'midday_break');
+assert.equal(middayEntryManual.state.sceneResolution.scene, 'midday_release');
+assert.ok(!middayEntryManual.state.sceneResolution.modifiers.includes('manual_refresh'));
+assert.equal(middayEntryManual.state.noveltyPlan.cacheFillTracks.length, 6);
+assert.match(getStateAwareFallback(middayEntryManual.state, 'Chinese (Simplified)')?.text || '', /(午间|午饭|饭点|中午)/u);
+assert.doesNotMatch(middayEntryManual.user, /GROUNDED PHILOSOPHY/);
+
+const vagueClosingEntry = validatePerspectiveCandidate({
+  text: '今天没做完的，不等于把这一天过坏了。',
+  style: 'life_boundary',
+  track: 'D_THEME',
+  content_track: 'life_boundary',
+  semantic_core: 'closing_without_stage_anchor',
+  action_tag: 'leave_unfinished_work',
+  object_tag: 'unfinished_work',
+  metaphor_tag: 'none',
+  opener_tag: 'unfinished_day',
+  sentence_shape: 'fact_plus_reframe',
+  state_fingerprint: closingEntryReload.state.stateFingerprint,
+  environment_fingerprint: closingEntryReload.state.environmentFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, closingEntryReload.state);
+assert.equal(vagueClosingEntry.valid, false);
+assert.ok(vagueClosingEntry.reasons.includes('missing_environment_stage_anchor'));
+
+const explicitClosingEntry = validatePerspectiveCandidate({
+  text: '快到下班时间了，今天没做完的可以明天再继续。',
+  style: 'life_boundary',
+  track: 'D_THEME',
+  content_track: 'life_boundary',
+  semantic_core: 'closing_stage_anchor',
+  action_tag: 'leave_work_for_tomorrow',
+  object_tag: 'unfinished_work',
+  metaphor_tag: 'none',
+  opener_tag: 'closing_time_direct',
+  sentence_shape: 'stage_plus_boundary',
+  state_fingerprint: closingEntryReload.state.stateFingerprint,
+  environment_fingerprint: closingEntryReload.state.environmentFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, closingEntryReload.state);
+assert.equal(explicitClosingEntry.valid, true);
+
+const stageEntryCases = [
+  ['06:30', 'early_morning', /(还早|一大早)/u],
+  ['08:30', 'arrival_window', /(早上刚开始|早晨刚开始)/u],
+  ['10:00', 'morning_focus', /上午/u],
+  ['11:40', 'pre_lunch', /(快到午饭|快到饭点)/u],
+  ['12:30', 'midday_break', /(午间|午饭|中午)/u],
+  ['13:45', 'post_lunch_reset', /(午后|下午刚开始)/u],
+  ['15:00', 'afternoon', /下午/u],
+  ['17:50', 'closing_window', /(快到下班|下班时间|收尾)/u],
+  ['19:00', 'evening', /晚上/u],
+  ['22:00', 'late_evening', /(比较晚|这么晚|晚上)/u],
+  ['00:30', 'late_night', /(深夜|夜深)/u]
+] as const;
+
+for (const [localTime, expectedBlock, stagePattern] of stageEntryCases) {
+  const entryState = stateFor({ local_time: localTime, isNewEnvironment: true });
+  const fallback = getStateAwareFallback(entryState, 'Chinese (Simplified)');
+  assert.equal(entryState.input.timeBlock, expectedBlock);
+  assert.ok(fallback);
+  assert.match(fallback.text, stagePattern);
+}
+
+const stableClosingReload = stateFor({
+  local_time: '17:55',
+  trigger: 'page_reload',
+  isPageReload: true
+});
+const closingReloadCandidate = {
+  ...explicitClosingEntry.item,
+  state_fingerprint: stableClosingReload.stateFingerprint,
+  environment_fingerprint: stableClosingReload.environmentFingerprint
+};
+const freshClosingFraming = validatePerspectiveCandidate(
+  closingReloadCandidate,
+  stableClosingReload
+);
+assert.equal(freshClosingFraming.valid, true);
+
+const repeatedClosingFraming = validatePerspectiveCandidate(
+  closingReloadCandidate,
+  stableClosingReload,
+  [{
+    text: '快到下班了，今天先准备收尾。',
+    timestamp: Date.now(),
+    promptId: 'recent-closing-stage',
+    timeBlock: 'closing_window'
+  }]
+);
+assert.equal(repeatedClosingFraming.valid, false);
+assert.ok(repeatedClosingFraming.reasons.includes('repeated_scene_framing_on_refresh'));
+
 const productivityHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [
   { text: '手里的事情不用一起往前挤，先留一件在前面。', timestamp: Date.now(), promptId: 'scope-1' },
   { text: '工作别一下排满，先处理最清楚的一项。', timestamp: Date.now() - 1, promptId: 'scope-2' }
@@ -563,7 +683,12 @@ const vagueRefreshCandidate = validatePerspectiveCandidate({
   state_fingerprint: firstRefresh.stateFingerprint,
   environment_fingerprint: firstRefresh.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
-}, firstRefresh);
+}, firstRefresh, [{
+  text: '天还早，先做点简单的。',
+  timestamp: Date.now(),
+  promptId: 'recent-early-stage',
+  timeBlock: 'early_morning'
+}]);
 assert.equal(vagueRefreshCandidate.valid, false);
 assert.ok(vagueRefreshCandidate.reasons.includes('vague_or_literary_wording'));
 assert.ok(vagueRefreshCandidate.reasons.includes('repeated_scene_framing_on_refresh'));

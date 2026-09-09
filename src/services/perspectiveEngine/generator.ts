@@ -1,7 +1,7 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.6.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.7.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -63,8 +63,32 @@ const STRATEGY_GUIDANCE: Record<ResponseStrategy, string> = {
   interrupt: 'Change angle decisively but lightly; do not reward endless refreshing.'
 };
 
+const STAGE_ENTRY_GUIDANCE: Record<PipelineState['sceneResolution']['baseScene'], string> = {
+  early_buffer: 'Say plainly that it is still early and the user does not need to become fully active at once.',
+  arrival_buffer: 'Say plainly that the morning is just getting started and the user can begin with something simple.',
+  morning_sustained: 'Say plainly that the morning is underway and work does not need all of the user’s attention at once.',
+  pre_lunch_transition: 'Say plainly that lunch time is approaching and the current task can begin to loosen its hold.',
+  midday_release: 'Say plainly that this is the midday break and food or rest does not need to give way to work.',
+  post_lunch_reentry: 'Say plainly that the afternoon is restarting and the user does not need to resume at full load immediately.',
+  afternoon_stretch: 'Say plainly that it is already afternoon and a brief step away from work is legitimate.',
+  closing_runway: 'Say plainly that the configured end-of-work window is approaching and unfinished work does not all need to fit into this moment. Do not claim that work has already ended.',
+  evening_transition: 'Say plainly that it is evening and time outside work deserves room now. Do not claim the user has finished work.',
+  late_evening_boundary: 'Say plainly that it is getting late and screen tasks do not all need to be handled tonight.',
+  night_guard: 'Say plainly that it is late at night and screen tasks can wait until tomorrow.'
+};
+
+function environmentEntryGuidance(state: PipelineState): string | undefined {
+  if (!state.input.isNewEnvironment) return undefined;
+  return [
+    'This is the first line for a newly resolved environment. The environment takes priority over whether it was revealed by a page reload or the New Perspective button.',
+    STAGE_ENTRY_GUIDANCE[state.sceneResolution.baseScene],
+    'The first item must make the current stage obvious on the first read, using direct everyday language rather than a subtle metaphor.',
+    'Across the remaining batch, keep at least three items recognizably connected to this same stage while rotating the requested dimensions.'
+  ].join(' ');
+}
+
 function refreshGuidance(state: PipelineState): string | undefined {
-  if (!state.input.isManualRefresh) return undefined;
+  if (!state.input.isManualRefresh || state.input.isNewEnvironment) return undefined;
   const streak = state.input.consecutiveClicks;
   const shared = 'This is not the first line in this moment. Do not repeat the time-of-day, weekday, holiday, or pace framing from the initial line. Never say or paraphrase “不要着急”, “慢慢来”, “不用马上进入状态”, “别安排太满”, or “别把工作塞满”. The assigned content track is mandatory and must produce a genuinely different kind of message.';
   if (streak === 1) return `${shared} SENSORY: give one safe, concrete visual shift, such as looking away from the screen for a few seconds.`;
@@ -76,11 +100,12 @@ function refreshGuidance(state: PipelineState): string | undefined {
 }
 
 function pageReloadGuidance(state: PipelineState): string | undefined {
-  if (!state.input.isPageReload) return undefined;
+  if (!state.input.isPageReload || state.input.isNewEnvironment) return undefined;
   const capReached = state.noveltyPlan.recentProductivityCount >= 2;
   return [
     'This is a browser page reload, NOT a New Perspective button click. Do not use the manual-refresh stage sequence.',
-    'Keep the resolved scene as quiet background context, but do not repeat its time-of-day, weekday, holiday, or pace framing.',
+    'Keep the resolved time scene recognizably relevant. It may be named directly when recent lines have not just used the same framing; do not open every line with the same time phrase.',
+    'At least two candidates in the batch should be explicitly anchored to the current time scene, while the others may carry it more lightly.',
     'Make this visit different in subject, sentence shape, and tone. Prefer ordinary objects, a sensory shift, off-screen life, dry humor, clear permission, a concrete observation, or a grounded change of scale.',
     'Never mention reloading, refreshing, click counts, or that the user has returned repeatedly.',
     capReached
@@ -91,6 +116,7 @@ function pageReloadGuidance(state: PipelineState): string | undefined {
 
 /** Builds the compact, auditable policy packet sent to the existing model. */
 function buildPolicyPacket(state: PipelineState, language: string, batchSize: number) {
+  const usesManualRefreshContract = state.input.isManualRefresh && !state.input.isNewEnvironment;
   return {
     prompt_version: STARTLY_PROMPT_VERSION,
     output_language: language,
@@ -127,6 +153,7 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       productivity_planning_lines_in_recent_8: state.noveltyPlan.recentProductivityCount,
       rotation_reason: state.noveltyPlan.rotationReason
     },
+    environment_entry_instruction: environmentEntryGuidance(state),
     manual_refresh_instruction: refreshGuidance(state),
     page_reload_instruction: pageReloadGuidance(state),
     user_themes: {
@@ -138,11 +165,11 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       english_length: '7-16 words preferred; hard maximum 90 total characters',
       sentence_count: 1,
       first_item_must_use_target_track: true,
-      remaining_items_should_rotate_allowed_tracks: !state.input.isManualRefresh,
-      non_refresh_batch_variety_rule: !state.input.isManualRefresh
+      remaining_items_should_rotate_allowed_tracks: !usesManualRefreshContract,
+      non_refresh_batch_variety_rule: !usesManualRefreshContract
         ? 'The batch is also the cache for later interactions in this unchanged environment. Include at least one item from every cache_fill_priority_track when batch size permits, while keeping the first item on the target track. Use at least four visibly different sentence constructions. No more than two items may discuss prioritizing, reducing, arranging, queuing, filling, or crowding work/tasks. Different tags alone do not count as variety; the user-facing meanings and tones must feel different.'
         : undefined,
-      manual_refresh_rule: state.input.isManualRefresh
+      manual_refresh_rule: usesManualRefreshContract
         ? 'Every item in this batch must use the single assigned content track. Vary wording and semantic core within that dimension only.'
         : undefined,
       every_item_must_have_distinct_semantic_core: true,

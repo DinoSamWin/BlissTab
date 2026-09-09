@@ -60,6 +60,20 @@ const BASE_ZH: Record<BaseTimeScene, Template[]> = {
   ]
 };
 
+const STAGE_ENTRY_ZH: Record<BaseTimeScene, Template> = {
+  early_buffer: { text: '现在还早，先做点简单的，不用马上进入忙碌状态。', content_track: 'grounded_observation', semantic_core: 'stage_early_is_not_full_speed', action_tag: 'start_simple', object_tag: 'early_time', metaphor_tag: 'none', opener_tag: 'stage_early_direct', sentence_shape: 'direct_stage_plus_permission' },
+  arrival_buffer: { text: '早上刚开始，先做一件简单的事，不用立刻排满。', content_track: 'grounded_observation', semantic_core: 'stage_morning_starts_simple', action_tag: 'start_with_one_simple_thing', object_tag: 'morning_start', metaphor_tag: 'none', opener_tag: 'stage_arrival_direct', sentence_shape: 'direct_stage_plus_action' },
+  morning_sustained: { text: '已经是上午了，工作一件件做，中间也可以停几分钟。', content_track: 'grounded_observation', semantic_core: 'stage_morning_allows_breaks', action_tag: 'take_brief_break', object_tag: 'morning_work', metaphor_tag: 'none', opener_tag: 'stage_morning_direct', sentence_shape: 'direct_stage_plus_permission' },
+  pre_lunch_transition: { text: '快到午饭时间了，手里的事情可以准备停一下。', content_track: 'life_boundary', semantic_core: 'stage_lunch_is_approaching', action_tag: 'prepare_to_pause', object_tag: 'lunch_time', metaphor_tag: 'none', opener_tag: 'stage_pre_lunch_direct', sentence_shape: 'direct_stage_plus_boundary' },
+  midday_release: { text: '现在是午间时间，吃饭和休息不用给工作让路。', content_track: 'life_boundary', semantic_core: 'stage_midday_protects_meal_and_rest', action_tag: 'protect_midday_break', object_tag: 'meal_and_rest', metaphor_tag: 'none', opener_tag: 'stage_midday_direct', sentence_shape: 'direct_stage_plus_boundary' },
+  post_lunch_reentry: { text: '午后刚开始，先做简单的事，不用马上处理一大堆。', content_track: 'grounded_observation', semantic_core: 'stage_post_lunch_restarts_small', action_tag: 'restart_with_simple_thing', object_tag: 'afternoon_start', metaphor_tag: 'none', opener_tag: 'stage_post_lunch_direct', sentence_shape: 'direct_stage_plus_action' },
+  afternoon_stretch: { text: '已经到下午了，工作可以继续，也该停几分钟看看别处。', content_track: 'sensory_reset', semantic_core: 'stage_afternoon_allows_visual_break', action_tag: 'look_elsewhere_briefly', object_tag: 'afternoon_work', metaphor_tag: 'none', opener_tag: 'stage_afternoon_direct', sentence_shape: 'direct_stage_plus_action' },
+  closing_runway: { text: '快到下班时间了，今天没做完的不用都塞进这会儿。', content_track: 'life_boundary', semantic_core: 'stage_closing_does_not_hold_everything', action_tag: 'leave_unfinished_work', object_tag: 'closing_window', metaphor_tag: 'work_as_container', opener_tag: 'stage_closing_direct', sentence_shape: 'direct_stage_plus_boundary' },
+  evening_transition: { text: '已经到晚上了，工作之外的时间也应该留出来。', content_track: 'life_boundary', semantic_core: 'stage_evening_makes_room_for_life', action_tag: 'make_room_for_nonwork', object_tag: 'evening_time', metaphor_tag: 'none', opener_tag: 'stage_evening_direct', sentence_shape: 'direct_stage_plus_boundary' },
+  late_evening_boundary: { text: '现在已经比较晚了，屏幕里的事情不用今晚全处理。', content_track: 'permission_pause', semantic_core: 'stage_late_evening_tasks_can_wait', action_tag: 'leave_tasks_for_later', object_tag: 'screen_tasks', metaphor_tag: 'none', opener_tag: 'stage_late_evening_direct', sentence_shape: 'direct_stage_plus_permission' },
+  night_guard: { text: '已经是深夜了，屏幕里的事情可以留到明天。', content_track: 'permission_pause', semantic_core: 'stage_night_tasks_wait_for_tomorrow', action_tag: 'leave_tasks_for_tomorrow', object_tag: 'screen_tasks', metaphor_tag: 'none', opener_tag: 'stage_night_direct', sentence_shape: 'direct_stage_plus_permission' }
+};
+
 const OVERRIDE_ZH: Partial<Record<PipelineState['sceneResolution']['scene'], Template[]>> = {
   quiet_return: [
     { text: '刚回到这一页，先不用把节奏接得太满。', content_track: 'grounded_observation', semantic_core: 'return_without_full_speed', action_tag: 'soft_reentry', object_tag: 'current_page', metaphor_tag: 'rhythm_as_connection', opener_tag: 'just_returned', sentence_shape: 'observation_plus_permission' }
@@ -258,6 +272,25 @@ export function getStateAwareFallback(
     const emotionCandidates = [EMOTION_ZH[state.input.clickedEmotion]].map(template => hydrate(template, state));
     const emotionSelection = selectBestCandidate(emotionCandidates, state, history);
     return emotionSelection.selected || leastRecentlyUsedFallback(emotionCandidates, state, history);
+  }
+
+  if (state.input.isNewEnvironment) {
+    if (state.input.confirmedWorkStatus) {
+      const confirmedCandidates = CONFIRMED_WORK_ZH[state.input.confirmedWorkStatus]
+        .map(template => hydrate(template, state));
+      const confirmedSelection = selectBestCandidate(confirmedCandidates, state, history);
+      return confirmedSelection.selected
+        || leastRecentlyUsedFallback(confirmedCandidates, state, history);
+    }
+
+    // A fallback can be shown before the network response arrives, so make
+    // its first job unambiguous: tell the user which part of the day this is.
+    // Scene modifiers remain available for later lines in the same scope.
+    const entryCandidates = [STAGE_ENTRY_ZH[state.sceneResolution.baseScene]]
+      .map(template => hydrate(template, state));
+    const entrySelection = selectBestCandidate(entryCandidates, state, history);
+    return entrySelection.selected
+      || leastRecentlyUsedFallback(entryCandidates, state, history);
   }
 
   if (state.input.isManualRefresh) {

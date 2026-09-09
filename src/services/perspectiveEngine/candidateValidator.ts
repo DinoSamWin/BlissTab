@@ -47,6 +47,20 @@ const CONCRETE_PHILOSOPHY_ANCHORS = [
 ];
 const VALID_TRACKS = new Set(['A_PHYSICAL', 'B_TIME_ECHO', 'C_EMOTION', 'D_THEME', 'E_QUESTION']);
 
+const SCENE_FRAMING_PATTERNS: Record<PipelineState['sceneResolution']['baseScene'], RegExp> = {
+  early_buffer: /(天还早|时间还早|这么早|一大早|早到|still early|early in the (?:day|morning))/iu,
+  arrival_buffer: /(刚到今天|今天刚打开|一早|早上刚开始|早晨刚开始|morning (?:is )?just (?:starting|getting started)|start of the morning)/iu,
+  morning_sustained: /(上午|早上|morning is (?:underway|already underway)|already morning)/iu,
+  pre_lunch_transition: /(快到饭点|快到午饭|午饭时间.{0,4}(?:快到|临近)|中午.{0,4}(?:快到|临近)|lunch is (?:approaching|coming up)|almost (?:lunch|noon))/iu,
+  midday_release: /(午间|午饭|饭点|中午|midday|lunch(?:time| break)?|noon)/iu,
+  post_lunch_reentry: /(午后|午饭后|下午刚开始|afternoon is (?:restarting|just starting)|start of the afternoon|after lunch)/iu,
+  afternoon_stretch: /(下午|already afternoon|it is afternoon|it's afternoon)/iu,
+  closing_runway: /(下班前|快(?:到)?下班|下班时间.{0,4}(?:快到|临近)|收尾|workday is (?:nearing|approaching) its end|end of the workday is (?:near|approaching)|almost time to finish work)/iu,
+  evening_transition: /(已经到晚上|到了晚上|现在是晚上|白天已经|下班|it is evening|it's evening|evening is here)/iu,
+  late_evening_boundary: /(这个点|这么晚|已经比较晚|深夜|晚上|getting late|already late|late evening)/iu,
+  night_guard: /(夜已经|夜深|深夜|这么晚|late at night|deep into the night)/iu
+};
+
 function sanitizeText(text: string): string {
   return text
     .replace(/^\s*["'“”‘’「」](.*?)["'“”‘’「」]\s*$/u, '$1')
@@ -137,24 +151,38 @@ function factBoundaryViolations(text: string, state: PipelineState): string[] {
   return reasons;
 }
 
-function repeatsResolvedSceneFraming(text: string, state: PipelineState): boolean {
+function repeatsResolvedSceneFraming(
+  text: string,
+  state: PipelineState,
+  history: PerspectiveHistory[]
+): boolean {
   if (!state.input.isManualRefresh && !state.input.isPageReload) return false;
+  if (state.input.isNewEnvironment) return false;
 
-  const patterns: Partial<Record<PipelineState['sceneResolution']['baseScene'], RegExp>> = {
-    early_buffer: /(天还早|时间还早|这么早|一大早|早到)/u,
-    arrival_buffer: /(刚到今天|今天刚打开|一早|早上刚开始)/u,
-    morning_sustained: /(上午|早上)/u,
-    pre_lunch_transition: /(快到饭点|午饭|中午)/u,
-    midday_release: /(午饭|饭点|中午)/u,
-    post_lunch_reentry: /(午后|午饭后|下午刚开始)/u,
-    afternoon_stretch: /下午/u,
-    closing_runway: /(下班前|快下班|收尾)/u,
-    evening_transition: /(已经到晚上|到了晚上|白天已经|下班)/u,
-    late_evening_boundary: /(这个点|这么晚|深夜|晚上)/u,
-    night_guard: /(夜已经|夜深|深夜|这么晚)/u
-  };
+  const scenePattern = SCENE_FRAMING_PATTERNS[state.sceneResolution.baseScene];
+  if (!scenePattern.test(text)) return false;
 
-  return patterns[state.sceneResolution.baseScene]?.test(text) || false;
+  // Scene words are useful anchors. Reject them only when the same framing
+  // was already visible very recently, rather than banning the scene from all
+  // reloads and New Perspective lines.
+  return history.slice(0, 2).some(item => (
+    item.timeBlock === state.input.timeBlock && scenePattern.test(item.text)
+  ));
+}
+
+function missesNewEnvironmentStageAnchor(
+  text: string,
+  state: PipelineState,
+  history: PerspectiveHistory[]
+): boolean {
+  if (!state.input.isNewEnvironment) return false;
+  if (state.input.clickedEmotion || state.input.confirmedWorkStatus) return false;
+
+  // Streaming validation prepends candidates already accepted from this same
+  // response. Only the first accepted item is required to state the stage
+  // plainly; the rest of the cached batch can rotate to different angles.
+  if (history.some(item => item.promptId === 'same_batch')) return false;
+  return !SCENE_FRAMING_PATTERNS[state.sceneResolution.baseScene].test(text);
 }
 
 export function validatePerspectiveCandidate(
@@ -175,7 +203,8 @@ export function validatePerspectiveCandidate(
   }
   if (CLICHE_PATTERNS.some(pattern => pattern.test(text))) reasons.push('cliche_or_coaching');
   if (VAGUE_LITERARY_PATTERNS.some(pattern => pattern.test(text))) reasons.push('vague_or_literary_wording');
-  if (repeatsResolvedSceneFraming(text, state)) reasons.push('repeated_scene_framing_on_refresh');
+  if (missesNewEnvironmentStageAnchor(text, state, history)) reasons.push('missing_environment_stage_anchor');
+  if (repeatsResolvedSceneFraming(text, state, history)) reasons.push('repeated_scene_framing_on_refresh');
   if (state.input.isManualRefresh && REFRESH_PACE_PATTERNS.some(pattern => pattern.test(text))) {
     reasons.push('repeated_pace_message_on_refresh');
   }

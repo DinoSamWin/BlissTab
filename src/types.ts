@@ -216,6 +216,8 @@ export interface PerspectiveRouterContext {
   trigger?: PerspectiveTrigger;
   isManualRefresh?: boolean;
   isPageReload?: boolean;
+  /** Set by the cache router when a materially new environment is entered. */
+  isNewEnvironment?: boolean;
 
   // V3 Routing & Strategy Context
   isNewUser?: boolean;

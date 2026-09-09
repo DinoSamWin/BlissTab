@@ -60,15 +60,15 @@ function resolveModifiers(input: EngineInput): { modifiers: SceneModifier[]; evi
     evidence.push(`reentry:${input.idleBucket}`);
   }
 
-  if (input.isManualRefresh) {
+  if (input.isManualRefresh && !input.isNewEnvironment) {
     modifiers.push('manual_refresh');
     evidence.push(`refresh_streak:${input.consecutiveClicks}`);
   }
-  if (input.isPageReload) {
+  if (input.isPageReload && !input.isNewEnvironment) {
     modifiers.push('page_reload');
     evidence.push(`page_reload_streak:${input.consecutiveClicks}`);
   }
-  if (input.isManualRefresh && input.consecutiveClicks >= 3) modifiers.push('refresh_streak');
+  if (input.isManualRefresh && !input.isNewEnvironment && input.consecutiveClicks >= 3) modifiers.push('refresh_streak');
   if (input.hasAudibleTab) modifiers.push('audio_present');
 
   const hasSustainedLateActivity = (input.sessionDurationMinutes || 0) >= 60

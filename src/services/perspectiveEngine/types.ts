@@ -59,6 +59,7 @@ export interface EngineInput {
   isFirstInTimeBlock: boolean;
   isManualRefresh: boolean;
   isPageReload: boolean;
+  isNewEnvironment: boolean;
   tabSwitches10m?: number;
 
   weather?: string;
