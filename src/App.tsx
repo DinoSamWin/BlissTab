@@ -49,6 +49,7 @@ const CONTEXT_SENSING_CONSENT_KEY = 'startlytab_context_sensing_consent';
 const LAST_PERSPECTIVE_OPEN_KEY = 'startlytab_last_perspective_open';
 
 type ContextSensingConsent = 'granted' | 'denied' | null;
+type PerspectiveRegenerationSource = 'manual' | 'page_reload';
 
 const readContextSensingConsent = (): ContextSensingConsent => {
   if (typeof window === 'undefined') return null;
@@ -361,7 +362,9 @@ const App: React.FC = () => {
   const [logoCacheVersion, setLogoCacheVersion] = useState(0); // triggers rerender when local logo cache changes across tabs
   const [currentNamespace, setCurrentNamespace] = useState<string | null>(null); // For local debugging
   const [pageRefreshStreak] = useState(initializePageRefreshStreak);
-  const sessionRefreshCountRef = useRef<number>(pageRefreshStreak.count);
+  const pageReloadCountRef = useRef<number>(pageRefreshStreak.count);
+  const sessionRefreshCountRef = useRef<number>(0);
+  const lastManualRefreshAtRef = useRef<number>(0);
 
   const isAuthenticated = !!appState.user;
   const isVerifiedUser = !!appState.user && appState.user.emailVerified === true;
@@ -796,7 +799,16 @@ const App: React.FC = () => {
 
 
 
-  const fetchRandomSnippet = useCallback(async (bypassLimit: boolean = false, clickedEmotion?: EmotionType, isUserRefresh: boolean = false, previousEmotionOverride?: EmotionType | null) => {
+  const fetchRandomSnippet = useCallback(async (
+    bypassLimit: boolean = false,
+    clickedEmotion?: EmotionType,
+    isUserRefresh: boolean = false,
+    previousEmotionOverride?: EmotionType | null,
+    regenerationSource: PerspectiveRegenerationSource = 'manual'
+  ) => {
+    const isPageReload = isUserRefresh && regenerationSource === 'page_reload';
+    const isManualPerspectiveRefresh = isUserRefresh && !isPageReload;
+
     if (isGenerating) {
       console.warn('[App] Request rejected: isGenerating is TRUE');
       return;
@@ -956,15 +968,28 @@ const App: React.FC = () => {
           console.warn('[App] Browser extension API access failed', e);
         }
       }
-      // Browser reloads and the New Perspective button share one sessionStorage
-      // streak, so F5 does not restart the copy at the same morning framing.
-      if (isUserRefresh) {
+      // Page reloads rotate through a broad revisit pool. The New Perspective
+      // button keeps its separate product-defined click sequence.
+      if (isPageReload) {
         const streak = advanceRefreshStreak();
-        sessionRefreshCountRef.current = streak.count;
+        pageReloadCountRef.current = streak.count;
+      } else if (isManualPerspectiveRefresh) {
+        const now = Date.now();
+        if (now - lastManualRefreshAtRef.current > 3 * 60 * 1000) {
+          sessionRefreshCountRef.current = 0;
+        }
+        sessionRefreshCountRef.current += 1;
+        lastManualRefreshAtRef.current = now;
       } else if (clickedEmotion) {
+        pageReloadCountRef.current = 0;
         sessionRefreshCountRef.current = 0;
+        lastManualRefreshAtRef.current = 0;
         resetRefreshStreak();
       }
+
+      const activeRefreshCount = isPageReload
+        ? pageReloadCountRef.current
+        : isManualPerspectiveRefresh ? sessionRefreshCountRef.current : 1;
 
       // Calculate Router Context
       const now = new Date();
@@ -976,10 +1001,14 @@ const App: React.FC = () => {
         is_weekend: now.getDay() === 0 || now.getDay() === 6,
         day_kind: now.getDay() === 0 || now.getDay() === 6 ? 'rest_day' : 'workday',
         session_count_today: getSessionCountToday(history),
-        refresh_count_session: sessionRefreshCountRef.current, // now has correct post-increment value
-        consecutiveClicks: isUserRefresh ? sessionRefreshCountRef.current : 1,
-        isManualRefresh: isUserRefresh,
-        trigger: clickedEmotion ? 'emotion_click' : isUserRefresh ? 'manual_refresh' : 'initial_open',
+        refresh_count_session: isManualPerspectiveRefresh ? sessionRefreshCountRef.current : 0,
+        page_reload_count_session: isPageReload ? pageReloadCountRef.current : 0,
+        consecutiveClicks: activeRefreshCount,
+        isManualRefresh: isManualPerspectiveRefresh,
+        isPageReload,
+        trigger: clickedEmotion
+          ? 'emotion_click'
+          : isPageReload ? 'page_reload' : isManualPerspectiveRefresh ? 'manual_refresh' : 'initial_open',
         isNewUser: history.length < 10,
         first_open_today: pageOpenContext.firstOpenToday,
         minutes_since_previous_open: pageOpenContext.previousOpenAt
@@ -1022,7 +1051,7 @@ const App: React.FC = () => {
       }
       context.selectedPersona = appState.selectedPersona || 'soulmate';
 
-      const response = await generateSnippet(context, isUserRefresh);
+      const response = await generateSnippet(context, isManualPerspectiveRefresh);
       const result = response.text;
       const plan = response.plan;
       setCurrentNamespace(response.namespace || null);
@@ -1066,7 +1095,9 @@ const App: React.FC = () => {
 
       if ((plan as any)?.reset_refresh_count) {
           console.log('[App] Macro environment shift detected by Backend. Resetting session refresh sequence.');
+          pageReloadCountRef.current = 0;
           sessionRefreshCountRef.current = 0;
+          lastManualRefreshAtRef.current = 0;
           resetRefreshStreak();
       }
 
@@ -1846,7 +1877,7 @@ const App: React.FC = () => {
 
     if (didInitialSnippetFetchRef.current === false) {
       didInitialSnippetFetchRef.current = true;
-      fetchRandomSnippet(false, undefined, pageRefreshStreak.isReload);
+      fetchRandomSnippet(false, undefined, pageRefreshStreak.isReload, undefined, 'page_reload');
     }
 
     if (!isUserContextChecking && !appState.user) {

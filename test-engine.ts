@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { calculateSimilarity } from './src/services/perspectiveService.ts';
 import {
   STARTLY_PROMPT_VERSION,
+  countRecentProductivityLines,
   getStateAwareFallback,
+  isProductivityPlanningText,
   runCompanionPipeline,
   validatePerspectiveCandidate
 } from './src/services/perspectiveEngine/index.ts';
@@ -245,6 +247,86 @@ for (let index = 0; index < 6; index += 1) {
   });
 }
 assert.ok(morningFallbackTracks.size >= 5, `expected at least five morning fallback styles, received ${morningFallbackTracks.size}`);
+
+const pageReloadHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [];
+const pageReloadTracks = new Set<string>();
+for (let index = 0; index < 8; index += 1) {
+  const pageReloadState = stateFor({
+    local_time: '09:58',
+    trigger: 'page_reload',
+    isPageReload: true,
+    isManualRefresh: false,
+    consecutiveClicks: index + 1,
+    recent_history: pageReloadHistory
+  });
+  assert.equal(pageReloadState.sceneResolution.baseScene, 'morning_sustained');
+  assert.equal(pageReloadState.sceneResolution.scene, 'morning_sustained');
+  assert.equal(pageReloadState.input.isManualRefresh, false);
+  assert.equal(pageReloadState.input.isPageReload, true);
+  assert.ok(pageReloadState.sceneResolution.modifiers.includes('page_reload'));
+  assert.ok(!pageReloadState.sceneResolution.modifiers.includes('manual_refresh'));
+  assert.equal(pageReloadState.noveltyPlan.allowedTracks.length, 8);
+
+  const fallback = getStateAwareFallback(pageReloadState, 'Chinese (Simplified)', pageReloadHistory);
+  assert.ok(fallback);
+  assert.doesNotMatch(fallback.text, /(上午|早上|不要着急|不用着急|慢慢来)/u);
+  pageReloadTracks.add(fallback.content_track || '');
+  pageReloadHistory.unshift({
+    text: fallback.text,
+    timestamp: Date.now() + index,
+    promptId: `page-reload-${index}`,
+    contentTrack: fallback.content_track,
+    semanticCore: fallback.semantic_core,
+    actionTag: fallback.action_tag,
+    objectTag: fallback.object_tag,
+    metaphorTag: fallback.metaphor_tag,
+    openerTag: fallback.opener_tag,
+    sentenceShape: fallback.sentence_shape,
+    timeBlock: 'morning_focus'
+  });
+}
+assert.equal(pageReloadTracks.size, 8, `expected all eight page-reload styles, received ${pageReloadTracks.size}`);
+assert.ok(countRecentProductivityLines(pageReloadHistory) <= 2);
+
+const productivityHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [
+  { text: '手里的事情不用一起往前挤，先留一件在前面。', timestamp: Date.now(), promptId: 'scope-1' },
+  { text: '工作别一下排满，先处理最清楚的一项。', timestamp: Date.now() - 1, promptId: 'scope-2' }
+];
+assert.equal(countRecentProductivityLines(productivityHistory), 2);
+assert.equal(isProductivityPlanningText('工作只是生活的一部分，不值得占满全部注意力。'), false);
+const cappedReloadState = stateFor({
+  local_time: '09:58',
+  trigger: 'page_reload',
+  isPageReload: true,
+  consecutiveClicks: 3,
+  recent_history: productivityHistory
+});
+const cappedProductivityCandidate = validatePerspectiveCandidate({
+  text: '手里的事情先排一下，挑最清楚的一件往前推。',
+  style: 'grounded_observation',
+  track: 'D_THEME',
+  content_track: 'grounded_observation',
+  semantic_core: 'reload_prioritize_clear_task',
+  action_tag: 'prioritize_task',
+  object_tag: 'current_tasks',
+  metaphor_tag: 'none',
+  opener_tag: 'reload_current_tasks',
+  sentence_shape: 'task_scope_plus_action',
+  state_fingerprint: cappedReloadState.stateFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, cappedReloadState, productivityHistory);
+assert.equal(cappedProductivityCandidate.valid, false);
+assert.ok(cappedProductivityCandidate.reasons.includes('productivity_framing_overused_on_page_reload'));
+
+const reloadPrompt = runCompanionPipeline(context({
+  local_time: '09:58',
+  trigger: 'page_reload',
+  isPageReload: true,
+  consecutiveClicks: 3,
+  recent_history: productivityHistory
+}), 'Chinese (Simplified)', 8);
+assert.match(reloadPrompt.user, /NOT a New Perspective button click/);
+assert.match(reloadPrompt.user, /productivity-advice cap has been reached/);
 
 const fifthRefresh = stateFor({
   local_time: '09:01',

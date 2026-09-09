@@ -1,5 +1,6 @@
 import { PerspectiveContentTrack, PerspectiveHistory } from '../../types';
 import { EngineInput, NoveltyPlan, ResponseStrategy, SceneResolution } from './types';
+import { countRecentProductivityLines } from './contentSignals';
 
 const DEFAULT_TRACKS: PerspectiveContentTrack[] = [
   'playful_boundary',
@@ -18,6 +19,17 @@ const REFRESH_TRACK_SEQUENCE: PerspectiveContentTrack[] = [
   'life_boundary',
   'philosophical_zoom_out',
   'permission_pause'
+];
+
+const PAGE_RELOAD_TRACKS: PerspectiveContentTrack[] = [
+  'object_humor',
+  'sensory_reset',
+  'unexpected_perspective',
+  'life_boundary',
+  'permission_pause',
+  'playful_boundary',
+  'grounded_observation',
+  'philosophical_zoom_out'
 ];
 
 /** Manual refreshes rotate by product rule, not by a random model choice. */
@@ -46,6 +58,10 @@ function allowedTracksFor(
     }
     return ['playful_boundary', 'grounded_observation', 'unexpected_perspective', 'object_humor'];
   }
+
+  // A browser reload is an ordinary revisit, not a New Perspective button
+  // click. It gets a broad, history-aware pool instead of the fixed sequence.
+  if (input.isPageReload) return PAGE_RELOAD_TRACKS;
 
   if (resolution.scene === 'refresh_loop') {
     return [getRefreshTargetTrack(input.consecutiveClicks)];
@@ -106,6 +122,14 @@ export function buildNoveltyPlan(
 
   if (forcedRefreshTrack) {
     targetTrack = forcedRefreshTrack;
+  } else if (input.isPageReload) {
+    const rankedTracks = allowedTracks.map((track) => {
+      const recency = history.findIndex(item => item.contentTrack === track);
+      return { track, recency: recency === -1 ? Number.POSITIVE_INFINITY : recency };
+    });
+    const oldestRecency = Math.max(...rankedTracks.map(item => item.recency));
+    const leastRecentlyUsed = rankedTracks.filter(item => item.recency === oldestRecency);
+    targetTrack = leastRecentlyUsed[seed % leastRecentlyUsed.length]?.track || allowedTracks[0];
   } else {
     let selectedIndex = seed % allowedTracks.length;
     for (let offset = 0; offset < allowedTracks.length; offset += 1) {
@@ -128,10 +152,13 @@ export function buildNoveltyPlan(
     avoidOpeners: recentUnique(history, 'openerTag', 8).slice(0, 6),
     avoidSentenceShapes: recentUnique(history, 'sentenceShape', 5).slice(0, 4),
     recentTexts: history.slice(0, 2).map(item => item.text.slice(0, 48)),
+    recentProductivityCount: countRecentProductivityLines(history),
     rotationReason: forcedRefreshTrack
       ? `manual_refresh_${Math.min(input.consecutiveClicks, REFRESH_TRACK_SEQUENCE.length)}:${forcedRefreshTrack}`
-      : recentTracks.length > 0
-        ? `rotated_away_from:${recentTracks.join(',')}`
-        : `daily_scene_seed:${seed % 997}`
+      : input.isPageReload
+        ? `page_reload_variety:${targetTrack}`
+        : recentTracks.length > 0
+          ? `rotated_away_from:${recentTracks.join(',')}`
+          : `daily_scene_seed:${seed % 997}`
   };
 }

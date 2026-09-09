@@ -69,6 +69,25 @@ const OVERRIDE_ZH: Partial<Record<PipelineState['sceneResolution']['scene'], Tem
   ]
 };
 
+const PAGE_RELOAD_ZH: Template[] = [
+  { text: '随便挑个手边的小东西看看，它今天不用完成任务。', content_track: 'object_humor', semantic_core: 'reload_object_has_no_task', action_tag: 'notice_nearby_object', object_tag: 'ordinary_object', metaphor_tag: 'object_with_no_assignment', opener_tag: 'reload_pick_object', sentence_shape: 'object_invitation_plus_joke' },
+  { text: '看看屏幕外最普通的东西，不用从它身上得到启发。', content_track: 'object_humor', semantic_core: 'reload_object_needs_no_inspiration', action_tag: 'notice_without_purpose', object_tag: 'ordinary_object', metaphor_tag: 'none', opener_tag: 'reload_ordinary_object', sentence_shape: 'object_action_plus_permission' },
+  { text: '先看几秒屏幕外最远的地方，再回来也来得及。', content_track: 'sensory_reset', semantic_core: 'reload_brief_far_gaze', action_tag: 'look_far_briefly', object_tag: 'farthest_visible_point', metaphor_tag: 'none', opener_tag: 'reload_look_far', sentence_shape: 'visual_action_plus_return' },
+  { text: '把视线从字上挪开一会儿，看看远近有什么变化。', content_track: 'sensory_reset', semantic_core: 'reload_notice_visual_distance', action_tag: 'shift_visual_distance', object_tag: 'near_and_far_view', metaphor_tag: 'none', opener_tag: 'reload_move_gaze', sentence_shape: 'visual_shift_plus_observation' },
+  { text: '不是每次打开页面，都要顺手解决一个问题。', content_track: 'unexpected_perspective', semantic_core: 'reload_page_needs_no_solution', action_tag: 'leave_problem_unsolved', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'reload_not_every_open', sentence_shape: 'negation_plus_perspective' },
+  { text: '少看屏幕几分钟，大多数事情不会因此变糟。', content_track: 'unexpected_perspective', semantic_core: 'reload_brief_absence_changes_little', action_tag: 'leave_screen_briefly', object_tag: 'current_things', metaphor_tag: 'none', opener_tag: 'reload_brief_screen_absence', sentence_shape: 'small_action_plus_plain_result' },
+  { text: '去喝两口水也算正事，这一页可以先放一会儿。', content_track: 'life_boundary', semantic_core: 'reload_water_counts_as_life', action_tag: 'drink_water', object_tag: 'water', metaphor_tag: 'none', opener_tag: 'reload_water_is_valid', sentence_shape: 'ordinary_life_plus_page_boundary' },
+  { text: '做件和屏幕无关的小事，回来再决定看不看。', content_track: 'life_boundary', semantic_core: 'reload_offscreen_choice_first', action_tag: 'do_offscreen_activity', object_tag: 'ordinary_life', metaphor_tag: 'none', opener_tag: 'reload_offscreen_activity', sentence_shape: 'ordinary_action_plus_choice' },
+  { text: '现在什么都不处理也可以，页面先开着就行。', content_track: 'permission_pause', semantic_core: 'reload_no_processing_required', action_tag: 'do_nothing_briefly', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'reload_nothing_required', sentence_shape: 'clear_permission_plus_fact' },
+  { text: '有件事暂时没做完，也不妨碍你先停一会儿。', content_track: 'permission_pause', semantic_core: 'reload_unfinished_allows_pause', action_tag: 'pause_with_unfinished_item', object_tag: 'unfinished_item', metaphor_tag: 'none', opener_tag: 'reload_unfinished_permission', sentence_shape: 'fact_plus_permission' },
+  { text: '浏览器可以一直开着，你不用一直陪着它。', content_track: 'playful_boundary', semantic_core: 'reload_browser_needs_no_company', action_tag: 'leave_browser_alone', object_tag: 'browser', metaphor_tag: 'browser_needs_company', opener_tag: 'reload_browser_open', sentence_shape: 'object_joke_plus_boundary' },
+  { text: '这页不会点名，走神几分钟也没人记过。', content_track: 'playful_boundary', semantic_core: 'reload_page_takes_no_attendance', action_tag: 'allow_mind_wander', object_tag: 'current_page', metaphor_tag: 'page_taking_attendance', opener_tag: 'reload_page_attendance', sentence_shape: 'clear_page_joke' },
+  { text: '屏幕亮着只说明页面开着，不代表你现在得做什么。', content_track: 'grounded_observation', semantic_core: 'reload_open_screen_implies_nothing', action_tag: 'drop_page_obligation', object_tag: 'screen', metaphor_tag: 'none', opener_tag: 'reload_screen_fact', sentence_shape: 'literal_fact_plus_boundary' },
+  { text: '你只是打开了一页，不需要顺手接住所有事情。', content_track: 'grounded_observation', semantic_core: 'reload_opening_is_not_obligation', action_tag: 'drop_page_scope', object_tag: 'current_page', metaphor_tag: 'catching_all_things', opener_tag: 'reload_just_one_page', sentence_shape: 'plain_fact_plus_boundary' },
+  { text: '眼前这件事放到一周里看，晚几分钟真的没什么。', content_track: 'philosophical_zoom_out', semantic_core: 'reload_current_task_is_small_in_week', action_tag: 'allow_a_few_minutes', object_tag: 'current_task', metaphor_tag: 'none', opener_tag: 'reload_week_scale', sentence_shape: 'time_scale_plus_plain_conclusion' },
+  { text: '今天没做完一件事，不等于把这一天过坏了。', content_track: 'philosophical_zoom_out', semantic_core: 'reload_unfinished_task_does_not_define_day', action_tag: 'separate_task_from_day', object_tag: 'unfinished_task', metaphor_tag: 'none', opener_tag: 'reload_day_reframe', sentence_shape: 'concrete_fact_plus_identity_boundary' }
+];
+
 const REFRESH_ZH: Record<'first' | 'second' | 'third' | 'fourth' | 'fifth' | 'later', Template[]> = {
   first: [
     { text: '先看几秒远处，让眼睛从屏幕上换个焦点。', content_track: 'sensory_reset', semantic_core: 'refresh_look_far_for_seconds', action_tag: 'look_far', object_tag: 'distant_view', metaphor_tag: 'none', opener_tag: 'first_refresh_visual', sentence_shape: 'single_direct_visual_action' },
@@ -246,6 +265,13 @@ export function getStateAwareFallback(
     const refreshSelection = selectBestCandidate(refreshCandidates, state, history);
     return refreshSelection.selected
       || leastRecentlyUsedFallback(refreshCandidates, state, history);
+  }
+
+  if (state.input.isPageReload) {
+    const reloadCandidates = PAGE_RELOAD_ZH.map(template => hydrate(template, state));
+    const reloadSelection = selectBestCandidate(reloadCandidates, state, history);
+    return reloadSelection.selected
+      || leastRecentlyUsedFallback(reloadCandidates, state, history);
   }
 
   if (state.input.confirmedWorkStatus) {

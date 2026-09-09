@@ -2,6 +2,7 @@ import { PerspectiveHistory, PerspectivePoolItem } from '../../types';
 import { isTooSimilar } from '../perspectiveService';
 import { STARTLY_PROMPT_VERSION } from './generator';
 import { PipelineState } from './types';
+import { countRecentProductivityLines, isProductivityPlanningText } from './contentSignals';
 
 export interface CandidateValidation {
   valid: boolean;
@@ -137,7 +138,7 @@ function factBoundaryViolations(text: string, state: PipelineState): string[] {
 }
 
 function repeatsResolvedSceneFraming(text: string, state: PipelineState): boolean {
-  if (!state.input.isManualRefresh) return false;
+  if (!state.input.isManualRefresh && !state.input.isPageReload) return false;
 
   const patterns: Partial<Record<PipelineState['sceneResolution']['baseScene'], RegExp>> = {
     early_buffer: /(天还早|时间还早|这么早|一大早|早到)/u,
@@ -177,6 +178,13 @@ export function validatePerspectiveCandidate(
   if (repeatsResolvedSceneFraming(text, state)) reasons.push('repeated_scene_framing_on_refresh');
   if (state.input.isManualRefresh && REFRESH_PACE_PATTERNS.some(pattern => pattern.test(text))) {
     reasons.push('repeated_pace_message_on_refresh');
+  }
+  if (
+    state.input.isPageReload
+    && isProductivityPlanningText(text)
+    && countRecentProductivityLines(history) >= 2
+  ) {
+    reasons.push('productivity_framing_overused_on_page_reload');
   }
 
   const length = visibleLength(text);

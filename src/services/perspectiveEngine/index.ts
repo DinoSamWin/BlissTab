@@ -8,6 +8,7 @@ export * from './noveltyPlanner';
 export * from './generator';
 export * from './candidateValidator';
 export * from './fallbackLibrary';
+export * from './contentSignals';
 
 import { PerspectiveRouterContext } from '../../types';
 import { buildCompanionPrompt } from './generator';

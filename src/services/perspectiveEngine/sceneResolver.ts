@@ -64,6 +64,10 @@ function resolveModifiers(input: EngineInput): { modifiers: SceneModifier[]; evi
     modifiers.push('manual_refresh');
     evidence.push(`refresh_streak:${input.consecutiveClicks}`);
   }
+  if (input.isPageReload) {
+    modifiers.push('page_reload');
+    evidence.push(`page_reload_streak:${input.consecutiveClicks}`);
+  }
   if (input.isManualRefresh && input.consecutiveClicks >= 3) modifiers.push('refresh_streak');
   if (input.hasAudibleTab) modifiers.push('audio_present');
 

@@ -57,6 +57,7 @@ export interface EngineInput {
   isNewUser: boolean;
   isFirstInTimeBlock: boolean;
   isManualRefresh: boolean;
+  isPageReload: boolean;
   tabSwitches10m?: number;
 
   weather?: string;
@@ -115,6 +116,7 @@ export type SceneModifier =
   | 'tab_overload'
   | 'rapid_switching'
   | 'recent_return'
+  | 'page_reload'
   | 'manual_refresh'
   | 'refresh_streak'
   | 'audio_present'
@@ -180,6 +182,7 @@ export interface NoveltyPlan {
   avoidOpeners: string[];
   avoidSentenceShapes: string[];
   recentTexts: string[];
+  recentProductivityCount: number;
   rotationReason: string;
 }
 

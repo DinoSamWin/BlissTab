@@ -14,7 +14,9 @@ interface NavigationPerformance {
   navigation?: { type?: number };
 }
 
-const REFRESH_STREAK_KEY = 'startlytab_perspective_refresh_streak_v2';
+// v3 is page-reload-only. Earlier versions mixed this count with the
+// New Perspective button and must not seed the new revisit policy.
+const REFRESH_STREAK_KEY = 'startlytab_page_reload_streak_v3';
 export const REFRESH_STREAK_WINDOW_MS = 3 * 60 * 1000;
 
 const EMPTY_STREAK: RefreshStreakState = { count: 0, lastAt: 0 };
@@ -90,9 +92,8 @@ export function isPageReloadNavigation(
 }
 
 /**
- * A normal navigation starts a new perspective sequence. A browser reload
- * keeps the previous sequence so F5 and the New Perspective button rotate
- * through the same product-defined dimensions.
+ * A normal navigation starts a new page-reload sequence. Browser reloads keep
+ * only this revisit count; the New Perspective button is managed separately.
  */
 export function initializePageRefreshStreak(
   isReload: boolean = isPageReloadNavigation(),

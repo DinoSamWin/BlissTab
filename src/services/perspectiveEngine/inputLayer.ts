@@ -112,7 +112,13 @@ export function buildEngineInput(context: PerspectiveRouterContext): EngineInput
   const inferredDayKind = context.day_kind
     || (context.is_weekend ? 'rest_day' : 'workday');
   const trigger = context.trigger
-    || (context.clickedEmotion ? 'emotion_click' : context.isManualRefresh ? 'manual_refresh' : 'initial_open');
+    || (context.clickedEmotion
+      ? 'emotion_click'
+      : context.isManualRefresh
+        ? 'manual_refresh'
+        : context.isPageReload
+          ? 'page_reload'
+          : 'initial_open');
   const lastHistoryBlock = context.recent_history?.[0]?.timeBlock;
   const weatherKnown = !!context.weather && !['unknown', 'sunny'].includes(context.weather.toLowerCase());
   const screenModeKnown = browserSignalsFresh
@@ -153,6 +159,7 @@ export function buildEngineInput(context: PerspectiveRouterContext): EngineInput
     isNewUser: context.isNewUser ?? (context.recent_history?.length || 0) < 10,
     isFirstInTimeBlock: context.isFirstInTimeBlock ?? lastHistoryBlock !== timeBlock,
     isManualRefresh: trigger === 'manual_refresh',
+    isPageReload: trigger === 'page_reload',
     tabSwitches10m: browserSignalsFresh ? context.tab_switches_10m : undefined,
 
     weather: weatherKnown ? context.weather : undefined,

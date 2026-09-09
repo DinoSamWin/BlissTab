@@ -1,7 +1,7 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.4.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.5.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -75,6 +75,20 @@ function refreshGuidance(state: PipelineState): string | undefined {
   return `${shared} PERMISSION: clearly say the page can be left or closed for now.`;
 }
 
+function pageReloadGuidance(state: PipelineState): string | undefined {
+  if (!state.input.isPageReload) return undefined;
+  const capReached = state.noveltyPlan.recentProductivityCount >= 2;
+  return [
+    'This is a browser page reload, NOT a New Perspective button click. Do not use the manual-refresh stage sequence.',
+    'Keep the resolved scene as quiet background context, but do not repeat its time-of-day, weekday, holiday, or pace framing.',
+    'Make this visit different in subject, sentence shape, and tone. Prefer ordinary objects, a sensory shift, off-screen life, dry humor, clear permission, a concrete observation, or a grounded change of scale.',
+    'Never mention reloading, refreshing, click counts, or that the user has returned repeatedly.',
+    capReached
+      ? 'The recent productivity-advice cap has been reached. Do not discuss prioritizing, arranging, reducing, queuing, filling, advancing, or completing work/tasks.'
+      : 'Task-ordering or efficiency advice is allowed sparingly, but it must not dominate the batch.'
+  ].join(' ');
+}
+
 /** Builds the compact, auditable policy packet sent to the existing model. */
 function buildPolicyPacket(state: PipelineState, language: string, batchSize: number) {
   return {
@@ -109,9 +123,11 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       avoid_openers: state.noveltyPlan.avoidOpeners,
       avoid_sentence_shapes: state.noveltyPlan.avoidSentenceShapes,
       recent_texts_for_surface_dedup_only: state.noveltyPlan.recentTexts,
+      productivity_planning_lines_in_recent_8: state.noveltyPlan.recentProductivityCount,
       rotation_reason: state.noveltyPlan.rotationReason
     },
     manual_refresh_instruction: refreshGuidance(state),
+    page_reload_instruction: pageReloadGuidance(state),
     user_themes: {
       values: state.input.customThemes.slice(0, 3),
       rule: 'Themes may influence at most 25% of wording. They must never override scene accuracy or fact boundaries.'

@@ -111,7 +111,7 @@ export type PerspectiveContentTrack =
   | 'philosophical_zoom_out'
   | 'unexpected_perspective';
 
-export type PerspectiveTrigger = 'initial_open' | 'manual_refresh' | 'emotion_click' | 'background_refill';
+export type PerspectiveTrigger = 'initial_open' | 'page_reload' | 'manual_refresh' | 'emotion_click' | 'background_refill';
 
 export type ConfirmedWorkStatus = 'workplace_arrival' | 'working' | 'off_work' | 'overtime';
 
@@ -214,6 +214,7 @@ export interface PerspectiveRouterContext {
   allow_context_sensing?: boolean;
   trigger?: PerspectiveTrigger;
   isManualRefresh?: boolean;
+  isPageReload?: boolean;
 
   // V3 Routing & Strategy Context
   isNewUser?: boolean;
