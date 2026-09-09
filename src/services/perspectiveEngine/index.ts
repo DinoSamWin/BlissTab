@@ -35,12 +35,12 @@ function compactHash(value: string): string {
 
 function refreshStage(input: PipelineState['input']): string {
   if (!input.isManualRefresh) return 'none';
-  if (input.consecutiveClicks === 1) return 'narrow_scope';
-  if (input.consecutiveClicks === 2) return 'offscreen_detail';
-  if (input.consecutiveClicks === 3) return 'interrupt';
-  if (input.consecutiveClicks === 4) return 'ordinary_life';
-  if (input.consecutiveClicks === 5) return 'leave_permission';
-  return 'wide_perspective';
+  if (input.consecutiveClicks === 1) return 'sensory_shift';
+  if (input.consecutiveClicks === 2) return 'object_focus';
+  if (input.consecutiveClicks === 3) return 'playful_interrupt';
+  if (input.consecutiveClicks === 4) return 'offscreen_life';
+  if (input.consecutiveClicks === 5) return 'concrete_reframe';
+  return 'leave_permission';
 }
 
 function buildStateFingerprint(state: Omit<PipelineState, 'stateFingerprint'>): string {

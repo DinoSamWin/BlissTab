@@ -164,6 +164,34 @@ const refreshLoop = stateFor({
 assert.equal(refreshLoop.sceneResolution.scene, 'refresh_loop');
 assert.equal(refreshLoop.strategy, 'interrupt');
 
+const expectedRefreshTracks = [
+  'sensory_reset',
+  'object_humor',
+  'playful_boundary',
+  'life_boundary',
+  'unexpected_perspective',
+  'permission_pause'
+] as const;
+const refreshFingerprints: string[] = [];
+const refreshDimensionTexts = expectedRefreshTracks.map((expectedTrack, index) => {
+  const state = stateFor({
+    local_time: '09:01',
+    trigger: 'manual_refresh',
+    isManualRefresh: true,
+    consecutiveClicks: index + 1
+  });
+  const fallback = getStateAwareFallback(state, 'Chinese (Simplified)');
+  assert.equal(state.noveltyPlan.targetTrack, expectedTrack);
+  assert.deepEqual(state.noveltyPlan.allowedTracks, [expectedTrack]);
+  refreshFingerprints.push(state.stateFingerprint);
+  assert.ok(fallback);
+  assert.equal(fallback.content_track, expectedTrack);
+  assert.doesNotMatch(fallback.text, /(不要着急|不用着急|慢慢来|不用马上|别.{0,8}(塞|排|装).{0,3}满)/u);
+  return fallback.text;
+});
+assert.equal(new Set(refreshDimensionTexts).size, expectedRefreshTracks.length);
+assert.equal(new Set(refreshFingerprints).size, expectedRefreshTracks.length);
+
 const similarity = calculateSimilarity(
   '人已经到今天了，脑子可以晚几分钟打卡。',
   '人先到了今天，脑子晚几分钟打卡也行。'
@@ -212,5 +240,22 @@ const vagueRefreshCandidate = validatePerspectiveCandidate({
 assert.equal(vagueRefreshCandidate.valid, false);
 assert.ok(vagueRefreshCandidate.reasons.includes('vague_or_literary_wording'));
 assert.ok(vagueRefreshCandidate.reasons.includes('repeated_scene_framing_on_refresh'));
+
+const repeatedPaceCandidate = validatePerspectiveCandidate({
+  text: '不用着急，今天的工作别马上塞得太满。',
+  style: 'sensory_reset',
+  track: 'A_PHYSICAL',
+  content_track: 'sensory_reset',
+  semantic_core: 'repeat_slow_start',
+  action_tag: 'slow_start',
+  object_tag: 'workday',
+  metaphor_tag: 'day_as_container',
+  opener_tag: 'pace_permission',
+  sentence_shape: 'permission_plus_boundary',
+  state_fingerprint: firstRefresh.stateFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, firstRefresh);
+assert.equal(repeatedPaceCandidate.valid, false);
+assert.ok(repeatedPaceCandidate.reasons.includes('repeated_pace_message_on_refresh'));
 
 console.log('Perspective engine deterministic checks passed.');

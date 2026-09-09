@@ -1,7 +1,7 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.1.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.2.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -65,13 +65,13 @@ const STRATEGY_GUIDANCE: Record<ResponseStrategy, string> = {
 function refreshGuidance(state: PipelineState): string | undefined {
   if (!state.input.isManualRefresh) return undefined;
   const streak = state.input.consecutiveClicks;
-  const shared = 'This is not the first line in this moment. Do not repeat the time-of-day, weekday, or holiday framing from the initial line. Use direct everyday wording and a different practical job.';
-  if (streak === 1) return `${shared} Narrow the moment to one simple thing; do not tell the user to speed up or optimize.`;
-  if (streak === 2) return `${shared} Shift to one ordinary off-screen detail or a brief visual change.`;
-  if (streak === 3) return `${shared} Lightly interrupt automatic refreshing without mentioning clicks or sounding annoyed.`;
-  if (streak === 4) return `${shared} Move decisively away from screen and work language toward ordinary life.`;
-  if (streak === 5) return `${shared} Give clear permission to leave the page for a while, without sounding concerned or clinical.`;
-  return `${shared} Use a concrete wider perspective. Do not become poetic, mystical, dramatic, or philosophical.`;
+  const shared = 'This is not the first line in this moment. Do not repeat the time-of-day, weekday, holiday, or pace framing from the initial line. Never say or paraphrase “不要着急”, “慢慢来”, “不用马上进入状态”, “别安排太满”, or “别把工作塞满”. The assigned content track is mandatory and must produce a genuinely different kind of message.';
+  if (streak === 1) return `${shared} SENSORY: give one safe, concrete visual shift, such as looking away from the screen for a few seconds.`;
+  if (streak === 2) return `${shared} OBJECT: use one ordinary visible object as the focus. Do not assume a specific object is present; invite the user to pick one.`;
+  if (streak === 3) return `${shared} PLAYFUL INTERRUPTION: use a clear browser or page joke to break the loop without mentioning clicks or sounding annoyed.`;
+  if (streak === 4) return `${shared} LIFE OUTSIDE THE SCREEN: name one small, concrete off-screen activity. Do not turn it into work advice.`;
+  if (streak === 5) return `${shared} UNEXPECTED PERSPECTIVE: offer one concrete reframe about why another sentence is not necessary.`;
+  return `${shared} PERMISSION: clearly say the page can be left or closed for now.`;
 }
 
 /** Builds the compact, auditable policy packet sent to the existing model. */
@@ -119,7 +119,10 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       english_length: '7-16 words preferred; hard maximum 90 total characters',
       sentence_count: 1,
       first_item_must_use_target_track: true,
-      remaining_items_should_rotate_allowed_tracks: true,
+      remaining_items_should_rotate_allowed_tracks: !state.input.isManualRefresh,
+      manual_refresh_rule: state.input.isManualRefresh
+        ? 'Every item in this batch must use the single assigned content track. Vary wording and semantic core within that dimension only.'
+        : undefined,
       every_item_must_have_distinct_semantic_core: true,
       directness_check: 'A user must understand the literal point immediately. Rewrite any line that mainly relies on metaphor, personification, or an abstract phrase.',
       json_shape: {

@@ -11,6 +11,21 @@ const DEFAULT_TRACKS: PerspectiveContentTrack[] = [
   'unexpected_perspective'
 ];
 
+const REFRESH_TRACK_SEQUENCE: PerspectiveContentTrack[] = [
+  'sensory_reset',
+  'object_humor',
+  'playful_boundary',
+  'life_boundary',
+  'unexpected_perspective',
+  'permission_pause'
+];
+
+/** Manual refreshes rotate by product rule, not by a random model choice. */
+export function getRefreshTargetTrack(consecutiveClicks: number): PerspectiveContentTrack {
+  const index = Math.min(Math.max(1, consecutiveClicks), REFRESH_TRACK_SEQUENCE.length) - 1;
+  return REFRESH_TRACK_SEQUENCE[index];
+}
+
 function hashString(value: string): number {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i += 1) {
@@ -33,7 +48,7 @@ function allowedTracksFor(
   }
 
   if (resolution.scene === 'refresh_loop') {
-    return ['unexpected_perspective', 'playful_boundary', 'sensory_reset', 'permission_pause'];
+    return [getRefreshTargetTrack(input.consecutiveClicks)];
   }
   if (resolution.scene === 'overloaded_browser' || strategy === 'reduce') {
     return ['playful_boundary', 'grounded_observation', 'permission_pause', 'life_boundary'];
@@ -84,15 +99,24 @@ export function buildNoveltyPlan(
     history.length
   ].join(':'));
 
-  let selectedIndex = seed % allowedTracks.length;
-  for (let offset = 0; offset < allowedTracks.length; offset += 1) {
-    const candidateIndex = (selectedIndex + offset) % allowedTracks.length;
-    if (!recentTracks.includes(allowedTracks[candidateIndex])) {
-      selectedIndex = candidateIndex;
-      break;
+  const forcedRefreshTrack = resolution.scene === 'refresh_loop'
+    ? getRefreshTargetTrack(input.consecutiveClicks)
+    : undefined;
+  let targetTrack: PerspectiveContentTrack;
+
+  if (forcedRefreshTrack) {
+    targetTrack = forcedRefreshTrack;
+  } else {
+    let selectedIndex = seed % allowedTracks.length;
+    for (let offset = 0; offset < allowedTracks.length; offset += 1) {
+      const candidateIndex = (selectedIndex + offset) % allowedTracks.length;
+      if (!recentTracks.includes(allowedTracks[candidateIndex])) {
+        selectedIndex = candidateIndex;
+        break;
+      }
     }
+    targetTrack = allowedTracks[selectedIndex];
   }
-  const targetTrack = allowedTracks[selectedIndex];
 
   return {
     targetTrack,
@@ -104,8 +128,10 @@ export function buildNoveltyPlan(
     avoidOpeners: recentUnique(history, 'openerTag', 8).slice(0, 6),
     avoidSentenceShapes: recentUnique(history, 'sentenceShape', 5).slice(0, 4),
     recentTexts: history.slice(0, 2).map(item => item.text.slice(0, 48)),
-    rotationReason: recentTracks.length > 0
-      ? `rotated_away_from:${recentTracks.join(',')}`
-      : `daily_scene_seed:${seed % 997}`
+    rotationReason: forcedRefreshTrack
+      ? `manual_refresh_${Math.min(input.consecutiveClicks, REFRESH_TRACK_SEQUENCE.length)}:${forcedRefreshTrack}`
+      : recentTracks.length > 0
+        ? `rotated_away_from:${recentTracks.join(',')}`
+        : `daily_scene_seed:${seed % 997}`
   };
 }

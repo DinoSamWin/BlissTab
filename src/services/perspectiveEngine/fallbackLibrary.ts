@@ -66,28 +66,28 @@ const OVERRIDE_ZH: Partial<Record<PipelineState['sceneResolution']['scene'], Tem
 
 const REFRESH_ZH: Record<'first' | 'second' | 'third' | 'fourth' | 'fifth' | 'later', Template[]> = {
   first: [
-    { text: '先只管眼前最简单的一件，其他的晚点再说。', content_track: 'permission_pause', semantic_core: 'refresh_narrow_to_one_simple_thing', action_tag: 'narrow_to_one', object_tag: 'simple_thing', metaphor_tag: 'none', opener_tag: 'first_refresh_scope', sentence_shape: 'direct_action_plus_permission' },
-    { text: '现在不用把事情想全，先顾好眼前这一小步。', content_track: 'unexpected_perspective', semantic_core: 'refresh_drop_full_plan', action_tag: 'drop_full_plan', object_tag: 'next_step', metaphor_tag: 'none', opener_tag: 'first_refresh_now', sentence_shape: 'direct_permission_plus_action' }
+    { text: '先看几秒远处，让眼睛从屏幕上换个焦点。', content_track: 'sensory_reset', semantic_core: 'refresh_look_far_for_seconds', action_tag: 'look_far', object_tag: 'distant_view', metaphor_tag: 'none', opener_tag: 'first_refresh_visual', sentence_shape: 'single_direct_visual_action' },
+    { text: '把视线移到远一点的地方，停几秒再看屏幕。', content_track: 'sensory_reset', semantic_core: 'refresh_move_gaze_offscreen', action_tag: 'move_gaze', object_tag: 'offscreen_view', metaphor_tag: 'none', opener_tag: 'first_refresh_gaze', sentence_shape: 'direct_visual_action_plus_return' }
   ],
   second: [
-    { text: '先把眼睛从屏幕上移开几秒，看看远一点的地方。', content_track: 'sensory_reset', semantic_core: 'refresh_look_far_briefly', action_tag: 'look_far', object_tag: 'view', metaphor_tag: 'none', opener_tag: 'second_refresh_visual', sentence_shape: 'single_direct_action' },
-    { text: '看看桌上随手能摸到的东西，先换一下注意力。', content_track: 'sensory_reset', semantic_core: 'refresh_notice_nearby_object', action_tag: 'notice_object', object_tag: 'nearby_object', metaphor_tag: 'none', opener_tag: 'second_refresh_object', sentence_shape: 'concrete_action_plus_reason' }
+    { text: '随便选一样看得见的小东西，认真看它几秒。', content_track: 'object_humor', semantic_core: 'refresh_pick_visible_object', action_tag: 'notice_object', object_tag: 'visible_object', metaphor_tag: 'none', opener_tag: 'second_refresh_pick', sentence_shape: 'direct_object_invitation' },
+    { text: '让电脑自己忙一会儿，你先看看旁边的普通东西。', content_track: 'object_humor', semantic_core: 'refresh_let_computer_run', action_tag: 'notice_nearby_object', object_tag: 'computer', metaphor_tag: 'computer_busy', opener_tag: 'second_refresh_computer', sentence_shape: 'light_object_joke_plus_action' }
   ],
   third: [
     { text: '这句没说到点上也没关系，先去做点别的。', content_track: 'playful_boundary', semantic_core: 'refresh_line_can_miss', action_tag: 'do_something_else', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'third_refresh_line', sentence_shape: 'acknowledgment_plus_direct_action' },
-    { text: '先别急着找下一句，离开屏幕一会儿也可以。', content_track: 'permission_pause', semantic_core: 'refresh_stop_searching', action_tag: 'leave_screen', object_tag: 'screen', metaphor_tag: 'none', opener_tag: 'third_refresh_stop', sentence_shape: 'direct_boundary_plus_permission' }
+    { text: '浏览器不会介意你少看它一会儿。', content_track: 'playful_boundary', semantic_core: 'refresh_browser_does_not_mind', action_tag: 'look_away', object_tag: 'browser', metaphor_tag: 'browser_has_opinion', opener_tag: 'third_refresh_browser', sentence_shape: 'clear_object_joke' }
   ],
   fourth: [
-    { text: '喝口水或者走两步，先做点和屏幕无关的事。', content_track: 'sensory_reset', semantic_core: 'refresh_choose_offscreen_action', action_tag: 'brief_offscreen_action', object_tag: 'body', metaphor_tag: 'none', opener_tag: 'fourth_refresh_action', sentence_shape: 'concrete_options_plus_boundary' },
-    { text: '去别的地方待一会儿也行，这个页面可以晚点再看。', content_track: 'permission_pause', semantic_core: 'refresh_change_place', action_tag: 'change_place', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'fourth_refresh_place', sentence_shape: 'permission_plus_direct_boundary' }
+    { text: '去倒杯水、走两步，或者做件和屏幕无关的小事。', content_track: 'life_boundary', semantic_core: 'refresh_choose_offscreen_activity', action_tag: 'do_offscreen_activity', object_tag: 'ordinary_life', metaphor_tag: 'none', opener_tag: 'fourth_refresh_activity', sentence_shape: 'concrete_offscreen_options' },
+    { text: '先整理一下手边的东西，几分钟后再回来。', content_track: 'life_boundary', semantic_core: 'refresh_tidy_something_nearby', action_tag: 'tidy_nearby', object_tag: 'nearby_things', metaphor_tag: 'none', opener_tag: 'fourth_refresh_tidy', sentence_shape: 'ordinary_action_plus_return' }
   ],
   fifth: [
-    { text: '现在可以先关掉这个页面，过一会儿再回来。', content_track: 'permission_pause', semantic_core: 'refresh_close_page_for_now', action_tag: 'close_page', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'fifth_refresh_close', sentence_shape: 'direct_permission_plus_later' },
-    { text: '先离开屏幕一会儿，这里的内容不会跑掉。', content_track: 'playful_boundary', semantic_core: 'refresh_content_will_remain', action_tag: 'leave_screen', object_tag: 'page_content', metaphor_tag: 'content_running_away', opener_tag: 'fifth_refresh_leave', sentence_shape: 'direct_action_plus_light_joke' }
+    { text: '换再多句，也不如真的离开屏幕几分钟。', content_track: 'unexpected_perspective', semantic_core: 'refresh_more_lines_are_not_a_break', action_tag: 'take_real_break', object_tag: 'new_lines', metaphor_tag: 'none', opener_tag: 'fifth_refresh_more_lines', sentence_shape: 'contrast_plus_concrete_reframe' },
+    { text: '下一句话不是必需的，几分钟不看屏幕也可以。', content_track: 'unexpected_perspective', semantic_core: 'refresh_next_line_not_required', action_tag: 'skip_next_line', object_tag: 'next_line', metaphor_tag: 'none', opener_tag: 'fifth_refresh_not_required', sentence_shape: 'direct_reframe_plus_permission' }
   ],
   later: [
-    { text: '今天不用每件事都有结果，没做完的以后再说。', content_track: 'unexpected_perspective', semantic_core: 'refresh_results_can_wait', action_tag: 'allow_unfinished', object_tag: 'unfinished_things', metaphor_tag: 'none', opener_tag: 'later_refresh_results', sentence_shape: 'direct_permission_plus_boundary' },
-    { text: '先去做点和屏幕无关的事，哪怕只有几分钟。', content_track: 'permission_pause', semantic_core: 'refresh_take_offscreen_minutes', action_tag: 'leave_screen', object_tag: 'offscreen_time', metaphor_tag: 'none', opener_tag: 'later_refresh_offscreen', sentence_shape: 'direct_action_plus_small_duration' }
+    { text: '这个页面可以先关掉，想回来时再回来。', content_track: 'permission_pause', semantic_core: 'refresh_page_can_close', action_tag: 'close_page', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'later_refresh_close', sentence_shape: 'direct_permission_plus_return' },
+    { text: '先离开屏幕一会儿，这里的内容不会跑掉。', content_track: 'permission_pause', semantic_core: 'refresh_content_will_remain', action_tag: 'leave_screen', object_tag: 'page_content', metaphor_tag: 'content_running_away', opener_tag: 'later_refresh_leave', sentence_shape: 'direct_action_plus_light_joke' }
   ]
 };
 

@@ -27,6 +27,15 @@ const VAGUE_LITERARY_PATTERNS = [
   /脑子.{0,6}(?:满格|打卡)/u,
   /注意力.{0,6}(?:站着|结账)/u
 ];
+const REFRESH_PACE_PATTERNS = [
+  /(?:不要|不用|不必|别).{0,4}(?:着急|急着)/u,
+  /(?:慢慢来|慢一点|放慢|慢慢(?:开始|进入|做))/u,
+  /(?:不要|不用|不必|别).{0,6}(?:马上|立刻).{0,8}(?:开始|进入|忙|开工|处理|做)/u,
+  /(?:不要|不用|不必|别).{0,5}(?:把)?(?:今天|工作|事情|任务).{0,8}(?:塞|排|装|挤).{0,3}满/u,
+  /(?:塞|排|装|挤).{0,4}(?:太满|很满|满满)/u,
+  /按.{0,4}(?:平常|正常).{0,3}(?:速度|节奏)/u,
+  /节奏.{0,5}(?:放慢|慢|接满|排满)/u
+];
 const VALID_TRACKS = new Set(['A_PHYSICAL', 'B_TIME_ECHO', 'C_EMOTION', 'D_THEME', 'E_QUESTION']);
 
 function sanitizeText(text: string): string {
@@ -158,6 +167,9 @@ export function validatePerspectiveCandidate(
   if (CLICHE_PATTERNS.some(pattern => pattern.test(text))) reasons.push('cliche_or_coaching');
   if (VAGUE_LITERARY_PATTERNS.some(pattern => pattern.test(text))) reasons.push('vague_or_literary_wording');
   if (repeatsResolvedSceneFraming(text, state)) reasons.push('repeated_scene_framing_on_refresh');
+  if (state.input.isManualRefresh && REFRESH_PACE_PATTERNS.some(pattern => pattern.test(text))) {
+    reasons.push('repeated_pace_message_on_refresh');
+  }
 
   const length = visibleLength(text);
   const isChinese = /[\u3400-\u9fff\uf900-\ufaff]/u.test(text);
