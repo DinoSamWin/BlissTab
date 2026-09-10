@@ -3,7 +3,9 @@ import { Intent, SceneResolution } from './types';
 /** Intent is a response job, not a diagnosis of the user. */
 export function resolveIntent(resolution: SceneResolution): Intent {
   switch (resolution.scene) {
-    case 'emotional_checkin': return 'emotional_acknowledgment';
+    case 'emotional_checkin':
+    case 'emotional_followup':
+      return 'emotional_acknowledgment';
     case 'refresh_loop': return 'interrupt_autopilot';
     case 'quiet_return': return 'gentle_re_entry';
     case 'overloaded_browser': return 'reduce_scope';

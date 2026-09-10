@@ -52,8 +52,8 @@ function allowedTracksFor(
   resolution: SceneResolution,
   strategy: ResponseStrategy
 ): PerspectiveContentTrack[] {
-  if (resolution.scene === 'emotional_checkin') {
-    if (['angry', 'sad', 'anxious', 'exhausted'].includes(input.clickedEmotion || '')) {
+  if (resolution.scene === 'emotional_checkin' || resolution.scene === 'emotional_followup') {
+    if (['angry', 'sad', 'anxious', 'exhausted'].includes(input.activeEmotion || '')) {
       return ['grounded_observation', 'permission_pause', 'sensory_reset', 'life_boundary'];
     }
     return ['playful_boundary', 'grounded_observation', 'unexpected_perspective', 'object_humor'];
@@ -142,7 +142,11 @@ export function buildNoveltyPlan(
     targetTrack = sceneAllowedTracks[selectedIndex];
   }
 
-  const cacheFillTracks = (!input.isManualRefresh || input.isNewEnvironment) && !input.clickedEmotion
+  const cacheFillTracks = (
+    (!input.isManualRefresh || input.isNewEnvironment)
+    && !input.clickedEmotion
+    && !input.isEmotionFollowup
+  )
     ? REFRESH_TRACK_SEQUENCE
     : [];
   const allowedTracks = [

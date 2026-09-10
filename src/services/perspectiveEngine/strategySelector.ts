@@ -9,7 +9,7 @@ export function selectResponseStrategy(
   if (resolution.scene === 'refresh_loop') return 'interrupt';
   if (resolution.scene === 'overloaded_browser') return 'reduce';
 
-  if (resolution.scene === 'emotional_checkin') {
+  if (resolution.scene === 'emotional_checkin' || resolution.scene === 'emotional_followup') {
     if (emotionBias === 'anxious' || emotionBias === 'scattered') return 'ground';
     if (emotionBias === 'tired' || emotionBias === 'heavy') return 'soothe';
     return 'mirror';

@@ -3,8 +3,10 @@ import { calculateSimilarity } from './src/services/perspectiveService.ts';
 import {
   STARTLY_PROMPT_VERSION,
   countRecentProductivityLines,
+  EMOTION_FOLLOWUP_WINDOW_MS,
   getStateAwareFallback,
   isProductivityPlanningText,
+  resolveEmotionTransition,
   runCompanionPipeline,
   validatePerspectiveCandidate
 } from './src/services/perspectiveEngine/index.ts';
@@ -19,6 +21,13 @@ import {
   isPageReloadNavigation,
   REFRESH_STREAK_WINDOW_MS,
 } from './src/services/refreshStreakService.ts';
+import {
+  readPerspectiveRefreshCheckpoint,
+  resolveReturnRefreshDecision,
+  RETURN_REFRESH_MAX_STATE_AGE_MS,
+  RETURN_REFRESH_MIN_AWAY_MS,
+  savePerspectiveRefreshCheckpoint
+} from './src/services/perspectiveReturnRefreshService.ts';
 
 function context(overrides: Partial<PerspectiveRouterContext>): PerspectiveRouterContext {
   return {
@@ -63,6 +72,91 @@ assert.equal(advanceRefreshStreak(1000, refreshStorage).count, 1);
 assert.equal(initializePageRefreshStreak(true, 2000, refreshStorage).count, 1);
 assert.equal(advanceRefreshStreak(2000, refreshStorage).count, 2);
 assert.equal(advanceRefreshStreak(2000 + REFRESH_STREAK_WINDOW_MS + 1, refreshStorage).count, 1);
+
+const returnStorage = memoryStorage();
+const eightAm = Date.parse('2026-09-10T08:00:00+08:00');
+const refreshCheckpoint = savePerspectiveRefreshCheckpoint({
+  refreshedAt: eightAm,
+  localDate: '2026-09-10',
+  timeBlock: 'arrival_window'
+}, returnStorage);
+assert.deepEqual(readPerspectiveRefreshCheckpoint(returnStorage), refreshCheckpoint);
+
+const nineAmReturn = resolveReturnRefreshDecision({
+  now: Date.parse('2026-09-10T09:00:00+08:00'),
+  hiddenAt: eightAm,
+  localDate: '2026-09-10',
+  localTime: '09:00',
+  checkpoint: refreshCheckpoint
+});
+assert.equal(nineAmReturn.shouldRefresh, false);
+assert.equal(nineAmReturn.reason, 'same_state_fresh');
+
+const tenAmReturn = resolveReturnRefreshDecision({
+  now: Date.parse('2026-09-10T10:00:00+08:00'),
+  hiddenAt: Date.parse('2026-09-10T09:00:00+08:00'),
+  localDate: '2026-09-10',
+  localTime: '10:00',
+  checkpoint: refreshCheckpoint
+});
+assert.equal(tenAmReturn.shouldRefresh, false);
+assert.equal(tenAmReturn.reason, 'same_state_fresh');
+
+const noonReturn = resolveReturnRefreshDecision({
+  now: Date.parse('2026-09-10T12:00:00+08:00'),
+  hiddenAt: Date.parse('2026-09-10T10:00:00+08:00'),
+  localDate: '2026-09-10',
+  localTime: '12:00',
+  checkpoint: refreshCheckpoint
+});
+assert.equal(noonReturn.shouldRefresh, true);
+assert.equal(noonReturn.reason, 'stage_changed');
+
+const lunchBoundaryReturn = resolveReturnRefreshDecision({
+  now: Date.parse('2026-09-10T12:20:00+08:00'),
+  hiddenAt: Date.parse('2026-09-10T11:50:00+08:00'),
+  localDate: '2026-09-10',
+  localTime: '12:20',
+  checkpoint: {
+    refreshedAt: Date.parse('2026-09-10T11:50:00+08:00'),
+    localDate: '2026-09-10',
+    timeBlock: 'pre_lunch',
+    stageGroup: 'pre_lunch'
+  }
+});
+assert.equal(lunchBoundaryReturn.shouldRefresh, true);
+assert.equal(lunchBoundaryReturn.reason, 'stage_changed');
+
+const shortNoonReturn = resolveReturnRefreshDecision({
+  now: Date.parse('2026-09-10T12:00:00+08:00'),
+  hiddenAt: Date.parse('2026-09-10T11:50:01+08:00'),
+  localDate: '2026-09-10',
+  localTime: '12:00',
+  checkpoint: refreshCheckpoint
+});
+assert.equal(shortNoonReturn.shouldRefresh, false);
+assert.equal(shortNoonReturn.reason, 'away_too_short');
+assert.ok(shortNoonReturn.awayMs < RETURN_REFRESH_MIN_AWAY_MS);
+
+const staleMorningReturn = resolveReturnRefreshDecision({
+  now: eightAm + RETURN_REFRESH_MAX_STATE_AGE_MS,
+  hiddenAt: eightAm + RETURN_REFRESH_MAX_STATE_AGE_MS - RETURN_REFRESH_MIN_AWAY_MS,
+  localDate: '2026-09-10',
+  localTime: '12:00',
+  checkpoint: {
+    ...refreshCheckpoint,
+    timeBlock: 'midday_break',
+    stageGroup: 'midday'
+  }
+});
+assert.equal(staleMorningReturn.shouldRefresh, true);
+assert.equal(staleMorningReturn.reason, 'state_stale');
+
+assert.equal(resolveEmotionTransition('happy', 'happy'), 'same_emotion');
+assert.equal(resolveEmotionTransition('happy', 'sad'), 'uplift');
+assert.equal(resolveEmotionTransition('sad', 'happy'), 'drop');
+assert.equal(resolveEmotionTransition('neutral', 'angry'), 'settling');
+assert.equal(resolveEmotionTransition('sad', 'angry'), 'difficult_shift');
 
 const stableInitialState = stateFor({ local_time: '09:58' });
 const stableReloadState = stateFor({
@@ -264,6 +358,113 @@ const anxious = stateFor({ clickedEmotion: 'anxious', trigger: 'emotion_click' }
 assert.equal(anxious.sceneResolution.scene, 'emotional_checkin');
 assert.equal(anxious.emotionBias, 'anxious');
 assert.equal(anxious.strategy, 'ground');
+
+for (const emotion of ['happy', 'neutral', 'angry', 'anxious', 'sad', 'exhausted'] as const) {
+  const emotionState = stateFor({ clickedEmotion: emotion, trigger: 'emotion_click' });
+  const fallback = getStateAwareFallback(emotionState, 'Chinese (Simplified)');
+  assert.ok(fallback);
+  assert.equal(validatePerspectiveCandidate(fallback, emotionState).valid, true);
+}
+
+const repeatedHappy = stateFor({
+  clickedEmotion: 'happy',
+  previous_emotion: 'happy',
+  trigger: 'emotion_click'
+});
+assert.equal(repeatedHappy.input.emotionTransition, 'same_emotion');
+assert.equal(repeatedHappy.sceneResolution.scene, 'emotional_checkin');
+assert.match(runCompanionPipeline(context({
+  clickedEmotion: 'happy',
+  previous_emotion: 'happy',
+  trigger: 'emotion_click'
+}), 'Chinese (Simplified)', 4).user, /same emotion was selected again/i);
+assert.match(getStateAwareFallback(repeatedHappy, 'Chinese (Simplified)')?.text || '', /(还是很开心|高兴)/u);
+
+const sadnessToHappiness = stateFor({
+  clickedEmotion: 'happy',
+  previous_emotion: 'sad',
+  trigger: 'emotion_click'
+});
+assert.equal(sadnessToHappiness.input.emotionTransition, 'uplift');
+assert.match(getStateAwareFallback(sadnessToHappiness, 'Chinese (Simplified)')?.text || '', /现在开心起来/u);
+
+const happinessToSadness = stateFor({
+  clickedEmotion: 'sad',
+  previous_emotion: 'happy',
+  trigger: 'emotion_click'
+});
+assert.equal(happinessToSadness.input.emotionTransition, 'drop');
+assert.ok(happinessToSadness.knownFacts.includes('previous_explicit_emotion:happy'));
+assert.match(getStateAwareFallback(happinessToSadness, 'Chinese (Simplified)')?.text || '', /(现在却难过|落差)/u);
+
+const emotionFollowupObservedAt = Date.now();
+const sadEmotionFollowup = stateFor({
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  previous_emotion: 'sad',
+  previous_emotion_at: emotionFollowupObservedAt - EMOTION_FOLLOWUP_WINDOW_MS + 1,
+  context_observed_at: emotionFollowupObservedAt,
+  consecutiveClicks: 5
+});
+assert.equal(sadEmotionFollowup.input.isEmotionFollowup, true);
+assert.equal(sadEmotionFollowup.input.activeEmotion, 'sad');
+assert.equal(sadEmotionFollowup.input.emotionTransition, 'followup');
+assert.equal(sadEmotionFollowup.sceneResolution.scene, 'emotional_followup');
+assert.notEqual(sadEmotionFollowup.dimension, 'philosophical');
+const sadFollowupPrompt = runCompanionPipeline(context({
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  previous_emotion: 'sad',
+  previous_emotion_at: emotionFollowupObservedAt - 1000,
+  context_observed_at: emotionFollowupObservedAt,
+  consecutiveClicks: 5
+}), 'Chinese (Simplified)', 4).user;
+assert.match(sadFollowupPrompt, /New Perspective shortly after explicitly selecting an emotion/i);
+assert.doesNotMatch(sadFollowupPrompt, /GROUNDED PHILOSOPHY/);
+assert.match(getStateAwareFallback(sadEmotionFollowup, 'Chinese (Simplified)')?.text || '', /(不解决什么也可以|少要求自己)/u);
+
+for (const emotion of ['happy', 'neutral', 'angry', 'anxious', 'sad', 'exhausted'] as const) {
+  const followupState = stateFor({
+    trigger: 'manual_refresh',
+    isManualRefresh: true,
+    previous_emotion: emotion,
+    previous_emotion_at: emotionFollowupObservedAt - 1000,
+    context_observed_at: emotionFollowupObservedAt
+  });
+  const fallback = getStateAwareFallback(followupState, 'Chinese (Simplified)');
+  assert.ok(fallback);
+  assert.equal(validatePerspectiveCandidate(fallback, followupState).valid, true);
+}
+
+const expiredEmotionFollowup = stateFor({
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  previous_emotion: 'sad',
+  previous_emotion_at: emotionFollowupObservedAt - EMOTION_FOLLOWUP_WINDOW_MS - 1,
+  context_observed_at: emotionFollowupObservedAt,
+  consecutiveClicks: 5
+});
+assert.equal(expiredEmotionFollowup.input.isEmotionFollowup, false);
+assert.equal(expiredEmotionFollowup.input.previousEmotion, undefined);
+assert.equal(expiredEmotionFollowup.sceneResolution.scene, 'refresh_loop');
+
+const genericHappyCandidate = validatePerspectiveCandidate({
+  text: '这一会儿先看看窗外，页面可以晚一点再处理。',
+  style: 'grounded_observation',
+  track: 'D_THEME',
+  content_track: 'grounded_observation',
+  semantic_core: 'generic_without_happy_ack',
+  action_tag: 'look_away',
+  object_tag: 'current_page',
+  metaphor_tag: 'none',
+  opener_tag: 'generic_moment',
+  sentence_shape: 'action_plus_permission',
+  state_fingerprint: repeatedHappy.stateFingerprint,
+  environment_fingerprint: repeatedHappy.environmentFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, repeatedHappy);
+assert.equal(genericHappyCandidate.valid, false);
+assert.ok(genericHappyCandidate.reasons.includes('missing_emotion_acknowledgment'));
 
 const firstRefresh = stateFor({
   local_time: '07:00',

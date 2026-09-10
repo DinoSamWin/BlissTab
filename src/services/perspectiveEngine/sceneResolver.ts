@@ -98,6 +98,9 @@ export function resolveScene(input: EngineInput): SceneResolution {
   if (input.clickedEmotion) {
     scene = 'emotional_checkin';
     evidence.unshift(`explicit_emotion:${input.clickedEmotion}`);
+  } else if (input.isEmotionFollowup && input.activeEmotion) {
+    scene = 'emotional_followup';
+    evidence.unshift(`recent_explicit_emotion:${input.activeEmotion}`);
   } else if (modifiers.includes('manual_refresh')) {
     scene = 'refresh_loop';
   } else if (modifiers.includes('recent_return')) {

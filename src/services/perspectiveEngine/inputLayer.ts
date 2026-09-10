@@ -1,5 +1,6 @@
-import { PerspectiveRouterContext, WorkSchedule } from '../../types';
-import { EngineInput, IdleBucket, TabCountBucket, TimeBlock } from './types';
+import type { PerspectiveRouterContext, WorkSchedule } from '../../types';
+import type { EngineInput, IdleBucket, TabCountBucket, TimeBlock } from './types';
+import { resolveEmotionTransition } from './emotionBiasResolver';
 
 const DEFAULT_WORK_SCHEDULE: Required<Omit<WorkSchedule, 'workDays'>> = {
   workStart: '09:00',
@@ -8,6 +9,8 @@ const DEFAULT_WORK_SCHEDULE: Required<Omit<WorkSchedule, 'workDays'>> = {
   workEnd: '18:00'
 };
 const BROWSER_SIGNAL_MAX_AGE_MS = 2 * 60 * 1000;
+export const EMOTION_FOLLOWUP_WINDOW_MS = 15 * 60 * 1000;
+export const EMOTION_TRANSITION_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 function parseMinute(value: string | undefined, fallback: string): number {
   const source = /^\d{2}:\d{2}$/.test(value || '') ? value! : fallback;
@@ -119,6 +122,23 @@ export function buildEngineInput(context: PerspectiveRouterContext): EngineInput
         : context.isPageReload
           ? 'page_reload'
           : 'initial_open');
+  const observedAt = typeof context.context_observed_at === 'number'
+    ? context.context_observed_at
+    : Date.now();
+  const previousEmotionAge = typeof context.previous_emotion_at === 'number'
+    ? observedAt - context.previous_emotion_at
+    : Number.POSITIVE_INFINITY;
+  const previousEmotionIsFresh = previousEmotionAge >= 0
+    && previousEmotionAge <= EMOTION_FOLLOWUP_WINDOW_MS;
+  const isEmotionFollowup = trigger === 'manual_refresh'
+    && !context.clickedEmotion
+    && !!context.previous_emotion
+    && previousEmotionIsFresh;
+  const previousEmotion = context.clickedEmotion || isEmotionFollowup
+    ? context.previous_emotion
+    : undefined;
+  const activeEmotion = context.clickedEmotion
+    || (isEmotionFollowup ? previousEmotion : undefined);
   const lastHistoryBlock = context.recent_history?.[0]?.timeBlock;
   const weatherKnown = !!context.weather && !['unknown', 'sunny'].includes(context.weather.toLowerCase());
   const screenModeKnown = browserSignalsFresh
@@ -151,6 +171,12 @@ export function buildEngineInput(context: PerspectiveRouterContext): EngineInput
     reentryState,
 
     clickedEmotion: context.clickedEmotion,
+    previousEmotion,
+    activeEmotion,
+    emotionTransition: isEmotionFollowup
+      ? 'followup'
+      : resolveEmotionTransition(context.clickedEmotion, previousEmotion),
+    isEmotionFollowup,
     trigger,
     rawTabCount,
     rawIdleMinutes: idleSeconds === undefined ? undefined : Math.floor(idleSeconds / 60),

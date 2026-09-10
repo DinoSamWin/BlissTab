@@ -45,6 +45,12 @@ export function getEmotionLogs(): EmotionLog[] {
     }
 }
 
+export function getMostRecentEmotionLog(): EmotionLog | undefined {
+    return getEmotionLogs()
+        .filter(log => Number.isFinite(log.timestamp))
+        .sort((left, right) => right.timestamp - left.timestamp)[0];
+}
+
 /**
  * Calculate the user's emotional baseline over the last 48 hours.
  * Based on EmotionLog scores.

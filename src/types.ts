@@ -111,7 +111,7 @@ export type PerspectiveContentTrack =
   | 'philosophical_zoom_out'
   | 'unexpected_perspective';
 
-export type PerspectiveTrigger = 'initial_open' | 'page_reload' | 'manual_refresh' | 'emotion_click' | 'background_refill';
+export type PerspectiveTrigger = 'initial_open' | 'page_reload' | 'manual_refresh' | 'emotion_click' | 'auto_return' | 'background_refill';
 
 export type ConfirmedWorkStatus = 'workplace_arrival' | 'working' | 'off_work' | 'overtime';
 
@@ -195,6 +195,9 @@ export interface PerspectiveRouterContext {
   battery_level?: number;
   // V7.0 Emotion & ECRA Context
   clickedEmotion?: EmotionType;
+  /** Most recent explicit emotion, used only for transition/follow-up rules. */
+  previous_emotion?: EmotionType;
+  previous_emotion_at?: number;
   emotionalBaseline?: number;
   bypassPool?: boolean;
   historyKeywords?: string[];

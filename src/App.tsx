@@ -14,7 +14,7 @@ import { canonicalizeUrl } from './services/urlCanonicalService';
 import { getLocalLogoDataUrl, downloadAndCacheLogo } from './services/gatewayLogoCacheService';
 import { fetchUserGatewayOverrides, getLogoSignedUrl } from './services/supabaseService';
 import { EmotionType, TrackType } from './types';
-import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns, getEmotionLogs } from './services/emotionService';
+import { saveEmotionLog, calculateEmotionalBaseline, getTodayEmotionClickCount, analyzeEmotionalPatterns, getEmotionLogs, getMostRecentEmotionLog } from './services/emotionService';
 import { updateTrackAffinity } from './services/recommendationEngine';
 import { startTabPresence, getWebTabCount } from './services/tabPresenceService';
 import {
@@ -22,6 +22,13 @@ import {
   initializePageRefreshStreak,
   resetRefreshStreak,
 } from './services/refreshStreakService';
+import { EMOTION_FOLLOWUP_WINDOW_MS, EMOTION_TRANSITION_WINDOW_MS } from './services/perspectiveEngine';
+import {
+  readPerspectiveRefreshCheckpoint,
+  resolveReturnRefreshDecision,
+  savePerspectiveRefreshCheckpoint
+} from './services/perspectiveReturnRefreshService';
+import type { TimeBlock } from './services/perspectiveEngine';
 import { useUser } from './contexts/UserContext';
 import Settings from './components/Settings';
 import i18n from './i18n';
@@ -49,7 +56,7 @@ const CONTEXT_SENSING_CONSENT_KEY = 'startlytab_context_sensing_consent';
 const LAST_PERSPECTIVE_OPEN_KEY = 'startlytab_last_perspective_open';
 
 type ContextSensingConsent = 'granted' | 'denied' | null;
-type PerspectiveRegenerationSource = 'manual' | 'page_reload';
+type PerspectiveRegenerationSource = 'manual' | 'page_reload' | 'auto_return';
 
 const readContextSensingConsent = (): ContextSensingConsent => {
   if (typeof window === 'undefined') return null;
@@ -220,6 +227,25 @@ const EmotionalPulsePerceiver: React.FC<{ emotion: EmotionType | null; currentLa
   );
 };
 
+const PerspectiveRefreshLoader: React.FC<{ currentLang: string }> = ({ currentLang }) => {
+  const isChinese = currentLang === 'Chinese (Simplified)';
+  return (
+    <div
+      className="flex w-[min(80vw,36rem)] max-w-xl flex-col items-center gap-4 px-8 py-8"
+      role="status"
+      aria-live="polite"
+      aria-label={isChinese ? '正在更新当前提示' : 'Updating this perspective'}
+    >
+      <div className="h-3 w-3/4 animate-pulse rounded-full bg-black/10 dark:bg-white/15" />
+      <div className="h-3 w-full animate-pulse rounded-full bg-black/[0.07] dark:bg-white/10 [animation-delay:120ms]" />
+      <div className="h-3 w-2/5 animate-pulse rounded-full bg-black/[0.05] dark:bg-white/[0.08] [animation-delay:240ms]" />
+      <span className="mt-1 font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-black/35 dark:text-white/35">
+        {isChinese ? '正在看看这一刻适合说什么' : 'Finding the right words for this moment'}
+      </span>
+    </div>
+  );
+};
+
 // Check if we were opened by the extension and cache it
 if (typeof window !== 'undefined') {
   const params = new URLSearchParams(window.location.search);
@@ -348,6 +374,7 @@ const App: React.FC = () => {
   const [currentSnippetIsMemoryEcho, setCurrentSnippetIsMemoryEcho] = useState<boolean>(false);
   const [currentSnippetEchoType, setCurrentSnippetEchoType] = useState<'node_2' | 'node_3' | undefined>();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isAutoRefreshingSnippet, setIsAutoRefreshingSnippet] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -387,6 +414,11 @@ const App: React.FC = () => {
   const lastPromptIdRef = useRef<string | null>(null);
   const snippetRequestIdRef = useRef<number>(0);
   const didInitialSnippetFetchRef = useRef<boolean>(false);
+  const isGeneratingRef = useRef<boolean>(false);
+  const currentSnippetRef = useRef<string | null>(null);
+  const lastHiddenAtRef = useRef<number | undefined>(
+    typeof document !== 'undefined' && document.visibilityState === 'hidden' ? Date.now() : undefined
+  );
 
   // Emotion & ECRA State
   const [isEmotionFrozen, setIsEmotionFrozen] = useState(false);
@@ -449,6 +481,10 @@ const App: React.FC = () => {
   const currentSnippetStartTimeRef = useRef<number>(Date.now());
   const currentSnippetTrackRef = useRef<TrackType | null>(null);
 
+  useEffect(() => {
+    currentSnippetRef.current = currentSnippet;
+  }, [currentSnippet]);
+
 
 
   // Store latest appState in ref to avoid dependency issues in storage event listener
@@ -474,6 +510,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
+        lastHiddenAtRef.current = Date.now();
         reportDwellTime('HIDDEN');
       } else {
         currentSnippetStartTimeRef.current = Date.now(); // Reset timer if coming back
@@ -804,12 +841,14 @@ const App: React.FC = () => {
     clickedEmotion?: EmotionType,
     isUserRefresh: boolean = false,
     previousEmotionOverride?: EmotionType | null,
-    regenerationSource: PerspectiveRegenerationSource = 'manual'
+    regenerationSource: PerspectiveRegenerationSource = 'manual',
+    returnGapMs?: number
   ) => {
     const isPageReload = isUserRefresh && regenerationSource === 'page_reload';
     const isManualPerspectiveRefresh = isUserRefresh && !isPageReload;
+    const isAutoReturn = regenerationSource === 'auto_return';
 
-    if (isGenerating) {
+    if (isGeneratingRef.current) {
       console.warn('[App] Request rejected: isGenerating is TRUE');
       return;
     }
@@ -901,9 +940,12 @@ const App: React.FC = () => {
     lastPromptIdRef.current = randomReq.id;
 
     const requestId = ++snippetRequestIdRef.current;
+    isGeneratingRef.current = true;
     setIsGenerating(true);
-    // Show loading while generating (prevents stale content flashes)
-    setCurrentSnippet(null);
+    setIsAutoRefreshingSnippet(isAutoReturn);
+    // An automatic return refresh swaps only the text-area view for a small
+    // skeleton. Keep the current text in memory so a failure can reveal it.
+    if (!isAutoReturn) setCurrentSnippet(null);
 
     try {
       // Increment perspective count for unauthenticated users (only if not bypassing)
@@ -993,6 +1035,10 @@ const App: React.FC = () => {
 
       // Calculate Router Context
       const now = new Date();
+      const recentEmotionLog = getMostRecentEmotionLog();
+      const previousEmotion = previousEmotionOverride !== undefined
+        ? previousEmotionOverride || undefined
+        : recentEmotionLog?.emotionType;
       const context: any = {
         local_time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         local_date: getLocalDateKey(now.getTime()),
@@ -1008,17 +1054,21 @@ const App: React.FC = () => {
         isPageReload,
         trigger: clickedEmotion
           ? 'emotion_click'
-          : isPageReload ? 'page_reload' : isManualPerspectiveRefresh ? 'manual_refresh' : 'initial_open',
+          : isAutoReturn ? 'auto_return'
+            : isPageReload ? 'page_reload' : isManualPerspectiveRefresh ? 'manual_refresh' : 'initial_open',
         isNewUser: history.length < 10,
         first_open_today: pageOpenContext.firstOpenToday,
-        minutes_since_previous_open: pageOpenContext.previousOpenAt
-          ? Math.floor((pageOpenContext.openedAt - pageOpenContext.previousOpenAt) / 60000)
-          : undefined,
+        minutes_since_previous_open: isAutoReturn && returnGapMs !== undefined
+          ? Math.floor(returnGapMs / 60000)
+          : pageOpenContext.previousOpenAt
+            ? Math.floor((pageOpenContext.openedAt - pageOpenContext.previousOpenAt) / 60000)
+            : undefined,
         session_duration_minutes: Math.floor((Date.now() - pageOpenContext.openedAt) / 60000),
         context_observed_at: Date.now(),
-        previous_emotion: previousEmotionOverride !== undefined
-            ? previousEmotionOverride
-            : (lastClickedEmotion || undefined),
+        previous_emotion: previousEmotion,
+        previous_emotion_at: previousEmotionOverride !== undefined
+          ? undefined
+          : recentEmotionLog?.timestamp,
         minutes_since_last: getMinutesSinceLast(history),
         late_night_streak: getLateNightStreak(history),
         work_mode_disabled: false,
@@ -1050,7 +1100,17 @@ const App: React.FC = () => {
       }
       context.selectedPersona = appState.selectedPersona || 'soulmate';
 
-      const response = await generateSnippet(context, isManualPerspectiveRefresh);
+      const hasRecentEmotionFollowup = isManualPerspectiveRefresh
+        && !!recentEmotionLog
+        && Date.now() - recentEmotionLog.timestamp <= EMOTION_FOLLOWUP_WINDOW_MS;
+      // Emotion responses need one acknowledgment plus a few compatible
+      // follow-ups, not the full seven-item day-stage cache.
+      const response = await generateSnippet(
+        context,
+        isManualPerspectiveRefresh,
+        undefined,
+        clickedEmotion || hasRecentEmotionFollowup ? 4 : undefined
+      );
       const result = response.text;
       const plan = response.plan;
       setCurrentNamespace(response.namespace || null);
@@ -1092,6 +1152,13 @@ const App: React.FC = () => {
       setCurrentSnippet(result);
       setCurrentSnippetIsMemoryEcho(plan?.cached_item?.is_memory_echo || false);
       setCurrentSnippetEchoType(plan?.cached_item?.echo_type);
+      if (plan?.time_block) {
+        savePerspectiveRefreshCheckpoint({
+          refreshedAt: Date.now(),
+          localDate: context.local_date,
+          timeBlock: plan.time_block as TimeBlock
+        });
+      }
 
       if ((plan as any)?.reset_refresh_count) {
           console.log('[App] Macro environment shift detected by Backend. Resetting session refresh sequence.');
@@ -1101,9 +1168,9 @@ const App: React.FC = () => {
           resetRefreshStreak();
       }
 
-      // Only bump revealKey for generic refreshes to trigger 'animate-reveal'
-      // For emotions, we use the internal Typewriter/reveal system
-      if (!clickedEmotion) {
+      // Automatic returns replace only the text-area contents. Do not remount
+      // the wrapper containing the controls and lower section.
+      if (!clickedEmotion && !isAutoReturn) {
         setRevealKey(prev => prev + 1);
       }
     } catch (error) {
@@ -1112,10 +1179,62 @@ const App: React.FC = () => {
       addToast('Failed to generate perspective', 'error');
     } finally {
       if (requestId === snippetRequestIdRef.current) {
+        isGeneratingRef.current = false;
         setIsGenerating(false);
+        setIsAutoRefreshingSnippet(false);
       }
     }
-  }, [appState, contextSensingConsent, reportDwellTime, isAuthenticated, showInlineGuidance, hasLocalPreference, isGenerating, pageOpenContext]);
+  }, [appState, contextSensingConsent, reportDwellTime, isAuthenticated, showInlineGuidance, hasLocalPreference, pageOpenContext]);
+
+  // Returning to a long-lived tab updates only the perspective region. Short
+  // visits never move the refresh checkpoint, so repeated peeks at 8, 9 and
+  // 10 do not postpone a genuinely new midday perspective at 12.
+  useEffect(() => {
+    const markPerspectiveAway = () => {
+      if (lastHiddenAtRef.current === undefined) lastHiddenAtRef.current = Date.now();
+    };
+
+    const handlePerspectiveReturn = () => {
+      if (document.visibilityState !== 'visible') return;
+      const hiddenAt = lastHiddenAtRef.current;
+      lastHiddenAtRef.current = undefined;
+      if (!didInitialSnippetFetchRef.current || !currentSnippetRef.current || isGeneratingRef.current) return;
+
+      const now = Date.now();
+      const currentDate = getLocalDateKey(now);
+      const currentTime = new Date(now).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const decision = resolveReturnRefreshDecision({
+        now,
+        hiddenAt,
+        localDate: currentDate,
+        localTime: currentTime,
+        checkpoint: readPerspectiveRefreshCheckpoint()
+      });
+
+      if (!decision.shouldRefresh) return;
+      console.log('[App] Refreshing perspective after return:', decision.reason);
+      void fetchRandomSnippet(
+        true,
+        undefined,
+        false,
+        undefined,
+        'auto_return',
+        decision.awayMs
+      );
+    };
+
+    document.addEventListener('visibilitychange', handlePerspectiveReturn);
+    window.addEventListener('blur', markPerspectiveAway);
+    window.addEventListener('focus', handlePerspectiveReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', handlePerspectiveReturn);
+      window.removeEventListener('blur', markPerspectiveAway);
+      window.removeEventListener('focus', handlePerspectiveReturn);
+    };
+  }, [fetchRandomSnippet]);
 
   const renderSnippet = (text: string) => {
     const parts = text.split(/\[h\](.*?)\[\/h\]/g);
@@ -1786,8 +1905,14 @@ const App: React.FC = () => {
 
     // 2. Lock UI & Selected State
     setIsEmotionFrozen(true);
-    // Capture previous BEFORE updating (sync ref ensures no async delay)
-    const previousEmotionBeforeClick = lastClickedEmotionRef.current;
+    // Only a recent explicit click counts as an emotional transition. The
+    // icon may remember an older choice, but the copy must not pretend that a
+    // feeling from yesterday directly changed into the one selected now.
+    const recentEmotionBeforeClick = getMostRecentEmotionLog();
+    const previousEmotionBeforeClick = recentEmotionBeforeClick
+      && Date.now() - recentEmotionBeforeClick.timestamp <= EMOTION_TRANSITION_WINDOW_MS
+      ? recentEmotionBeforeClick.emotionType
+      : null;
     lastClickedEmotionRef.current = emotion; // update ref immediately
     setLastClickedEmotion(emotion);
     localStorage.setItem('focus_tab_last_emotion', emotion);
@@ -2286,6 +2411,8 @@ const App: React.FC = () => {
                         <div className="flex flex-col items-center justify-center w-full min-h-[100px]">
                           <EmotionalPulsePerceiver emotion={lastClickedEmotion} currentLang={appState.language || 'English'} />
                         </div>
+                      ) : isAutoRefreshingSnippet ? (
+                        <PerspectiveRefreshLoader currentLang={appState.language || 'English'} />
                       ) : currentSnippet ? (
                         <div className="relative group inline-block">
                           <div className="editorial-title">
@@ -2333,13 +2460,13 @@ const App: React.FC = () => {
                           onClick={() => fetchRandomSnippet(false, undefined, true)}
                           disabled={isGenerating || isEmotionFrozen}
                           className={`w-[280px] h-[64px] rounded-full font-bold uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-black/5 flex items-center justify-center transition-all
-                        ${isGenerating || isEmotionFrozen
+                        ${(isGenerating && !isAutoRefreshingSnippet) || isEmotionFrozen
                               ? 'bg-gray-400 cursor-not-allowed opacity-50'
                               : 'bg-black dark:bg-white text-white dark:text-black hover:scale-[1.02] active:scale-95'
                             }`}
                         >
                           <div className="flex items-center gap-3">
-                            {isGenerating && (
+                            {isGenerating && !isAutoRefreshingSnippet && (
                               <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

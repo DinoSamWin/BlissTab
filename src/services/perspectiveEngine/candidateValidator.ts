@@ -61,6 +61,15 @@ const SCENE_FRAMING_PATTERNS: Record<PipelineState['sceneResolution']['baseScene
   night_guard: /(夜已经|夜深|深夜|这么晚|late at night|deep into the night)/iu
 };
 
+const EMOTION_ACKNOWLEDGMENT_PATTERNS: Record<NonNullable<PipelineState['input']['activeEmotion']>, RegExp> = {
+  happy: /(开心|高兴|好心情|快乐|心情.{0,3}(?:好|不错)|happy|happiness|good mood|glad)/iu,
+  neutral: /(平静|平常|普通|没什么特别|neutral|calm|ordinary|nothing in particular)/iu,
+  angry: /(生气|愤怒|恼火|angry|anger|mad)/iu,
+  anxious: /(焦虑|不安|anxious|anxiety|uneasy)/iu,
+  sad: /(难过|伤心|低落|sad|sadness|down)/iu,
+  exhausted: /(累|疲惫|没力气|exhausted|exhaustion|worn out|drained)/iu
+};
+
 function sanitizeText(text: string): string {
   return text
     .replace(/^\s*["'“”‘’「」](.*?)["'“”‘’「」]\s*$/u, '$1')
@@ -120,10 +129,10 @@ function factBoundaryViolations(text: string, state: PipelineState): string[] {
   if (input.confirmedWorkStatus !== 'overtime' && /(overtime|working late)/iu.test(text)) {
     reasons.push('invented_overtime');
   }
-  if (!input.clickedEmotion && /(你|看起来|感觉).{0,4}(焦虑|抑郁|难过|生气|烦躁|崩溃|疲惫|累了)/u.test(text)) {
+  if (!input.activeEmotion && /(你|看起来|感觉).{0,4}(焦虑|抑郁|难过|生气|烦躁|崩溃|疲惫|累了)/u.test(text)) {
     reasons.push('invented_emotion');
   }
-  if (!input.clickedEmotion && /(you|you seem|you look).{0,16}(anxious|tired|exhausted|sad|angry|burned out)/iu.test(text)) {
+  if (!input.activeEmotion && /(you|you seem|you look).{0,16}(anxious|tired|exhausted|sad|angry|burned out)/iu.test(text)) {
     reasons.push('invented_emotion');
   }
   if (!input.clickedEmotion && /(刚午睡|睡醒了|你饿了)/u.test(text)) {
@@ -176,13 +185,25 @@ function missesNewEnvironmentStageAnchor(
   history: PerspectiveHistory[]
 ): boolean {
   if (!state.input.isNewEnvironment) return false;
-  if (state.input.clickedEmotion || state.input.confirmedWorkStatus) return false;
+  if (state.input.activeEmotion || state.input.confirmedWorkStatus) return false;
 
   // Streaming validation prepends candidates already accepted from this same
   // response. Only the first accepted item is required to state the stage
   // plainly; the rest of the cached batch can rotate to different angles.
   if (history.some(item => item.promptId === 'same_batch')) return false;
   return !SCENE_FRAMING_PATTERNS[state.sceneResolution.baseScene].test(text);
+}
+
+function missesEmotionAcknowledgment(
+  text: string,
+  state: PipelineState,
+  history: PerspectiveHistory[]
+): boolean {
+  if (state.sceneResolution.scene !== 'emotional_checkin' || !state.input.activeEmotion) return false;
+  if (history.some(item => item.promptId === 'same_batch')) return false;
+  const language = state.input.userLanguage.toLowerCase();
+  if (!/chinese|zh|english|en\b/u.test(language)) return false;
+  return !EMOTION_ACKNOWLEDGMENT_PATTERNS[state.input.activeEmotion].test(text);
 }
 
 export function validatePerspectiveCandidate(
@@ -204,6 +225,7 @@ export function validatePerspectiveCandidate(
   if (CLICHE_PATTERNS.some(pattern => pattern.test(text))) reasons.push('cliche_or_coaching');
   if (VAGUE_LITERARY_PATTERNS.some(pattern => pattern.test(text))) reasons.push('vague_or_literary_wording');
   if (missesNewEnvironmentStageAnchor(text, state, history)) reasons.push('missing_environment_stage_anchor');
+  if (missesEmotionAcknowledgment(text, state, history)) reasons.push('missing_emotion_acknowledgment');
   if (repeatsResolvedSceneFraming(text, state, history)) reasons.push('repeated_scene_framing_on_refresh');
   if (state.input.isManualRefresh && REFRESH_PACE_PATTERNS.some(pattern => pattern.test(text))) {
     reasons.push('repeated_pace_message_on_refresh');

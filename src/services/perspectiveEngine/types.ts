@@ -27,6 +27,17 @@ export type SignalConfidence = 'high' | 'medium' | 'low' | 'unknown';
 export type TabCountBucket = 'unknown' | 'light' | 'normal' | 'heavy' | 'overloaded';
 export type IdleBucket = 'unknown' | 'active' | 'away' | 'long_away';
 
+export type EmotionTransition =
+  | 'none'
+  | 'first_signal'
+  | 'same_emotion'
+  | 'uplift'
+  | 'drop'
+  | 'settling'
+  | 'difficult_shift'
+  | 'other_shift'
+  | 'followup';
+
 export interface EngineInput {
   localDate: string;
   timezone: string;
@@ -49,6 +60,10 @@ export interface EngineInput {
   reentryState: 'recent_return' | 'continuous' | 'unknown';
 
   clickedEmotion?: EmotionType;
+  previousEmotion?: EmotionType;
+  activeEmotion?: EmotionType;
+  emotionTransition: EmotionTransition;
+  isEmotionFollowup: boolean;
   trigger: PerspectiveTrigger;
   rawTabCount?: number;
   rawIdleMinutes?: number;
@@ -99,6 +114,7 @@ export type OverrideScene =
   | 'quiet_return'
   | 'overloaded_browser'
   | 'emotional_checkin'
+  | 'emotional_followup'
   | 'refresh_loop';
 
 export type Scene = BaseTimeScene | OverrideScene;

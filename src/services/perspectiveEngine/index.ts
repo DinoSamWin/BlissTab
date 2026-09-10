@@ -63,7 +63,7 @@ function buildEnvironmentFingerprint(state: StateWithoutFingerprints): string {
     input.weekday,
     input.timeBlock,
     sceneResolution.baseScene,
-    input.clickedEmotion || 'no_emotion',
+    input.activeEmotion || 'no_emotion',
     input.tabCountBucket,
     input.reentryState,
     input.confirmedWorkStatus || 'work_status_unknown',
@@ -87,6 +87,7 @@ function buildStateFingerprint(state: StateWithoutFingerprints, environmentFinge
     `render_scene:${sceneResolution.scene}`,
     `trigger:${input.trigger}`,
     `environment_entry:${input.isNewEnvironment ? 'yes' : 'no'}`,
+    `emotion_transition:${input.emotionTransition}`,
     `refresh:${refreshStage(input)}`,
     `first_in_block:${input.isFirstInTimeBlock ? 'yes' : 'no'}`
   ].join('|');
@@ -105,6 +106,12 @@ function buildFactBoundary(input: PipelineState['input'], resolution: PipelineSt
   if (input.audibleStateKnown) knownFacts.push(`audio:${input.hasAudibleTab ? 'present' : 'absent'}`);
   if (input.reentryState !== 'unknown') knownFacts.push(`reentry:${input.reentryState}`);
   if (input.clickedEmotion) knownFacts.push(`explicit_emotion:${input.clickedEmotion}`);
+  if (input.clickedEmotion && input.previousEmotion) {
+    knownFacts.push(`previous_explicit_emotion:${input.previousEmotion}`);
+  }
+  if (input.isEmotionFollowup && input.activeEmotion) {
+    knownFacts.push(`recent_explicit_emotion:${input.activeEmotion}`);
+  }
   if (input.holidayPhase !== 'none') knownFacts.push(`holiday_phase:${input.holidayPhase}`);
   if (input.holidayDayIndex !== undefined) knownFacts.push(`holiday_day_index:${input.holidayDayIndex}`);
   if (input.daysToHoliday !== undefined) knownFacts.push(`days_to_holiday:${input.daysToHoliday}`);

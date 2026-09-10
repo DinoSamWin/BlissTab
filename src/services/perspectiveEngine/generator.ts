@@ -1,7 +1,7 @@
-import { PerspectiveContentTrack, PersonaType } from '../../types';
+import { EmotionType, PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.7.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.8.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
@@ -77,8 +77,52 @@ const STAGE_ENTRY_GUIDANCE: Record<PipelineState['sceneResolution']['baseScene']
   night_guard: 'Say plainly that it is late at night and screen tasks can wait until tomorrow.'
 };
 
+const CURRENT_EMOTION_GUIDANCE: Record<EmotionType, string> = {
+  happy: 'Acknowledge the happiness plainly and help it expand through one small enjoyable detail. Do not warn the user to save, ration, or protect the good mood.',
+  neutral: 'Acknowledge the calm or ordinary feeling plainly. Do not manufacture a problem or demand that the moment become meaningful.',
+  angry: 'Acknowledge the anger plainly without judging it or agreeing with an unknown cause. Help the user create a little distance from what is in front of them; never tell them to calm down.',
+  anxious: 'Acknowledge the anxiety plainly and narrow the moment to one concrete, safe, immediate detail. Do not promise that everything will be fine.',
+  sad: 'Acknowledge the sadness plainly and offer company or permission without trying to fix, brighten, or explain it.',
+  exhausted: 'Acknowledge the exhaustion plainly and make stopping, reducing demands, or leaving something unfinished feel legitimate. Do not push recovery as another task.'
+};
+
+const EMOTION_TRANSITION_GUIDANCE: Record<PipelineState['input']['emotionTransition'], string> = {
+  none: 'No emotion transition is available.',
+  first_signal: 'Treat this as the first explicit emotional signal; respond only to the current emotion.',
+  same_emotion: 'The same emotion was selected again. Show that persistence was heard, but use a new observation or form of support instead of paraphrasing the previous reply.',
+  uplift: 'The user moved into happiness from a different feeling. Notice the lighter turn gently without calling it recovery, progress, or success.',
+  drop: 'The user moved from happy or neutral into a difficult feeling. Respect the contrast without asking why, forcing positivity, or implying failure.',
+  settling: 'The user moved from a difficult feeling into neutral. Let the quieter state be enough without celebrating it as an achievement.',
+  difficult_shift: 'One difficult emotion changed into another. Respond to the current emotion and acknowledge that the shape of the difficulty changed; do not diagnose a cause.',
+  other_shift: 'The emotion changed. Keep the current emotion primary and mention the shift only if it sounds natural and non-clinical.',
+  followup: 'This is a follow-up angle after a recent explicit emotion selection.'
+};
+
+function emotionGuidance(state: PipelineState): string | undefined {
+  const emotion = state.input.activeEmotion;
+  if (!emotion) return undefined;
+
+  if (state.sceneResolution.scene === 'emotional_followup') {
+    return [
+      'The user requested a New Perspective shortly after explicitly selecting an emotion.',
+      CURRENT_EMOTION_GUIDANCE[emotion],
+      'Do not repeat the first acknowledgment or restart the generic New Perspective click sequence.',
+      'Give a genuinely different, concrete angle that remains emotionally compatible. The line may name the emotion, but it does not have to.'
+    ].join(' ');
+  }
+
+  if (state.sceneResolution.scene !== 'emotional_checkin') return undefined;
+  return [
+    `The user explicitly selected ${emotion}; this is known, not inferred.`,
+    CURRENT_EMOTION_GUIDANCE[emotion],
+    EMOTION_TRANSITION_GUIDANCE[state.input.emotionTransition],
+    'The first item must plainly acknowledge the current emotion so the response cannot read like generic wellness copy.',
+    'Never invent the cause of the feeling, diagnose the user, or claim to know what happened.'
+  ].join(' ');
+}
+
 function environmentEntryGuidance(state: PipelineState): string | undefined {
-  if (!state.input.isNewEnvironment) return undefined;
+  if (!state.input.isNewEnvironment || state.input.activeEmotion) return undefined;
   return [
     'This is the first line for a newly resolved environment. The environment takes priority over whether it was revealed by a page reload or the New Perspective button.',
     STAGE_ENTRY_GUIDANCE[state.sceneResolution.baseScene],
@@ -88,7 +132,11 @@ function environmentEntryGuidance(state: PipelineState): string | undefined {
 }
 
 function refreshGuidance(state: PipelineState): string | undefined {
-  if (!state.input.isManualRefresh || state.input.isNewEnvironment) return undefined;
+  if (
+    !state.input.isManualRefresh
+    || state.input.isNewEnvironment
+    || state.sceneResolution.scene === 'emotional_followup'
+  ) return undefined;
   const streak = state.input.consecutiveClicks;
   const shared = 'This is not the first line in this moment. Do not repeat the time-of-day, weekday, holiday, or pace framing from the initial line. Never say or paraphrase “不要着急”, “慢慢来”, “不用马上进入状态”, “别安排太满”, or “别把工作塞满”. The assigned content track is mandatory and must produce a genuinely different kind of message.';
   if (streak === 1) return `${shared} SENSORY: give one safe, concrete visual shift, such as looking away from the screen for a few seconds.`;
@@ -116,7 +164,7 @@ function pageReloadGuidance(state: PipelineState): string | undefined {
 
 /** Builds the compact, auditable policy packet sent to the existing model. */
 function buildPolicyPacket(state: PipelineState, language: string, batchSize: number) {
-  const usesManualRefreshContract = state.input.isManualRefresh && !state.input.isNewEnvironment;
+  const usesManualRefreshContract = state.sceneResolution.scene === 'refresh_loop';
   return {
     prompt_version: STARTLY_PROMPT_VERSION,
     output_language: language,
@@ -130,6 +178,9 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       strategy_instruction: STRATEGY_GUIDANCE[state.strategy],
       dimension: state.dimension,
       emotional_bias_for_tone_only: state.emotionBias,
+      active_explicit_emotion: state.input.activeEmotion,
+      previous_explicit_emotion: state.input.previousEmotion,
+      emotion_transition: state.input.emotionTransition,
       scene_confidence: state.sceneResolution.confidence,
       persona: state.input.selectedPersona,
       persona_instruction: PERSONA_GUIDANCE[state.input.selectedPersona]
@@ -154,6 +205,7 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       rotation_reason: state.noveltyPlan.rotationReason
     },
     environment_entry_instruction: environmentEntryGuidance(state),
+    emotion_instruction: emotionGuidance(state),
     manual_refresh_instruction: refreshGuidance(state),
     page_reload_instruction: pageReloadGuidance(state),
     user_themes: {

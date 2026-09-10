@@ -1,7 +1,7 @@
-import { ConfirmedWorkStatus, PerspectiveHistory, PerspectivePoolItem } from '../../types';
+import { ConfirmedWorkStatus, EmotionType, PerspectiveHistory, PerspectivePoolItem } from '../../types';
 import { selectBestCandidate } from './candidateValidator';
 import { STARTLY_PROMPT_VERSION } from './generator';
-import { BaseTimeScene, PipelineState, SceneModifier } from './types';
+import { BaseTimeScene, EmotionTransition, PipelineState, SceneModifier } from './types';
 
 type Template = Pick<
   PerspectivePoolItem,
@@ -208,13 +208,63 @@ const CONFIRMED_WORK_ZH: Record<ConfirmedWorkStatus, Template[]> = {
   ]
 };
 
-const EMOTION_ZH: Record<string, Template> = {
-  happy: { text: '这点好心情先别急着用掉，留一会儿也行。', content_track: 'grounded_observation', semantic_core: 'let_good_feeling_linger', action_tag: 'keep_feeling', object_tag: 'good_mood', metaphor_tag: 'mood_as_resource', opener_tag: 'good_feeling', sentence_shape: 'observation_plus_permission' },
-  neutral: { text: '没什么特别的也很好，这一会儿可以只是普通。', content_track: 'permission_pause', semantic_core: 'ordinary_moment_is_enough', action_tag: 'allow_ordinary', object_tag: 'moment', metaphor_tag: 'none', opener_tag: 'nothing_special', sentence_shape: 'reframe_plus_permission' },
-  angry: { text: '这股火先不用讲道理，在这里放一会儿也行。', content_track: 'grounded_observation', semantic_core: 'anger_needs_no_argument', action_tag: 'let_anger_rest', object_tag: 'anger', metaphor_tag: 'anger_as_fire', opener_tag: 'this_anger', sentence_shape: 'acknowledgment_plus_permission' },
-  anxious: { text: '先不用追到以后，眼前这一小块已经够了。', content_track: 'grounded_observation', semantic_core: 'future_can_shrink_to_present', action_tag: 'narrow_to_present', object_tag: 'present_space', metaphor_tag: 'future_as_chase', opener_tag: 'no_need_to_chase', sentence_shape: 'permission_plus_grounding' },
-  sad: { text: '这一会儿不用表现得没事，安静待着也可以。', content_track: 'permission_pause', semantic_core: 'sadness_needs_no_performance', action_tag: 'allow_quiet', object_tag: 'moment', metaphor_tag: 'emotion_as_performance', opener_tag: 'this_moment', sentence_shape: 'permission_plus_acceptance' },
-  exhausted: { text: '现在不用再证明什么，停在这里也算一种安排。', content_track: 'permission_pause', semantic_core: 'exhaustion_needs_no_proof', action_tag: 'allow_stop', object_tag: 'current_moment', metaphor_tag: 'stopping_as_plan', opener_tag: 'no_more_proof', sentence_shape: 'permission_plus_reframe' }
+const EMOTION_ZH: Record<EmotionType, Template> = {
+  happy: { text: '现在心情很好，想笑就多笑一会儿。', content_track: 'grounded_observation', semantic_core: 'happiness_can_expand', action_tag: 'enjoy_happiness', object_tag: 'good_mood', metaphor_tag: 'none', opener_tag: 'happiness_direct', sentence_shape: 'acknowledgment_plus_invitation' },
+  neutral: { text: '现在挺平静的，不需要特意把这一刻变得更精彩。', content_track: 'grounded_observation', semantic_core: 'ordinary_calm_is_enough', action_tag: 'leave_moment_ordinary', object_tag: 'calm_moment', metaphor_tag: 'none', opener_tag: 'calm_direct', sentence_shape: 'acknowledgment_plus_boundary' },
+  angry: { text: '现在确实很生气，先离开眼前的事几分钟。', content_track: 'grounded_observation', semantic_core: 'anger_allows_distance', action_tag: 'step_away_briefly', object_tag: 'current_thing', metaphor_tag: 'none', opener_tag: 'anger_direct', sentence_shape: 'acknowledgment_plus_distance' },
+  anxious: { text: '现在确实有点焦虑，先看眼前一个具体的东西。', content_track: 'grounded_observation', semantic_core: 'anxiety_returns_to_concrete_detail', action_tag: 'notice_one_detail', object_tag: 'visible_detail', metaphor_tag: 'none', opener_tag: 'anxiety_direct', sentence_shape: 'acknowledgment_plus_grounding' },
+  sad: { text: '现在难过就不用装作没事，先安静待一会儿。', content_track: 'permission_pause', semantic_core: 'sadness_needs_no_performance', action_tag: 'allow_quiet', object_tag: 'moment', metaphor_tag: 'none', opener_tag: 'sadness_direct', sentence_shape: 'acknowledgment_plus_permission' },
+  exhausted: { text: '现在真的累了，停一会儿不是偷懒。', content_track: 'permission_pause', semantic_core: 'exhaustion_legitimizes_stopping', action_tag: 'allow_stop', object_tag: 'current_moment', metaphor_tag: 'none', opener_tag: 'exhaustion_direct', sentence_shape: 'acknowledgment_plus_reframe' }
+};
+
+const EMOTION_TRANSITION_ZH: Partial<Record<EmotionTransition, Partial<Record<EmotionType, Template>>>> = {
+  same_emotion: {
+    happy: { text: '你还是很开心，这点高兴可以再多待一会儿。', content_track: 'grounded_observation', semantic_core: 'repeated_happiness_can_continue', action_tag: 'let_happiness_continue', object_tag: 'good_mood', metaphor_tag: 'none', opener_tag: 'still_happy', sentence_shape: 'repeat_acknowledgment_plus_permission' },
+    neutral: { text: '你还是挺平静的，普通的一会儿也不用添点什么。', content_track: 'grounded_observation', semantic_core: 'repeated_calm_needs_no_addition', action_tag: 'leave_moment_ordinary', object_tag: 'calm_moment', metaphor_tag: 'none', opener_tag: 'still_calm', sentence_shape: 'repeat_acknowledgment_plus_boundary' },
+    angry: { text: '这股生气还在，我听见了，先别逼自己马上消气。', content_track: 'permission_pause', semantic_core: 'repeated_anger_needs_no_instant_resolution', action_tag: 'allow_anger_without_action', object_tag: 'anger', metaphor_tag: 'none', opener_tag: 'anger_remains', sentence_shape: 'repeat_acknowledgment_plus_permission' },
+    anxious: { text: '焦虑还没有走开也没关系，先只看眼前这一小块。', content_track: 'grounded_observation', semantic_core: 'repeated_anxiety_narrows_to_present', action_tag: 'narrow_to_present', object_tag: 'present_detail', metaphor_tag: 'none', opener_tag: 'anxiety_remains', sentence_shape: 'repeat_acknowledgment_plus_grounding' },
+    sad: { text: '难过还在也不用装没事，这一会儿先别勉强自己。', content_track: 'permission_pause', semantic_core: 'repeated_sadness_needs_no_performance', action_tag: 'stop_self_pressure', object_tag: 'sad_moment', metaphor_tag: 'none', opener_tag: 'sadness_remains', sentence_shape: 'repeat_acknowledgment_plus_permission' },
+    exhausted: { text: '你还是很累，那就先少做一点，不用继续硬撑。', content_track: 'permission_pause', semantic_core: 'repeated_exhaustion_reduces_demands', action_tag: 'reduce_demands', object_tag: 'current_demands', metaphor_tag: 'none', opener_tag: 'still_exhausted', sentence_shape: 'repeat_acknowledgment_plus_boundary' }
+  },
+  uplift: {
+    happy: { text: '现在开心起来了，就让这份好心情再多待一会儿。', content_track: 'grounded_observation', semantic_core: 'happiness_after_shift_can_linger', action_tag: 'let_happiness_linger', object_tag: 'good_mood', metaphor_tag: 'none', opener_tag: 'happy_now', sentence_shape: 'transition_acknowledgment_plus_permission' }
+  },
+  drop: {
+    sad: { text: '刚才还好好的，现在却难过了，这个落差确实不好受。', content_track: 'grounded_observation', semantic_core: 'happy_to_sad_contrast_hurts', action_tag: 'acknowledge_contrast', object_tag: 'emotional_shift', metaphor_tag: 'none', opener_tag: 'mood_drop', sentence_shape: 'transition_contrast_plus_validation' },
+    angry: { text: '刚才还算轻松，现在却很生气，这个变化确实不好受。', content_track: 'grounded_observation', semantic_core: 'calm_to_anger_contrast_is_hard', action_tag: 'acknowledge_contrast', object_tag: 'emotional_shift', metaphor_tag: 'none', opener_tag: 'anger_shift', sentence_shape: 'transition_contrast_plus_validation' },
+    anxious: { text: '刚才还比较轻松，现在却焦虑了，先不用逼自己解释。', content_track: 'permission_pause', semantic_core: 'calm_to_anxiety_needs_no_explanation', action_tag: 'drop_explanation', object_tag: 'emotional_shift', metaphor_tag: 'none', opener_tag: 'anxiety_shift', sentence_shape: 'transition_contrast_plus_permission' },
+    exhausted: { text: '刚才状态还不错，现在却很累，身体的变化不用硬扛。', content_track: 'life_boundary', semantic_core: 'positive_to_exhausted_allows_stop', action_tag: 'stop_pushing', object_tag: 'body', metaphor_tag: 'none', opener_tag: 'exhaustion_shift', sentence_shape: 'transition_contrast_plus_boundary' }
+  },
+  settling: {
+    neutral: { text: '现在平静一点了，这份普通不用被解释成进步。', content_track: 'grounded_observation', semantic_core: 'settling_needs_no_progress_story', action_tag: 'leave_calm_unmeasured', object_tag: 'calm_moment', metaphor_tag: 'none', opener_tag: 'calmer_now', sentence_shape: 'transition_acknowledgment_plus_boundary' }
+  }
+};
+
+const EMOTION_FOLLOWUP_ZH: Record<EmotionType, Template[]> = {
+  happy: [
+    { text: '趁现在心情不错，去做件单纯让你高兴的小事。', content_track: 'unexpected_perspective', semantic_core: 'happy_followup_small_joy', action_tag: 'choose_small_joy', object_tag: 'ordinary_life', metaphor_tag: 'none', opener_tag: 'happy_followup', sentence_shape: 'mood_plus_offscreen_invitation' },
+    { text: '开心的时候不用找意义，做件你本来就想做的小事。', content_track: 'playful_boundary', semantic_core: 'happy_followup_needs_no_meaning', action_tag: 'choose_wanted_activity', object_tag: 'ordinary_life', metaphor_tag: 'none', opener_tag: 'happy_followup_no_meaning', sentence_shape: 'mood_plus_plain_permission' }
+  ],
+  neutral: [
+    { text: '平静的一会儿不需要产出什么，普通就很好。', content_track: 'unexpected_perspective', semantic_core: 'neutral_followup_needs_no_output', action_tag: 'leave_moment_unproductive', object_tag: 'ordinary_moment', metaphor_tag: 'none', opener_tag: 'neutral_followup', sentence_shape: 'plain_reframe' },
+    { text: '现在不想多说什么也可以，让这一页安静一会儿。', content_track: 'grounded_observation', semantic_core: 'neutral_followup_allows_quiet', action_tag: 'leave_page_quiet', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'neutral_followup_quiet', sentence_shape: 'permission_plus_quiet_observation' }
+  ],
+  angry: [
+    { text: '先把眼前这件事放远一点，几分钟后再决定要不要理它。', content_track: 'permission_pause', semantic_core: 'anger_followup_delays_engagement', action_tag: 'delay_reengagement', object_tag: 'current_thing', metaphor_tag: 'none', opener_tag: 'anger_followup', sentence_shape: 'distance_plus_later_choice' },
+    { text: '先别回应眼前的事，去碰点和它没关系的东西。', content_track: 'life_boundary', semantic_core: 'anger_followup_changes_context', action_tag: 'touch_unrelated_object', object_tag: 'ordinary_object', metaphor_tag: 'none', opener_tag: 'anger_followup_no_response', sentence_shape: 'boundary_plus_context_shift' }
+  ],
+  anxious: [
+    { text: '先只看一个具体的东西，让注意力有地方落下。', content_track: 'sensory_reset', semantic_core: 'anxiety_followup_uses_visual_anchor', action_tag: 'notice_one_object', object_tag: 'visible_object', metaphor_tag: 'attention_landing', opener_tag: 'anxiety_followup', sentence_shape: 'concrete_action_plus_grounding' },
+    { text: '把视线放到离屏幕远一点的地方，先停几秒。', content_track: 'sensory_reset', semantic_core: 'anxiety_followup_shifts_visual_distance', action_tag: 'look_far_briefly', object_tag: 'distant_view', metaphor_tag: 'none', opener_tag: 'anxiety_followup_distance', sentence_shape: 'visual_shift_plus_pause' }
+  ],
+  sad: [
+    { text: '这会儿不解决什么也可以，先做件让身体舒服的小事。', content_track: 'life_boundary', semantic_core: 'sad_followup_allows_simple_comfort', action_tag: 'choose_simple_comfort', object_tag: 'body', metaphor_tag: 'none', opener_tag: 'sad_followup', sentence_shape: 'permission_plus_ordinary_care' },
+    { text: '今天可以先少要求自己一点，普通地待着就行。', content_track: 'permission_pause', semantic_core: 'sad_followup_reduces_self_demand', action_tag: 'reduce_self_demand', object_tag: 'current_day', metaphor_tag: 'none', opener_tag: 'sad_followup_less_demand', sentence_shape: 'boundary_plus_permission' }
+  ],
+  exhausted: [
+    { text: '能停的先停一件，今天不用靠硬撑来证明什么。', content_track: 'permission_pause', semantic_core: 'exhausted_followup_stops_one_demand', action_tag: 'stop_one_demand', object_tag: 'current_demands', metaphor_tag: 'none', opener_tag: 'exhausted_followup', sentence_shape: 'reduce_demand_plus_boundary' },
+    { text: '这一页可以先放着，累的时候不用再接新的事。', content_track: 'permission_pause', semantic_core: 'exhausted_followup_adds_no_new_demand', action_tag: 'avoid_new_demand', object_tag: 'current_page', metaphor_tag: 'none', opener_tag: 'exhausted_followup_no_new_task', sentence_shape: 'page_permission_plus_boundary' }
+  ]
 };
 
 function hydrate(template: Template, state: PipelineState): PerspectivePoolItem {
@@ -269,9 +319,24 @@ export function getStateAwareFallback(
   if (!language.toLowerCase().includes('chinese') && !language.toLowerCase().includes('zh')) return undefined;
 
   if (state.input.clickedEmotion) {
-    const emotionCandidates = [EMOTION_ZH[state.input.clickedEmotion]].map(template => hydrate(template, state));
+    const transitionTemplate = EMOTION_TRANSITION_ZH[state.input.emotionTransition]?.[state.input.clickedEmotion];
+    const emotionTemplates = transitionTemplate
+      ? state.input.emotionTransition === 'same_emotion'
+        ? [transitionTemplate, EMOTION_ZH[state.input.clickedEmotion]]
+        : [transitionTemplate]
+      : [EMOTION_ZH[state.input.clickedEmotion]];
+    const emotionCandidates = emotionTemplates
+      .map(template => hydrate(template, state));
     const emotionSelection = selectBestCandidate(emotionCandidates, state, history);
     return emotionSelection.selected || leastRecentlyUsedFallback(emotionCandidates, state, history);
+  }
+
+  if (state.sceneResolution.scene === 'emotional_followup' && state.input.activeEmotion) {
+    const followupCandidates = EMOTION_FOLLOWUP_ZH[state.input.activeEmotion]
+      .map(template => hydrate(template, state));
+    const followupSelection = selectBestCandidate(followupCandidates, state, history);
+    return followupSelection.selected
+      || leastRecentlyUsedFallback(followupCandidates, state, history);
   }
 
   if (state.input.isNewEnvironment) {
