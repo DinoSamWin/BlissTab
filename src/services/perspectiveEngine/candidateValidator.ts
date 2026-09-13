@@ -53,10 +53,16 @@ function factBoundaryViolations(text: string, state: PipelineState): string[] {
   if (input.tabCountBucket === 'unknown' && /(too many|many|crowded|full).{0,12}(tabs?|screen)|(tabs?|screen).{0,12}(too many|many|crowded|full)/iu.test(text)) {
     reasons.push('invented_tab_load');
   }
-  if ((!input.audibleStateKnown || !input.hasAudibleTab) && /(音乐|歌声|耳机|背景音|旋律)/u.test(text)) {
+  if (
+    (!input.audibleStateKnown || !input.hasAudibleTab)
+    && /(?:音乐|歌声|背景音|旋律).{0,6}(?:响着|放着|正在|传来)|耳机里.{0,6}(?:响|放)/u.test(text)
+  ) {
     reasons.push('invented_audio');
   }
-  if ((!input.audibleStateKnown || !input.hasAudibleTab) && /(music|song|headphones?|background sound|melody)/iu.test(text)) {
+  if (
+    (!input.audibleStateKnown || !input.hasAudibleTab)
+    && /(?:music|song|background sound|melody).{0,16}(?:playing|on now|coming from)|headphones?.{0,12}(?:playing|sound)/iu.test(text)
+  ) {
     reasons.push('invented_audio');
   }
   if (!input.weatherKnown && /(下雨|雨声|阳光|晴天|阴天|天气|风声)/u.test(text)) {
@@ -109,6 +115,22 @@ function factBoundaryViolations(text: string, state: PipelineState): string[] {
     reasons.push('invented_off_work_state');
   }
   if (/开完会|meeting just ended|after (that|your) meeting/iu.test(text)) reasons.push('invented_meeting_state');
+
+  const isProtectedRestDay = (
+    input.dayKind === 'rest_day' || input.dayKind === 'public_holiday'
+  ) && !['working', 'overtime', 'workplace_arrival'].includes(input.confirmedWorkStatus || '');
+  if (
+    isProtectedRestDay
+    && /(工作|任务|待办|效率|加班|下班|邮件|项目|截止|进度|办公|会议|职场|上班)/u.test(text)
+  ) {
+    reasons.push('work_framing_on_rest_day');
+  }
+  if (
+    isProtectedRestDay
+    && /\b(work|task|to-?do|productiv(?:e|ity)|overtime|email|project|deadline|office|meeting|career)\b/iu.test(text)
+  ) {
+    reasons.push('work_framing_on_rest_day');
+  }
   return reasons;
 }
 
@@ -156,13 +178,18 @@ export function validatePerspectiveCandidate(
   if (!contentTrack) reasons.push('missing_content_track');
   if (!item.action_tag) reasons.push('missing_action_tag');
   if (!item.object_tag) reasons.push('missing_object_tag');
-  if (!item.metaphor_tag) reasons.push('missing_metaphor_tag');
-  if (!item.opener_tag) reasons.push('missing_opener_tag');
-  if (!item.sentence_shape) reasons.push('missing_sentence_shape');
-  if (contentTrack === state.noveltyPlan.targetTrack) score += 12;
+  // Track rotation is the primary diversity decision. Its bonus must remain
+  // larger than the combined soft penalties below, otherwise a generic work
+  // line can repeatedly outrank the intended life/curiosity/social direction.
+  if (contentTrack === state.noveltyPlan.targetTrack) score += 40;
 
   if (isTooSimilar(text, history, 0.58)) reasons.push('surface_text_duplicate');
-  if (hasRecentTag(history, 'semanticCore', item.semantic_core, 20)) reasons.push('semantic_core_duplicate');
+  // The supplied history is already trimmed to the 14-day retention window.
+  // Check all of it so a busy refresh day cannot push an older, same-meaning
+  // line past an arbitrary item-count cutoff.
+  if (hasRecentTag(history, 'semanticCore', item.semantic_core, history.length)) {
+    reasons.push('semantic_core_duplicate');
+  }
   if (hasRecentTag(history, 'metaphorTag', item.metaphor_tag, 10)) reasons.push('metaphor_duplicate');
   if (hasRecentTag(history, 'openerTag', item.opener_tag, 5)) reasons.push('opener_duplicate');
   if (hasRecentTag(history, 'sentenceShape', item.sentence_shape, 4)) score -= 8;

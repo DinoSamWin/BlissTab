@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { requestAiCompletion } from '../services/aiApiService';
 
 export interface DeepCareContent {
     title: string;
@@ -14,52 +15,67 @@ interface EmotionProportion {
     color: string;
 }
 
+const DEEP_CARE_CACHE_KEY = 'startlytab_deep_care_daily_v1';
+
+interface DeepCareCacheEntry {
+    localDate: string;
+    language: string;
+    content: DeepCareContent;
+}
+
+function getLocalDateKey(): string {
+    const now = new Date();
+    return [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0')
+    ].join('-');
+}
+
+function readDailyCache(language: string): DeepCareContent | null {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(DEEP_CARE_CACHE_KEY) || 'null') as DeepCareCacheEntry | null;
+        if (parsed?.localDate === getLocalDateKey() && parsed.language === language) {
+            return parsed.content;
+        }
+    } catch {
+        // A malformed or unavailable cache should never block the report.
+    }
+    return null;
+}
+
+function saveDailyCache(language: string, content: DeepCareContent): void {
+    try {
+        const entry: DeepCareCacheEntry = { localDate: getLocalDateKey(), language, content };
+        localStorage.setItem(DEEP_CARE_CACHE_KEY, JSON.stringify(entry));
+    } catch {
+        // The insight remains available in React state for this visit.
+    }
+}
+
 export function useDeepCareAI() {
     const [loading, setLoading] = useState(false);
     const [content, setContent] = useState<DeepCareContent | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchAdvice = useCallback(async (proportions: EmotionProportion[], language: string) => {
+    const fetchAdvice = useCallback(async (
+        proportions: EmotionProportion[],
+        language: string,
+        options: { force?: boolean } = {}
+    ) => {
         if (!proportions || proportions.length === 0) return;
+
+        if (!options.force) {
+            const cached = readDailyCache(language);
+            if (cached) {
+                setContent(cached);
+                setError(null);
+                return;
+            }
+        }
 
         setLoading(true);
         setError(null);
-
-        // Extract credentials logic (matches geminiService.ts)
-        const deepseekKey = (import.meta.env as any)?.VITE_DEEPSEEK_API_KEY || '';
-        const siliconKey = (import.meta.env as any)?.VITE_SILICONFLOW_API_KEY || '';
-        const zhipuKey = (import.meta.env as any)?.VITE_ZHIPUAI_API_KEY || '';
-
-        const apiKey = deepseekKey || siliconKey || zhipuKey;
-
-        let apiBase = (import.meta.env as any)?.VITE_DEEPSEEK_API_BASE || 'https://api.deepseek.com';
-        let model = (import.meta.env as any)?.VITE_DEEPSEEK_MODEL || 'deepseek-chat';
-
-        if (siliconKey && !deepseekKey) {
-            apiBase = (import.meta.env as any)?.VITE_SILICONFLOW_API_BASE || 'https://api.siliconflow.cn/v1';
-            const envModel = (import.meta.env as any)?.VITE_SILICONFLOW_MODEL;
-            if (envModel && (envModel.includes('R1') || envModel.includes('Reasoning'))) {
-                model = 'deepseek-ai/DeepSeek-V3'; // Fallback to faster V3
-            } else {
-                model = envModel || 'deepseek-ai/DeepSeek-V3';
-            }
-        } else if (zhipuKey && !deepseekKey && !siliconKey) {
-            apiBase = (import.meta.env as any)?.VITE_ZHIPUAI_API_BASE || 'https://open.bigmodel.cn/api/paas/v4';
-            model = (import.meta.env as any)?.VITE_ZHIPUAI_MODEL || 'glm-4-flash';
-        }
-
-        const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
-        if (!isExtension && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-            if (deepseekKey) apiBase = '/api/deepseek';
-            else if (siliconKey) apiBase = '/api/siliconflow';
-            else if (zhipuKey) apiBase = '/api/zhipuai';
-        }
-
-        if (!apiKey) {
-            setError('No API Key found. Using fallback text.');
-            setLoading(false);
-            return;
-        }
 
         const dataSummary = proportions.map(p => `- ${p.type}: ${Math.round(p.percentage)}%`).join('\n');
         const isChinese = language === 'Chinese (Simplified)';
@@ -82,23 +98,17 @@ Context:
 }
 Avoid markdown code blocks, just return raw JSON.`;
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-            const response = await fetch(`${apiBase}/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({
-                    model,
-                    messages: [{ role: 'system', content: systemPrompt }],
-                    temperature: 0.8,
-                    response_format: { type: "json_object" } // Tell compatible models to output JSON
-                }),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
+            const response = await requestAiCompletion({
+                messages: [{ role: 'system', content: systemPrompt }],
+                temperature: 0.8,
+                max_tokens: 640,
+                purpose: 'deep_care',
+                response_format: { type: "json_object" }
+            }, controller.signal);
 
             if (!response.ok) throw new Error('API request failed');
 
@@ -111,6 +121,7 @@ Avoid markdown code blocks, just return raw JSON.`;
 
             if (parsed.title && parsed.p1 && parsed.p2 && parsed.p3) {
                 setContent(parsed);
+                saveDailyCache(language, parsed);
             } else {
                 throw new Error('Invalid JSON structure');
             }
@@ -119,6 +130,7 @@ Avoid markdown code blocks, just return raw JSON.`;
             console.error('Deep Care AI Error:', err);
             setError(err instanceof Error ? err.message : 'Unknown error');
         } finally {
+            clearTimeout(timeoutId);
             setLoading(false);
         }
 

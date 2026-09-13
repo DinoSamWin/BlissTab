@@ -20,8 +20,19 @@ import { selectResponseStrategy } from './strategySelector';
 import { Dimension, PipelineState } from './types';
 
 function dimensionForTrack(track: PipelineState['noveltyPlan']['targetTrack']): Dimension {
-  if (track === 'sensory_reset') return 'sensory';
-  return 'mixed';
+  switch (track) {
+    case 'work_companion': return 'work';
+    case 'everyday_care': return 'life';
+    case 'friendly_nudge': return 'friendship';
+    case 'small_delight': return 'delight';
+    case 'leisure_outing': return 'outdoors';
+    case 'social_connection': return 'connection';
+    case 'curiosity_play': return 'curiosity';
+    case 'home_ritual': return 'ritual';
+    case 'poetic_glimpse': return 'poetic';
+    case 'sensory_reset': return 'sensory';
+    default: return 'mixed';
+  }
 }
 
 function compactHash(value: string): string {
@@ -33,30 +44,29 @@ function compactHash(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function refreshStage(input: PipelineState['input']): string {
-  if (!input.isManualRefresh) return 'none';
-  if (input.consecutiveClicks <= 2) return 'alternate';
-  if (input.consecutiveClicks === 3) return 'interrupt';
-  if (input.consecutiveClicks === 4) return 'offscreen_shift';
-  if (input.consecutiveClicks === 5) return 'leave_permission';
-  return 'wide_perspective';
-}
-
 function buildStateFingerprint(state: Omit<PipelineState, 'stateFingerprint'>): string {
   const { input, sceneResolution } = state;
+  // Manual refresh changes selection, not factual compatibility. Keeping it
+  // out of the cache identity lets a generated batch serve later refreshes
+  // instead of buying a new batch for each refresh stage.
+  const cacheScene = sceneResolution.scene === 'refresh_loop'
+    ? sceneResolution.baseScene
+    : sceneResolution.scene;
+  const cacheModifiers = sceneResolution.modifiers
+    .filter(modifier => modifier !== 'manual_refresh' && modifier !== 'refresh_streak')
+    .sort();
   return [
     input.localDate,
     input.dayKind,
     input.weekday,
     sceneResolution.baseScene,
-    sceneResolution.scene,
-    [...sceneResolution.modifiers].sort().join('+') || 'plain',
+    cacheScene,
+    cacheModifiers.join('+') || 'plain',
     input.clickedEmotion || 'no_emotion',
     input.tabCountBucket,
     input.tabCountScope,
     input.reentryState,
     input.confirmedWorkStatus || 'work_status_unknown',
-    `refresh:${refreshStage(input)}`,
     `holiday_day:${input.holidayDayIndex ?? 'none'}`,
     `days_to_holiday:${input.daysToHoliday ?? 'none'}`,
     `days_since_holiday:${input.daysSinceHoliday ?? 'none'}`,
@@ -159,7 +169,7 @@ export function resolveCompanionState(context: PerspectiveRouterContext): Pipeli
 export function runCompanionPipeline(
   context: PerspectiveRouterContext,
   language: string,
-  batchSize: number = 8
+  batchSize: number = 4
 ): { system: string; user: string; state: PipelineState } {
   const state = resolveCompanionState(context);
   const { system, user } = buildCompanionPrompt(state, language, batchSize);

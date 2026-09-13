@@ -1,21 +1,30 @@
 import { PerspectiveContentTrack, PersonaType } from '../../types';
 import { PipelineState, ResponseStrategy } from './types';
 
-export const STARTLY_PROMPT_VERSION = 'context-loop-v1.0.0';
+export const STARTLY_PROMPT_VERSION = 'context-loop-v1.2.0';
 
 const PRODUCT_CONSTITUTION = `
 You are StartlyTab, a one-line companion that appears on the user's browser new-tab page.
 
 You are NOT a chatbot, therapist, productivity coach, motivational quote generator, manager, or surveillance system.
 
-The user often opens a new tab while working, searching, switching tasks, or briefly escaping pressure. You have one line of space. Your job is to create a small, humane interruption: accurately acknowledge the resolved moment, loosen the user's grip on work for a second, and remind them that food, body, time, ordinary objects, and life outside the screen still exist. Any productivity benefit is a side effect, never the message.
+The user often opens a new tab while working, searching, switching tasks, or briefly escaping pressure. You have one line of space. Your job is to offer varied, humane companionship that makes the moment feel lighter. Sometimes give a concrete work reframe, sometimes ordinary life care, a small practical suggestion, a familiar friend's observation, or gentle humor. A brief poetic image is welcome occasionally, but it must stay rooted in everyday life. Any productivity benefit is a side effect, never the message.
 
 Relationship and voice:
 - Sound like a familiar, observant friend who does not overstep.
 - Default to light, natural, quietly witty language.
 - Be warm without performing intimacy; clever without trying too hard.
 - Prefer everyday spoken language over poetry, therapy language, or poster copy.
+- Be specific enough to picture or do: one email, one page, a glass of water, a meal, a chair, a window, a small pleasure, or the next workable step.
 - Make the user feel "that fits this moment", never "this app is watching me".
+
+Variety requirements:
+- Do not make every line about resting, slowing down, breathing, leaving the screen, unfinished work, or reducing pressure.
+- Rotate broadly across work, ordinary life, going out, food and drink, people, curiosity, play, home rituals, friendly care, light delight, sensory detail, boundaries, and perspective.
+- Work-related lines may help the next step feel manageable, but must not push output, speed, discipline, or hustle.
+- A calendar workday does not prove the user is currently working. Without an explicit work signal, at most one candidate in a batch may mention work, and most batches should range beyond it.
+- Poetic language should be occasional, concrete, and easy to understand rather than abstract philosophy.
+- On a rest day or public holiday, do not mention work, tasks, productivity, unfinished work, or "recovering for tomorrow" unless work is explicitly confirmed. Bring the user into life itself rather than describing life only as an escape from work.
 
 Authority boundary:
 - Upstream deterministic rules have already resolved scene, intent, confidence, allowed facts, and novelty direction.
@@ -41,6 +50,15 @@ const PERSONA_GUIDANCE: Record<PersonaType, string> = {
 const TRACK_GUIDANCE: Record<PerspectiveContentTrack, string> = {
   playful_boundary: 'Use a small everyday conflict or gentle joke to separate the user from work momentum.',
   grounded_observation: 'Name one verified feature of the moment, then add a light human comment.',
+  work_companion: 'Offer one concrete work-related reframe or next workable step that reduces mental load without becoming productivity coaching.',
+  everyday_care: 'Ground care in ordinary life such as water, meals, posture, a tidy surface, or a brief change of view; never assume a symptom or private state.',
+  friendly_nudge: 'Sound like a familiar friend briefly standing on the user’s side: warm, plainspoken, and specific, with no forced intimacy.',
+  small_delight: 'Make room for one harmless everyday pleasure or lightly funny detail that is not tied to achievement.',
+  leisure_outing: 'Open a small doorway into leisure outside the screen: a walk, coffee, a bookshop, a park, a slow meal, or wandering nearby. Invite; never order or assume weather.',
+  social_connection: 'Make room for low-pressure human connection: sharing food, sending a casual hello, or spending easy time with someone. Never imply loneliness or invent a specific relationship.',
+  curiosity_play: 'Offer a harmless curiosity, playful detour, hobby, music, film, book, game, or small experiment with no usefulness requirement. Do not assume a particular taste.',
+  home_ritual: 'Notice a small domestic ritual that can make the day feel lived: making a drink, opening a book, cooking, tidying one corner, or changing the room mood. Do not turn it into a chore.',
+  poetic_glimpse: 'Use one clear everyday image with a little lyricism. Keep it concrete, restrained, and immediately understandable.',
   life_boundary: 'Give time, meals, rest, or off-screen life legitimate space without issuing a command.',
   sensory_reset: 'Offer at most one safe, tiny physical or visual shift; never claim a symptom.',
   permission_pause: 'Give permission to leave something unfinished or to do nothing briefly.',
@@ -63,14 +81,18 @@ function refreshGuidance(state: PipelineState): string | undefined {
   if (!state.input.isManualRefresh) return undefined;
   const streak = state.input.consecutiveClicks;
   if (streak <= 2) return 'The user requested another line. Keep the same scene but use a clearly different angle.';
-  if (streak === 3) return 'Use light, friendly humor to interrupt automatic refreshing without mentioning clicks.';
-  if (streak === 4) return 'Shift from screen/work language toward one ordinary off-screen detail.';
-  if (streak === 5) return 'Offer permission to leave the screen briefly, without sounding concerned or clinical.';
-  return 'Use a concrete wider perspective. Do not become poetic, mystical, dramatic, or philosophical.';
+  return 'Change the subject away from work and productivity. Choose a fresh life-positive angle such as leisure, curiosity, people, food, home, play, or the world outside the screen; do not mention refreshing or sound concerned.';
 }
 
 /** Builds the compact, auditable policy packet sent to the existing model. */
 function buildPolicyPacket(state: PipelineState, language: string, batchSize: number) {
+  const protectedRestDay = (
+    state.input.dayKind === 'rest_day' || state.input.dayKind === 'public_holiday'
+  ) && !['working', 'overtime', 'workplace_arrival'].includes(state.input.confirmedWorkStatus || '');
+  const effectiveThemes = protectedRestDay ? [] : state.input.customThemes.slice(0, 2);
+  const workIsExplicitlyConfirmed = ['working', 'overtime', 'workplace_arrival']
+    .includes(state.input.confirmedWorkStatus || '');
+
   return {
     prompt_version: STARTLY_PROMPT_VERSION,
     output_language: language,
@@ -85,13 +107,22 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       emotional_bias_for_tone_only: state.emotionBias,
       scene_confidence: state.sceneResolution.confidence,
       persona: state.input.selectedPersona,
-      persona_instruction: PERSONA_GUIDANCE[state.input.selectedPersona]
+      persona_instruction: PERSONA_GUIDANCE[state.input.selectedPersona],
+      rest_day_rule: protectedRestDay
+        ? 'Protected rest day: speak directly about enjoyable or meaningful life. Do not frame the line around work, tasks, productivity, unfinished items, or preparing for the next workday.'
+        : undefined,
+      unconfirmed_workday_rule: !protectedRestDay && !workIsExplicitlyConfirmed
+        ? 'The calendar may say workday, but current work is unconfirmed. At most one candidate may use work_companion; all others must use life, people, curiosity, play, food, home, humor, or observation without mentioning work.'
+        : undefined
     },
     fact_boundary: {
-      known_facts: state.knownFacts,
+      known_facts: protectedRestDay
+        ? state.knownFacts.filter(fact => !fact.startsWith('user_themes:'))
+        : state.knownFacts,
       forbidden_assumptions: state.forbiddenAssumptions
     },
     novelty_plan: {
+      target_dimension: state.dimension,
       target_content_track: state.noveltyPlan.targetTrack,
       target_instruction: TRACK_GUIDANCE[state.noveltyPlan.targetTrack],
       allowed_content_tracks: state.noveltyPlan.allowedTracks,
@@ -106,8 +137,10 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
     },
     manual_refresh_instruction: refreshGuidance(state),
     user_themes: {
-      values: state.input.customThemes.slice(0, 3),
-      rule: 'Themes may influence at most 25% of wording. They must never override scene accuracy or fact boundaries.'
+      values: effectiveThemes,
+      rule: protectedRestDay
+        ? 'Work-oriented themes are intentionally suppressed for this rest-day batch.'
+        : 'Themes may influence at most one candidate in this batch. They must never override scene accuracy or fact boundaries.'
     },
     output_contract: {
       chinese_length: '12-28 Chinese characters preferred; hard maximum 60 total characters',
@@ -115,21 +148,16 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
       sentence_count: 1,
       first_item_must_use_target_track: true,
       remaining_items_should_rotate_allowed_tracks: true,
+      poetic_glimpse_limit: 'At most one candidate per batch may use poetic_glimpse, unless it is the target track.',
       every_item_must_have_distinct_semantic_core: true,
       json_shape: {
         text: 'final user-facing sentence',
-        style: 'short style label',
-        track: 'A | B | C | D | E',
-        dimension: 'specific angle code',
         content_track: 'one allowed content track',
         semantic_core: 'stable snake_case meaning tag',
         action_tag: 'snake_case or none',
-        object_tag: 'snake_case or none',
-        metaphor_tag: 'snake_case or none',
-        opener_tag: 'snake_case opener pattern',
-        sentence_shape: 'snake_case sentence pattern'
+        object_tag: 'snake_case or none'
       },
-      envelope_note: 'Do not output state_fingerprint or prompt_version; the application binds those trusted fields after validation.'
+      envelope_note: 'Output only these five fields. The application binds all other metadata after validation.'
     }
   };
 }
@@ -137,13 +165,11 @@ function buildPolicyPacket(state: PipelineState, language: string, batchSize: nu
 export function buildCompanionPrompt(
   state: PipelineState,
   language: string,
-  batchSize: number = 8
+  batchSize: number = 4
 ): { system: string; user: string } {
   const system = `${PRODUCT_CONSTITUTION}\n\nReturn ONLY a valid JSON array matching the supplied output contract. No prose before or after the array.`;
-  const user = `Render candidates from this already-resolved policy packet. Do not make new state decisions.\n\n${JSON.stringify(
-    buildPolicyPacket(state, language, batchSize),
-    null,
-    2
+  const user = `Render candidates from this already-resolved policy packet. Do not make new state decisions.\n${JSON.stringify(
+    buildPolicyPacket(state, language, batchSize)
   )}`;
   return { system, user };
 }

@@ -1,5 +1,5 @@
 import { ConfirmedWorkStatus, PerspectiveHistory, PerspectivePoolItem } from '../../types';
-import { selectBestCandidate } from './candidateValidator';
+import { selectBestCandidate, validatePerspectiveCandidate } from './candidateValidator';
 import { STARTLY_PROMPT_VERSION } from './generator';
 import { BaseTimeScene, PipelineState, SceneModifier } from './types';
 
@@ -104,10 +104,94 @@ const MODIFIER_ZH: Partial<Record<SceneModifier, Template[]>> = {
 };
 
 const REST_DAY_ZH: Template[] = [
-  { text: '今天不用按工作日的刻度走，慢一点也准时。', content_track: 'playful_boundary', semantic_core: 'rest_day_has_own_clock', action_tag: 'follow_rest_pace', object_tag: 'day_scale', metaphor_tag: 'day_as_clock_scale', opener_tag: 'rest_day_clock', sentence_shape: 'reframe_plus_permission' },
-  { text: '这一页可以只是路过，不必顺手变成一项任务。', content_track: 'life_boundary', semantic_core: 'page_need_not_become_task', action_tag: 'keep_page_casual', object_tag: 'current_page', metaphor_tag: 'page_as_task', opener_tag: 'page_permission', sentence_shape: 'permission_plus_boundary' },
-  { text: '空下来不是漏掉了什么，是今天本来就有空白。', content_track: 'permission_pause', semantic_core: 'empty_time_belongs_in_day', action_tag: 'allow_empty_time', object_tag: 'empty_time', metaphor_tag: 'day_contains_blank', opener_tag: 'empty_time_reframe', sentence_shape: 'negation_plus_reframe' },
-  { text: '屏幕可以开着，今天的注意力不用跟着值班。', content_track: 'object_humor', semantic_core: 'attention_off_duty_on_rest_day', action_tag: 'release_attention', object_tag: 'attention', metaphor_tag: 'attention_on_duty', opener_tag: 'screen_can_stay', sentence_shape: 'contrast_plus_joke' }
+  { text: '去附近走一圈，让一杯喜欢的咖啡加入周末。', content_track: 'leisure_outing', semantic_core: 'walk_with_favorite_coffee', action_tag: 'take_casual_walk', object_tag: 'coffee', metaphor_tag: 'coffee_joins_weekend', opener_tag: 'walk_nearby', sentence_shape: 'invitation_plus_small_pleasure' },
+  { text: '今天可以把路线交给脚步，拐进一家没去过的小店。', content_track: 'leisure_outing', semantic_core: 'wander_into_new_shop', action_tag: 'wander_nearby', object_tag: 'small_shop', metaphor_tag: 'feet_choose_route', opener_tag: 'let_feet_choose', sentence_shape: 'permission_plus_discovery' },
+  { text: '找个舒服的位置坐会儿，看街上的故事自己经过。', content_track: 'leisure_outing', semantic_core: 'watch_street_life_pass', action_tag: 'sit_and_watch', object_tag: 'street', metaphor_tag: 'street_life_as_stories', opener_tag: 'find_comfortable_seat', sentence_shape: 'invitation_plus_observation' },
+
+  { text: '给熟悉的人发句没正事的消息，闲聊也有自己的价值。', content_track: 'social_connection', semantic_core: 'casual_message_has_value', action_tag: 'send_casual_hello', object_tag: 'familiar_person', metaphor_tag: 'none', opener_tag: 'message_someone_familiar', sentence_shape: 'invitation_plus_reframe' },
+  { text: '约一顿不用赶时间的饭，让话题慢慢自己长出来。', content_track: 'social_connection', semantic_core: 'unhurried_meal_together', action_tag: 'share_slow_meal', object_tag: 'shared_meal', metaphor_tag: 'conversation_growing', opener_tag: 'share_a_meal', sentence_shape: 'invitation_plus_image' },
+
+  { text: '挑部没看过的电影，今晚可以借别人的故事旅行。', content_track: 'curiosity_play', semantic_core: 'travel_through_new_film', action_tag: 'watch_new_film', object_tag: 'film', metaphor_tag: 'story_as_travel', opener_tag: 'choose_new_film', sentence_shape: 'suggestion_plus_imagination' },
+  { text: '翻几页一直好奇的书，答案晚点出现也没关系。', content_track: 'curiosity_play', semantic_core: 'browse_a_curious_book', action_tag: 'read_for_curiosity', object_tag: 'book', metaphor_tag: 'none', opener_tag: 'open_curious_book', sentence_shape: 'suggestion_plus_permission' },
+  { text: '今天适合研究一件纯粹好玩的事，不必证明它有用。', content_track: 'curiosity_play', semantic_core: 'explore_something_for_fun', action_tag: 'follow_curiosity', object_tag: 'playful_interest', metaphor_tag: 'none', opener_tag: 'today_suits_curiosity', sentence_shape: 'observation_plus_permission' },
+
+  { text: '给自己认真调杯喜欢的饮料，普通一天也值得讲究。', content_track: 'home_ritual', semantic_core: 'make_favorite_drink_carefully', action_tag: 'make_favorite_drink', object_tag: 'drink', metaphor_tag: 'none', opener_tag: 'make_a_drink', sentence_shape: 'ritual_plus_reframe' },
+  { text: '放首想听的歌，让房间先换一种表情。', content_track: 'home_ritual', semantic_core: 'change_room_mood_with_song', action_tag: 'play_a_song', object_tag: 'room', metaphor_tag: 'room_changes_expression', opener_tag: 'play_wanted_song', sentence_shape: 'small_ritual_plus_image' },
+  { text: '做点想吃的东西，厨房很擅长把时间变得有香气。', content_track: 'home_ritual', semantic_core: 'cook_something_desired', action_tag: 'cook_for_pleasure', object_tag: 'kitchen', metaphor_tag: 'time_gains_aroma', opener_tag: 'make_something_tasty', sentence_shape: 'invitation_plus_personification' },
+
+  { text: '甜点不必等庆祝，今天愿意吃就是一个好理由。', content_track: 'small_delight', semantic_core: 'dessert_needs_no_occasion', action_tag: 'enjoy_small_treat', object_tag: 'dessert', metaphor_tag: 'none', opener_tag: 'dessert_permission', sentence_shape: 'reframe_plus_reason' },
+  { text: '换件自己喜欢的衣服，哪怕只是出门随便逛逛。', content_track: 'small_delight', semantic_core: 'dress_for_casual_wandering', action_tag: 'wear_something_liked', object_tag: 'favorite_clothes', metaphor_tag: 'none', opener_tag: 'wear_something_liked', sentence_shape: 'small_choice_plus_example' },
+  { text: '把窗边留给一杯东西和几分钟发呆，这就很像周末。', content_track: 'poetic_glimpse', semantic_core: 'window_drink_and_daydream', action_tag: 'daydream_by_window', object_tag: 'window', metaphor_tag: 'weekend_as_small_scene', opener_tag: 'leave_window_space', sentence_shape: 'scene_plus_weekend_image' },
+  { text: '周末的空白不是缺内容，是生活正在自由发挥。', content_track: 'grounded_observation', semantic_core: 'weekend_blank_is_free_living', action_tag: 'allow_open_time', object_tag: 'weekend_space', metaphor_tag: 'life_improvising', opener_tag: 'weekend_blank', sentence_shape: 'reframe_plus_personification' },
+  { text: '水杯和零食都到位的话，这一刻已经颇有阵容。', content_track: 'object_humor', semantic_core: 'snack_and_drink_make_a_lineup', action_tag: 'enjoy_simple_setup', object_tag: 'drink_and_snack', metaphor_tag: 'snacks_as_lineup', opener_tag: 'if_snacks_ready', sentence_shape: 'conditional_plus_object_humor' }
+];
+
+/**
+ * A broad, scene-safe reserve for slow or unavailable AI responses. These
+ * lines deliberately rotate across work, daily life, friendship, delight and
+ * restrained poetry so the fallback experience does not become a loop of
+ * "slow down" reminders.
+ */
+const GENERAL_ZH: Template[] = [
+  { text: '这件事先做到能往前走，漂亮可以留给下一遍。', content_track: 'work_companion', semantic_core: 'workable_before_polished', action_tag: 'make_workable_version', object_tag: 'current_task', metaphor_tag: 'polish_as_second_pass', opener_tag: 'this_task_first', sentence_shape: 'work_reframe_plus_permission' },
+  { text: '卡住时先把已知条件摆出来，答案不用全靠脑子扛。', content_track: 'work_companion', semantic_core: 'externalize_known_conditions', action_tag: 'write_known_conditions', object_tag: 'known_conditions', metaphor_tag: 'mind_carrying_answer', opener_tag: 'when_stuck', sentence_shape: 'micro_step_plus_reassurance' },
+  { text: '今天的工作不用每项都满分，重要的那项清楚就好。', content_track: 'work_companion', semantic_core: 'clarity_over_all_perfect', action_tag: 'clarify_priority', object_tag: 'important_item', metaphor_tag: 'tasks_as_scores', opener_tag: 'todays_work', sentence_shape: 'scope_reframe_plus_standard' },
+  { text: '邮件可以晚两分钟回，先把正在想的这件事放稳。', content_track: 'work_companion', semantic_core: 'protect_current_thought', action_tag: 'finish_current_thought', object_tag: 'email', metaphor_tag: 'thought_as_object_to_settle', opener_tag: 'email_can_wait', sentence_shape: 'boundary_plus_micro_focus' },
+  { text: '待办再长也只会一次来一件，不用替后面那件着急。', content_track: 'work_companion', semantic_core: 'tasks_arrive_one_at_a_time', action_tag: 'stay_with_current_item', object_tag: 'task_list', metaphor_tag: 'tasks_arriving_in_turn', opener_tag: 'however_long_the_list', sentence_shape: 'fact_reframe_plus_reassurance' },
+  { text: '先交出一个能用的版本，余下的聪明可以慢慢补上。', content_track: 'work_companion', semantic_core: 'usable_version_before_cleverness', action_tag: 'make_usable_version', object_tag: 'draft', metaphor_tag: 'cleverness_added_later', opener_tag: 'usable_version_first', sentence_shape: 'micro_step_plus_permission' },
+
+  { text: '如果想换个场景，附近一段没走过的路也能当目的地。', content_track: 'leisure_outing', semantic_core: 'nearby_unwalked_route_as_destination', action_tag: 'take_new_nearby_route', object_tag: 'nearby_route', metaphor_tag: 'route_as_destination', opener_tag: 'if_scene_change_wanted', sentence_shape: 'conditional_plus_invitation' },
+  { text: '下一次出门可以留个小彩蛋，比如尝一杯没喝过的东西。', content_track: 'leisure_outing', semantic_core: 'small_surprise_on_next_outing', action_tag: 'try_new_drink', object_tag: 'new_drink', metaphor_tag: 'outing_contains_surprise', opener_tag: 'next_outing', sentence_shape: 'permission_plus_example' },
+  { text: '偶尔绕开最熟的路线，普通街角也会多一点新鲜。', content_track: 'leisure_outing', semantic_core: 'detour_refreshes_familiar_street', action_tag: 'take_small_detour', object_tag: 'street_corner', metaphor_tag: 'none', opener_tag: 'occasionally_detour', sentence_shape: 'small_action_plus_observation' },
+  { text: '找个舒服的地方坐一会儿，看看人间自己往前走。', content_track: 'leisure_outing', semantic_core: 'sit_and_watch_life_move', action_tag: 'sit_somewhere_comfortable', object_tag: 'surroundings', metaphor_tag: 'life_moving_itself', opener_tag: 'find_comfortable_place', sentence_shape: 'invitation_plus_observation' },
+
+  { text: '给熟悉的人分享一件小事，不必等它足够重要。', content_track: 'social_connection', semantic_core: 'share_small_thing_without_importance', action_tag: 'share_small_thing', object_tag: 'familiar_person', metaphor_tag: 'none', opener_tag: 'share_with_someone', sentence_shape: 'invitation_plus_permission' },
+  { text: '想到谁就发句没正事的消息，闲聊本来就不需要理由。', content_track: 'social_connection', semantic_core: 'casual_chat_needs_no_reason', action_tag: 'send_casual_message', object_tag: 'familiar_person', metaphor_tag: 'none', opener_tag: 'when_someone_comes_to_mind', sentence_shape: 'invitation_plus_reframe' },
+  { text: '有空可以约顿轻松的饭，话题到了桌边会自己出现。', content_track: 'social_connection', semantic_core: 'easy_meal_brings_conversation', action_tag: 'share_easy_meal', object_tag: 'dining_table', metaphor_tag: 'topics_arrive_at_table', opener_tag: 'when_time_allows', sentence_shape: 'invitation_plus_personification' },
+  { text: '有人一起笑过的小事，通常比事情本身多活一会儿。', content_track: 'social_connection', semantic_core: 'shared_laughter_extends_small_moment', action_tag: 'notice_shared_laughter', object_tag: 'small_moment', metaphor_tag: 'moment_lives_longer', opener_tag: 'small_thing_shared', sentence_shape: 'observation_plus_perspective' },
+
+  { text: '今天可以顺手认识一个完全用不上的冷知识。', content_track: 'curiosity_play', semantic_core: 'learn_useless_fun_fact', action_tag: 'follow_random_fact', object_tag: 'fun_fact', metaphor_tag: 'none', opener_tag: 'today_can', sentence_shape: 'permission_plus_play' },
+  { text: '翻几页一直好奇的书，不急着读完也能带走一点东西。', content_track: 'curiosity_play', semantic_core: 'browse_curious_book_without_finishing', action_tag: 'browse_book', object_tag: 'book', metaphor_tag: 'carry_idea_away', opener_tag: 'browse_some_pages', sentence_shape: 'invitation_plus_permission' },
+  { text: '挑部没看过的电影，借别人的故事换一会儿频道。', content_track: 'curiosity_play', semantic_core: 'switch_channel_through_new_film', action_tag: 'watch_new_film', object_tag: 'film', metaphor_tag: 'story_as_channel', opener_tag: 'choose_new_film', sentence_shape: 'invitation_plus_metaphor' },
+  { text: '把一个平常问题查到有趣为止，好奇心偶尔也想散步。', content_track: 'curiosity_play', semantic_core: 'follow_question_until_interesting', action_tag: 'explore_small_question', object_tag: 'ordinary_question', metaphor_tag: 'curiosity_takes_walk', opener_tag: 'follow_a_question', sentence_shape: 'playful_action_plus_personification' },
+
+  { text: '给喜欢的杯子换种饮料，房间会立刻多一点新剧情。', content_track: 'home_ritual', semantic_core: 'new_drink_changes_room_story', action_tag: 'make_different_drink', object_tag: 'favorite_cup', metaphor_tag: 'room_gains_story', opener_tag: 'change_cup_drink', sentence_shape: 'small_ritual_plus_image' },
+  { text: '把灯光调到舒服的样子，屋子也会跟着换种语气。', content_track: 'home_ritual', semantic_core: 'comfortable_light_changes_room_tone', action_tag: 'adjust_room_light', object_tag: 'room_light', metaphor_tag: 'room_changes_tone', opener_tag: 'adjust_the_light', sentence_shape: 'small_ritual_plus_personification' },
+  { text: '放首想听的歌，几分钟也足够让房间重新布景。', content_track: 'home_ritual', semantic_core: 'song_resets_room_scene', action_tag: 'play_wanted_song', object_tag: 'room', metaphor_tag: 'room_as_stage', opener_tag: 'play_wanted_song', sentence_shape: 'small_ritual_plus_reframe' },
+  { text: '认真做点想吃的东西，香气会替这一段时间署名。', content_track: 'home_ritual', semantic_core: 'cook_desired_food_to_mark_time', action_tag: 'cook_something_desired', object_tag: 'food', metaphor_tag: 'aroma_signs_time', opener_tag: 'make_something_desired', sentence_shape: 'ritual_plus_poetic_image' },
+
+  { text: '水杯如果在手边，让它也参与一下今天。', content_track: 'everyday_care', semantic_core: 'water_joins_the_day', action_tag: 'take_water', object_tag: 'water_cup', metaphor_tag: 'cup_participating', opener_tag: 'if_cup_nearby', sentence_shape: 'conditional_plus_light_action' },
+  { text: '坐着时偶尔换个姿势，椅子也不用从头到尾演同一幕。', content_track: 'everyday_care', semantic_core: 'change_posture_for_variety', action_tag: 'change_posture', object_tag: 'chair', metaphor_tag: 'chair_scene_changes', opener_tag: 'while_sitting', sentence_shape: 'micro_action_plus_object_humor' },
+  { text: '下一顿选点真正想吃的，味觉也该有一点发言权。', content_track: 'everyday_care', semantic_core: 'choose_food_by_real_preference', action_tag: 'choose_desired_food', object_tag: 'next_meal', metaphor_tag: 'taste_has_a_vote', opener_tag: 'next_meal', sentence_shape: 'small_choice_plus_personification' },
+  { text: '眼睛可以离开屏幕一小会儿，窗外不需要加载。', content_track: 'everyday_care', semantic_core: 'brief_view_beyond_screen', action_tag: 'look_away_briefly', object_tag: 'window', metaphor_tag: 'outside_without_loading', opener_tag: 'eyes_may_leave', sentence_shape: 'permission_plus_object_humor' },
+  { text: '洗把脸或走几步，都算把自己接回到今天。', content_track: 'everyday_care', semantic_core: 'small_reset_returns_to_day', action_tag: 'wash_or_walk', object_tag: 'small_routine', metaphor_tag: 'self_returning_to_day', opener_tag: 'wash_or_walk', sentence_shape: 'options_plus_reframe' },
+  { text: '给桌面腾出一小块空地方，也给脑子留点余地。', content_track: 'everyday_care', semantic_core: 'clear_small_surface_space', action_tag: 'clear_small_space', object_tag: 'desk', metaphor_tag: 'desk_space_as_mental_margin', opener_tag: 'make_small_space', sentence_shape: 'micro_action_plus_parallel_reframe' },
+
+  { text: '此刻只是一天里的一小段，不必替整天承担剧情。', content_track: 'grounded_observation', semantic_core: 'moment_need_not_carry_whole_day', action_tag: 'keep_moment_in_scale', object_tag: 'current_moment', metaphor_tag: 'day_as_story', opener_tag: 'this_moment', sentence_shape: 'observation_plus_scale' },
+  { text: '平常的一刻也有自己的完整，不需要非得发生点什么。', content_track: 'grounded_observation', semantic_core: 'ordinary_moment_is_complete', action_tag: 'notice_ordinary_moment', object_tag: 'ordinary_moment', metaphor_tag: 'none', opener_tag: 'ordinary_moment', sentence_shape: 'observation_plus_reframe' },
+  { text: '一天会自己往前走，偶尔看看沿途也算参与其中。', content_track: 'grounded_observation', semantic_core: 'notice_day_as_it_moves', action_tag: 'notice_surroundings', object_tag: 'day', metaphor_tag: 'day_as_path', opener_tag: 'day_moves_itself', sentence_shape: 'observation_plus_permission' },
+  { text: '眼前能看见的小东西，也在认真组成这一刻。', content_track: 'grounded_observation', semantic_core: 'small_visible_things_form_moment', action_tag: 'notice_small_object', object_tag: 'visible_detail', metaphor_tag: 'moment_as_composition', opener_tag: 'small_visible_things', sentence_shape: 'observation_plus_personification' },
+
+  { text: '先陪你把今天过到这里，后面的事等它来了再说。', content_track: 'friendly_nudge', semantic_core: 'company_for_current_part_of_day', action_tag: 'stay_with_present', object_tag: 'rest_of_day', metaphor_tag: 'future_events_arriving', opener_tag: 'stay_with_you_here', sentence_shape: 'companionship_plus_boundary' },
+  { text: '要是这一刻不太顺，也不用马上把自己修好。', content_track: 'friendly_nudge', semantic_core: 'rough_moment_needs_no_self_repair', action_tag: 'drop_self_repair', object_tag: 'current_moment', metaphor_tag: 'self_as_repair_project', opener_tag: 'if_moment_rough', sentence_shape: 'conditional_plus_reassurance' },
+  { text: '今天不必一直表现得很能干，普通一点也很可靠。', content_track: 'friendly_nudge', semantic_core: 'ordinary_self_is_reliable', action_tag: 'drop_competence_performance', object_tag: 'ordinary_self', metaphor_tag: 'competence_as_performance', opener_tag: 'today_need_not_perform', sentence_shape: 'permission_plus_reframe' },
+  { text: '有些事只是难，不是你哪里做得不够。', content_track: 'friendly_nudge', semantic_core: 'difficulty_is_not_personal_failure', action_tag: 'separate_self_from_difficulty', object_tag: 'hard_thing', metaphor_tag: 'none', opener_tag: 'some_things_are_hard', sentence_shape: 'distinction_plus_reassurance' },
+  { text: '你可以认真，也可以不把每件事都往心里搬。', content_track: 'friendly_nudge', semantic_core: 'care_without_carrying_everything', action_tag: 'carry_less_personally', object_tag: 'every_thing', metaphor_tag: 'things_carried_into_heart', opener_tag: 'you_can_care', sentence_shape: 'permission_plus_boundary' },
+  { text: '这一小会儿先站你这边，不催，也不讲大道理。', content_track: 'friendly_nudge', semantic_core: 'brief_unpressured_companionship', action_tag: 'offer_company', object_tag: 'this_moment', metaphor_tag: 'standing_on_your_side', opener_tag: 'for_this_moment', sentence_shape: 'companionship_plus_plain_boundary' },
+
+  { text: '让喜欢的杯子今天也上个班，气氛会松一点。', content_track: 'small_delight', semantic_core: 'favorite_cup_changes_mood', action_tag: 'use_favorite_cup', object_tag: 'favorite_cup', metaphor_tag: 'cup_clocking_in', opener_tag: 'let_favorite_cup', sentence_shape: 'small_delight_plus_light_result' },
+  { text: '手边若有一份小零食，不必等到庆祝时才出现。', content_track: 'small_delight', semantic_core: 'small_treat_needs_no_occasion', action_tag: 'allow_small_treat', object_tag: 'small_snack', metaphor_tag: 'snack_waiting_for_celebration', opener_tag: 'if_snack_nearby', sentence_shape: 'conditional_plus_permission' },
+  { text: '换一张喜欢的背景，也算给这一天换个表情。', content_track: 'small_delight', semantic_core: 'favorite_background_changes_day_expression', action_tag: 'change_background', object_tag: 'background', metaphor_tag: 'day_has_expression', opener_tag: 'change_a_background', sentence_shape: 'small_action_plus_playful_reframe' },
+  { text: '把一个小东西摆正，世界会短暂地很配合。', content_track: 'small_delight', semantic_core: 'align_one_small_object', action_tag: 'straighten_small_object', object_tag: 'small_object', metaphor_tag: 'world_cooperating', opener_tag: 'straighten_one_thing', sentence_shape: 'micro_action_plus_dry_humor' },
+  { text: '偶尔看看与工作无关的东西，脑子也需要闲逛。', content_track: 'small_delight', semantic_core: 'mind_needs_harmless_wandering', action_tag: 'look_at_nonwork_thing', object_tag: 'nonwork_detail', metaphor_tag: 'mind_wandering', opener_tag: 'occasionally_look_elsewhere', sentence_shape: 'permission_plus_personification' },
+  { text: '今天可以留个小盼头，哪怕只是喝到喜欢的东西。', content_track: 'small_delight', semantic_core: 'keep_one_small_anticipation', action_tag: 'name_small_pleasure', object_tag: 'favorite_drink', metaphor_tag: 'anticipation_as_reserved_space', opener_tag: 'today_can_keep', sentence_shape: 'permission_plus_example' },
+
+  { text: '把目光放远一点，屏幕之外还有没有标题的时间。', content_track: 'poetic_glimpse', semantic_core: 'untitled_time_beyond_screen', action_tag: 'look_farther', object_tag: 'untitled_time', metaphor_tag: 'time_without_title', opener_tag: 'look_a_little_farther', sentence_shape: 'micro_action_plus_poetic_image' },
+  { text: '今天不必一路笔直，绕去生活里坐一会儿也很好。', content_track: 'poetic_glimpse', semantic_core: 'day_need_not_be_straight_line', action_tag: 'visit_life_briefly', object_tag: 'day_path', metaphor_tag: 'day_as_path', opener_tag: 'today_need_not', sentence_shape: 'permission_plus_clear_metaphor' },
+  { text: '留一点空白，风景常从没有安排的地方进来。', content_track: 'poetic_glimpse', semantic_core: 'unscheduled_space_allows_scenery', action_tag: 'leave_blank_space', object_tag: 'blank_space', metaphor_tag: 'scenery_entering_schedule', opener_tag: 'leave_some_blank', sentence_shape: 'micro_action_plus_poetic_observation' },
+  { text: '一天不只由完成组成，停顿也在替它轻轻换气。', content_track: 'poetic_glimpse', semantic_core: 'pauses_belong_in_a_day', action_tag: 'allow_pause', object_tag: 'day', metaphor_tag: 'day_breathing_through_pauses', opener_tag: 'a_day_is_not_only', sentence_shape: 'reframe_plus_poetic_image' },
+  { text: '手边的光阴不用全交给任务，留一点给发呆。', content_track: 'poetic_glimpse', semantic_core: 'time_not_all_given_to_tasks', action_tag: 'keep_idle_moment', object_tag: 'nearby_time', metaphor_tag: 'time_handed_to_tasks', opener_tag: 'time_at_hand', sentence_shape: 'boundary_plus_poetic_permission' },
+  { text: '让未完成先睡在句号外面，今天仍然可以收好。', content_track: 'poetic_glimpse', semantic_core: 'unfinished_can_rest_outside_period', action_tag: 'close_day_with_unfinished', object_tag: 'unfinished_work', metaphor_tag: 'unfinished_sleeping_outside_period', opener_tag: 'let_unfinished_rest', sentence_shape: 'poetic_image_plus_reassurance' }
 ];
 
 const CONFIRMED_WORK_ZH: Record<ConfirmedWorkStatus, Template[]> = {
@@ -177,6 +261,24 @@ function leastRecentlyUsedFallback(
   return tied[seed % tied.length]?.candidate;
 }
 
+function selectFallbackCandidate(
+  candidates: PerspectivePoolItem[],
+  state: PipelineState,
+  history: PerspectiveHistory[]
+): PerspectivePoolItem | undefined {
+  const selection = selectBestCandidate(candidates, state, history);
+  if (selection.selected) return selection.selected;
+
+  // If the 14-day duplicate window has exhausted every fresh option, relax
+  // only the historical cooldown. Facts, rest-day boundaries, length and
+  // allowed content tracks must still pass before choosing the least recently
+  // used line.
+  const hardSafeCandidates = candidates.filter(candidate => (
+    validatePerspectiveCandidate(candidate, state, []).valid
+  ));
+  return leastRecentlyUsedFallback(hardSafeCandidates, state, history);
+}
+
 export function getStateAwareFallback(
   state: PipelineState,
   language: string,
@@ -185,26 +287,30 @@ export function getStateAwareFallback(
   if (!language.toLowerCase().includes('chinese') && !language.toLowerCase().includes('zh')) return undefined;
 
   if (state.input.clickedEmotion) {
-    const emotionCandidates = [EMOTION_ZH[state.input.clickedEmotion]].map(template => hydrate(template, state));
-    const emotionSelection = selectBestCandidate(emotionCandidates, state, history);
-    return emotionSelection.selected || leastRecentlyUsedFallback(emotionCandidates, state, history);
+    const emotionCandidates = [
+      EMOTION_ZH[state.input.clickedEmotion],
+      ...GENERAL_ZH
+    ].filter(Boolean).map(template => hydrate(template, state));
+    return selectFallbackCandidate(emotionCandidates, state, history);
   }
 
   if (state.input.confirmedWorkStatus) {
-    const confirmedCandidates = CONFIRMED_WORK_ZH[state.input.confirmedWorkStatus]
-      .map(template => hydrate(template, state));
-    const confirmedSelection = selectBestCandidate(confirmedCandidates, state, history);
-    return confirmedSelection.selected
-      || leastRecentlyUsedFallback(confirmedCandidates, state, history);
+    const confirmedCandidates = [
+      ...CONFIRMED_WORK_ZH[state.input.confirmedWorkStatus],
+      ...GENERAL_ZH
+    ].map(template => hydrate(template, state));
+    return selectFallbackCandidate(confirmedCandidates, state, history);
   }
 
   const isRestDay = state.input.dayKind === 'rest_day' || state.input.dayKind === 'public_holiday';
+  const sceneSafeTemplates = isRestDay
+    ? [...REST_DAY_ZH, ...GENERAL_ZH]
+    : [...GENERAL_ZH, ...BASE_ZH[state.sceneResolution.baseScene]];
   const templates = [
     ...(OVERRIDE_ZH[state.sceneResolution.scene] || []),
     ...state.sceneResolution.modifiers.flatMap(modifier => MODIFIER_ZH[modifier] || []),
-    ...(isRestDay ? REST_DAY_ZH : BASE_ZH[state.sceneResolution.baseScene])
+    ...sceneSafeTemplates
   ];
   const candidates = templates.filter(Boolean).map(template => hydrate(template, state));
-  const selection = selectBestCandidate(candidates, state, history);
-  return selection.selected || leastRecentlyUsedFallback(candidates, state, history);
+  return selectFallbackCandidate(candidates, state, history);
 }

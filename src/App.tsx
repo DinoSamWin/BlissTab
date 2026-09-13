@@ -415,10 +415,15 @@ const App: React.FC = () => {
 
   const [useTypewriter, setUseTypewriter] = useState(false);
   const [typewriterKey, setTypewriterKey] = useState(0);
+  const perspectivePoolLanguageRef = useRef(appState.language);
 
-  // Clear pools when language changes to prevent mix-ups (Reactive Safety)
+  // Keep the daily pool across page reloads. Only a real language switch
+  // should clear it; clearing on every mount made the web experience request
+  // the same first batch again after each browser refresh.
   useEffect(() => {
-    console.log('[App] Language changed to:', appState.language, '- Synchronizing i18n and clearing pools');
+    const previousLanguage = perspectivePoolLanguageRef.current;
+    const languageChanged = previousLanguage !== appState.language;
+    console.log('[App] Language synchronized:', appState.language, { languageChanged });
     
     // Sync with i18next engine
     const langMap: Record<string, string> = {
@@ -435,7 +440,10 @@ const App: React.FC = () => {
     const i18nCode = langMap[appState.language] || 'en-US';
     i18n.changeLanguage(i18nCode).catch(err => console.error('[App] Failed to change language:', err));
     
-    clearAllPerspectivePools();
+    if (languageChanged) {
+      clearAllPerspectivePools();
+      perspectivePoolLanguageRef.current = appState.language;
+    }
   }, [appState.language]);
 
   const currentSnippetStartTimeRef = useRef<number>(Date.now());
