@@ -21,9 +21,20 @@ import { selectResponseStrategy } from './strategySelector';
 import { Dimension, PipelineState } from './types';
 
 function dimensionForTrack(track: PipelineState['noveltyPlan']['targetTrack']): Dimension {
-  if (track === 'sensory_reset') return 'sensory';
-  if (track === 'philosophical_zoom_out') return 'philosophical';
-  return 'mixed';
+  switch (track) {
+    case 'work_companion': return 'work';
+    case 'everyday_care': return 'life';
+    case 'friendly_nudge': return 'friendship';
+    case 'small_delight': return 'delight';
+    case 'leisure_outing': return 'outdoors';
+    case 'social_connection': return 'connection';
+    case 'curiosity_play': return 'curiosity';
+    case 'home_ritual': return 'ritual';
+    case 'poetic_glimpse': return 'poetic';
+    case 'sensory_reset': return 'sensory';
+    case 'philosophical_zoom_out': return 'philosophical';
+    default: return 'mixed';
+  }
 }
 
 function compactHash(value: string): string {
@@ -37,12 +48,7 @@ function compactHash(value: string): string {
 
 function refreshStage(input: PipelineState['input']): string {
   if (!input.isManualRefresh) return 'none';
-  if (input.consecutiveClicks === 1) return 'sensory_shift';
-  if (input.consecutiveClicks === 2) return 'object_focus';
-  if (input.consecutiveClicks === 3) return 'playful_interrupt';
-  if (input.consecutiveClicks === 4) return 'offscreen_life';
-  if (input.consecutiveClicks === 5) return 'grounded_philosophy';
-  return 'leave_permission';
+  return `life_rotation_${Math.max(1, input.consecutiveClicks)}`;
 }
 
 type StateWithoutFingerprints = Omit<PipelineState, 'environmentFingerprint' | 'stateFingerprint'>;
@@ -195,7 +201,7 @@ export function resolveCompanionState(context: PerspectiveRouterContext): Pipeli
 export function runCompanionPipeline(
   context: PerspectiveRouterContext,
   language: string,
-  batchSize: number = 8
+  batchSize: number = 4
 ): { system: string; user: string; state: PipelineState } {
   const state = resolveCompanionState(context);
   const { system, user } = buildCompanionPrompt(state, language, batchSize);

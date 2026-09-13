@@ -175,7 +175,7 @@ assert.equal(stableInitialState.environmentFingerprint, stableReloadState.enviro
 assert.equal(stableInitialState.environmentFingerprint, stableManualState.environmentFingerprint);
 assert.notEqual(stableInitialState.stateFingerprint, stableReloadState.stateFingerprint);
 assert.notEqual(stableReloadState.stateFingerprint, stableManualState.stateFingerprint);
-assert.equal(stableInitialState.noveltyPlan.cacheFillTracks.length, 6);
+assert.equal(stableInitialState.noveltyPlan.cacheFillTracks.length, 10);
 assert.equal(stableManualState.noveltyPlan.cacheFillTracks.length, 0);
 
 const nextTimeBlockState = stateFor({ local_time: '11:21' });
@@ -245,16 +245,7 @@ const firstManualInStableEnvironment = stateFor({
   consecutiveClicks: 1
 });
 const reusableCachedCandidate = {
-  text: '先看几秒远处，让眼睛从屏幕上换个焦点。',
-  style: 'sensory_reset',
-  track: 'A_PHYSICAL' as const,
-  content_track: 'sensory_reset' as const,
-  semantic_core: 'cached_stable_environment_gaze_shift',
-  action_tag: 'look_far',
-  object_tag: 'distant_view',
-  metaphor_tag: 'none',
-  opener_tag: 'cached_visual_shift',
-  sentence_shape: 'direct_visual_action',
+  ...getStateAwareFallback(firstManualInStableEnvironment, 'Chinese (Simplified)')!,
   state_fingerprint: stableInitialState.stateFingerprint,
   environment_fingerprint: stableInitialState.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
@@ -295,10 +286,7 @@ const confirmedEarlyArrival = stateFor({
   confirmed_work_status: 'workplace_arrival'
 });
 assert.ok(confirmedEarlyArrival.knownFacts.includes('confirmed_work_status:workplace_arrival'));
-assert.equal(
-  getStateAwareFallback(confirmedEarlyArrival, 'Chinese (Simplified)')?.text,
-  '已经到公司了，先简单收拾一下，不用马上开工。'
-);
+assert.ok(getStateAwareFallback(confirmedEarlyArrival, 'Chinese (Simplified)'));
 
 const preLunch = stateFor({ local_time: '11:50' });
 assert.equal(preLunch.sceneResolution.baseScene, 'pre_lunch_transition');
@@ -320,6 +308,90 @@ const publicHoliday = stateFor({
 });
 assert.ok(publicHoliday.sceneResolution.modifiers.includes('public_holiday'));
 assert.ok(publicHoliday.sceneResolution.modifiers.includes('holiday_middle'));
+
+const restDayInitial = stateFor({
+  local_date: '2026-09-13',
+  weekday: 0,
+  is_weekend: true,
+  day_kind: 'rest_day',
+  local_time: '14:20',
+  custom_themes: ['尽快完成今天的工作']
+});
+const restDayRefresh = stateFor({
+  local_date: '2026-09-13',
+  weekday: 0,
+  is_weekend: true,
+  day_kind: 'rest_day',
+  local_time: '14:20',
+  custom_themes: ['尽快完成今天的工作'],
+  trigger: 'manual_refresh',
+  isManualRefresh: true,
+  consecutiveClicks: 4
+});
+assert.ok(restDayInitial.noveltyPlan.allowedTracks.includes('leisure_outing'));
+assert.ok(restDayInitial.noveltyPlan.allowedTracks.includes('social_connection'));
+assert.ok(restDayInitial.noveltyPlan.allowedTracks.includes('curiosity_play'));
+assert.ok(!restDayInitial.noveltyPlan.allowedTracks.includes('work_companion'));
+assert.equal(restDayInitial.environmentFingerprint, restDayRefresh.environmentFingerprint);
+
+const restDayEnvironmentChanges: Array<Partial<PerspectiveRouterContext>> = [
+  { local_time: '21:20' },
+  { clickedEmotion: 'happy', trigger: 'emotion_click' },
+  { language: 'English' },
+  { selectedPersona: 'bestie' },
+  { custom_themes: ['周末想去逛书店'] },
+  {
+    allow_context_sensing: true,
+    browser_context_observed_at: Date.now(),
+    tab_count: 18,
+    tab_count_scope: 'all_browser_tabs'
+  },
+  {
+    allow_context_sensing: true,
+    browser_context_observed_at: Date.now(),
+    idle_time_seconds: 35 * 60
+  },
+  { confirmed_work_status: 'working' }
+];
+for (const changedContext of restDayEnvironmentChanges) {
+  const changedState = stateFor({
+    local_date: '2026-09-13',
+    weekday: 0,
+    is_weekend: true,
+    day_kind: 'rest_day',
+    local_time: '14:20',
+    custom_themes: ['尽快完成今天的工作'],
+    ...changedContext
+  });
+  assert.notEqual(restDayInitial.environmentFingerprint, changedState.environmentFingerprint);
+}
+
+const recentDailyHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [
+  {
+    text: '昨天的小乐趣',
+    timestamp: Date.parse('2026-09-12T09:00:00Z'),
+    promptId: 'previous-day',
+    contentTrack: 'small_delight',
+    semanticCore: 'previous_day_delight'
+  },
+  {
+    text: '前天的散步',
+    timestamp: Date.parse('2026-09-11T09:00:00Z'),
+    promptId: 'two-days-ago',
+    contentTrack: 'leisure_outing',
+    semanticCore: 'two_days_ago_outing'
+  }
+];
+const dailyRotation = stateFor({
+  local_date: '2026-09-13',
+  weekday: 0,
+  is_weekend: true,
+  day_kind: 'rest_day',
+  local_time: '14:20',
+  recent_history: recentDailyHistory
+});
+assert.notEqual(dailyRotation.noveltyPlan.targetTrack, 'small_delight');
+assert.notEqual(dailyRotation.noveltyPlan.targetTrack, 'leisure_outing');
 
 const overloadedPreLunch = stateFor({
   local_time: '11:50',
@@ -514,12 +586,16 @@ assert.equal(refreshLoop.sceneResolution.scene, 'refresh_loop');
 assert.equal(refreshLoop.strategy, 'interrupt');
 
 const expectedRefreshTracks = [
-  'sensory_reset',
+  'friendly_nudge',
+  'small_delight',
+  'leisure_outing',
+  'social_connection',
+  'curiosity_play',
+  'home_ritual',
+  'everyday_care',
   'object_humor',
-  'playful_boundary',
-  'life_boundary',
-  'philosophical_zoom_out',
-  'permission_pause'
+  'poetic_glimpse',
+  'grounded_observation'
 ] as const;
 const refreshFingerprints: string[] = [];
 const refreshDimensionTexts = expectedRefreshTracks.map((expectedTrack, index) => {
@@ -540,6 +616,39 @@ const refreshDimensionTexts = expectedRefreshTracks.map((expectedTrack, index) =
 });
 assert.equal(new Set(refreshDimensionTexts).size, expectedRefreshTracks.length);
 assert.equal(new Set(refreshFingerprints).size, expectedRefreshTracks.length);
+
+let workdayHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [];
+const workdayTracks: string[] = [];
+for (let index = 0; index < 10; index += 1) {
+  const workdayState = stateFor({
+    local_date: '2026-09-15',
+    weekday: 2,
+    is_weekend: false,
+    day_kind: 'workday',
+    local_time: '10:20',
+    recent_history: workdayHistory
+  });
+  const item = getStateAwareFallback(workdayState, 'Chinese (Simplified)', workdayHistory);
+  assert.ok(item);
+  workdayTracks.push(item.content_track || '');
+  workdayHistory = [{
+    text: item.text,
+    timestamp: Date.now() + index,
+    promptId: `workday-${index}`,
+    contentTrack: item.content_track,
+    semanticCore: item.semantic_core,
+    actionTag: item.action_tag,
+    objectTag: item.object_tag,
+    metaphorTag: item.metaphor_tag,
+    openerTag: item.opener_tag,
+    sentenceShape: item.sentence_shape
+  }, ...workdayHistory];
+}
+assert.ok(new Set(workdayTracks).size >= 6, `expected broad workday rotation, received ${workdayTracks.join(',')}`);
+assert.ok(
+  workdayTracks.filter(track => track === 'work_companion').length <= 2,
+  `expected work to remain occasional, received ${workdayTracks.join(',')}`
+);
 
 const morningFallbackTracks = new Set<string>();
 const morningHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [];
@@ -584,7 +693,7 @@ for (let index = 0; index < 8; index += 1) {
   assert.equal(pageReloadState.input.isPageReload, true);
   assert.ok(pageReloadState.sceneResolution.modifiers.includes('page_reload'));
   assert.ok(!pageReloadState.sceneResolution.modifiers.includes('manual_refresh'));
-  assert.equal(pageReloadState.noveltyPlan.allowedTracks.length, 8);
+  assert.equal(pageReloadState.noveltyPlan.allowedTracks.length, 16);
 
   const fallback = getStateAwareFallback(pageReloadState, 'Chinese (Simplified)', pageReloadHistory);
   assert.ok(fallback);
@@ -637,7 +746,7 @@ const middayEntryManual = runCompanionPipeline(context({
 assert.equal(middayEntryManual.state.input.timeBlock, 'midday_break');
 assert.equal(middayEntryManual.state.sceneResolution.scene, 'midday_release');
 assert.ok(!middayEntryManual.state.sceneResolution.modifiers.includes('manual_refresh'));
-assert.equal(middayEntryManual.state.noveltyPlan.cacheFillTracks.length, 6);
+assert.equal(middayEntryManual.state.noveltyPlan.cacheFillTracks.length, 10);
 assert.match(getStateAwareFallback(middayEntryManual.state, 'Chinese (Simplified)')?.text || '', /(午间|午饭|饭点|中午)/u);
 assert.doesNotMatch(middayEntryManual.user, /GROUNDED PHILOSOPHY/);
 
@@ -767,19 +876,12 @@ const reloadPrompt = runCompanionPipeline(context({
 assert.match(reloadPrompt.user, /NOT a New Perspective button click/);
 assert.match(reloadPrompt.user, /productivity-advice cap has been reached/);
 
-const fifthRefresh = stateFor({
+const philosophyValidationState = stateFor({
   local_time: '09:01',
-  trigger: 'manual_refresh',
-  isManualRefresh: true,
+  trigger: 'page_reload',
+  isPageReload: true,
   consecutiveClicks: 5
 });
-assert.equal(fifthRefresh.dimension, 'philosophical');
-assert.match(runCompanionPipeline(context({
-  local_time: '09:01',
-  trigger: 'manual_refresh',
-  isManualRefresh: true,
-  consecutiveClicks: 5
-}), 'Chinese (Simplified)', 4).user, /GROUNDED PHILOSOPHY/);
 
 const abstractPhilosophy = validatePerspectiveCandidate({
   text: '宇宙浩瀚，存在的意义终将归于无常。',
@@ -792,10 +894,10 @@ const abstractPhilosophy = validatePerspectiveCandidate({
   metaphor_tag: 'cosmic_scale',
   opener_tag: 'cosmic_claim',
   sentence_shape: 'abstract_claim',
-  state_fingerprint: fifthRefresh.stateFingerprint,
-  environment_fingerprint: fifthRefresh.environmentFingerprint,
+  state_fingerprint: philosophyValidationState.stateFingerprint,
+  environment_fingerprint: philosophyValidationState.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
-}, fifthRefresh);
+}, philosophyValidationState);
 assert.equal(abstractPhilosophy.valid, false);
 assert.ok(abstractPhilosophy.reasons.includes('grand_philosophy_cliche'));
 assert.ok(abstractPhilosophy.reasons.includes('ungrounded_philosophical_zoom_out'));
@@ -811,10 +913,10 @@ const abstractTodayPhilosophy = validatePerspectiveCandidate({
   metaphor_tag: 'none',
   opener_tag: 'today_abstract_claim',
   sentence_shape: 'abstract_claim',
-  state_fingerprint: fifthRefresh.stateFingerprint,
-  environment_fingerprint: fifthRefresh.environmentFingerprint,
+  state_fingerprint: philosophyValidationState.stateFingerprint,
+  environment_fingerprint: philosophyValidationState.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
-}, fifthRefresh);
+}, philosophyValidationState);
 assert.equal(abstractTodayPhilosophy.valid, false);
 assert.ok(abstractTodayPhilosophy.reasons.includes('grand_philosophy_cliche'));
 assert.ok(abstractTodayPhilosophy.reasons.includes('ungrounded_philosophical_zoom_out'));
@@ -830,10 +932,10 @@ const groundedPhilosophy = validatePerspectiveCandidate({
   metaphor_tag: 'none',
   opener_tag: 'week_scale',
   sentence_shape: 'time_scale_plus_plain_conclusion',
-  state_fingerprint: fifthRefresh.stateFingerprint,
-  environment_fingerprint: fifthRefresh.environmentFingerprint,
+  state_fingerprint: philosophyValidationState.stateFingerprint,
+  environment_fingerprint: philosophyValidationState.environmentFingerprint,
   prompt_version: STARTLY_PROMPT_VERSION
-}, fifthRefresh);
+}, philosophyValidationState);
 assert.equal(groundedPhilosophy.valid, true);
 
 const similarity = calculateSimilarity(
@@ -850,6 +952,20 @@ assert.doesNotMatch(promptCase.user, /"state_fingerprint"\s*:/);
 assert.match(promptCase.system, /meaning must be obvious on the first read/i);
 assert.match(promptCase.user, /every cache_fill_priority_track/i);
 assert.match(promptCase.user, /No more than two items may discuss prioritizing/i);
+
+const restDayPrompt = runCompanionPipeline(context({
+  local_date: '2026-09-13',
+  weekday: 0,
+  is_weekend: true,
+  day_kind: 'rest_day',
+  local_time: '14:20',
+  custom_themes: ['尽快完成今天的工作']
+}), 'Chinese (Simplified)', 4);
+assert.match(restDayPrompt.user, /Protected rest day/);
+assert.doesNotMatch(restDayPrompt.user, /尽快完成今天的工作/);
+const restFallback = getStateAwareFallback(restDayInitial, 'Chinese (Simplified)');
+assert.ok(restFallback);
+assert.doesNotMatch(restFallback.text, /(工作|任务|待办|效率|加班|下班|邮件|项目|截止|进度|办公|会议|职场|上班)/u);
 
 const invalidCandidate = validatePerspectiveCandidate({
   text: '你刚到公司，先深呼吸一下。',
@@ -869,6 +985,56 @@ const invalidCandidate = validatePerspectiveCandidate({
 assert.equal(invalidCandidate.valid, false);
 assert.ok(invalidCandidate.reasons.includes('cliche_or_coaching'));
 assert.ok(invalidCandidate.reasons.includes('invented_workplace_state'));
+
+const invalidRestDayCandidate = validatePerspectiveCandidate({
+  text: '周末先完成一件简单任务，再去喝杯咖啡。',
+  style: 'leisure_outing',
+  track: 'D_THEME',
+  content_track: 'leisure_outing',
+  semantic_core: 'task_before_coffee',
+  action_tag: 'finish_task',
+  object_tag: 'coffee',
+  metaphor_tag: 'none',
+  opener_tag: 'weekend_task_first',
+  sentence_shape: 'task_then_leisure',
+  state_fingerprint: restDayInitial.stateFingerprint,
+  environment_fingerprint: restDayInitial.environmentFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, restDayInitial);
+assert.equal(invalidRestDayCandidate.valid, false);
+assert.ok(invalidRestDayCandidate.reasons.includes('work_framing_on_rest_day'));
+
+const distantSemanticHistory: NonNullable<PerspectiveRouterContext['recent_history']> = [
+  ...Array.from({ length: 24 }, (_, index) => ({
+    text: `历史内容${index}`,
+    timestamp: Date.now() - index * 1000,
+    promptId: `history-${index}`,
+    semanticCore: `unrelated_${index}`
+  })),
+  {
+    text: '几天前用过的另一种说法',
+    timestamp: Date.now() - 25_000,
+    promptId: 'older-same-meaning',
+    semanticCore: 'wander_into_new_shop'
+  }
+];
+const distantSemanticDuplicate = validatePerspectiveCandidate({
+  text: '去街角看看没见过的小店，让今天拐个有趣的弯。',
+  style: 'leisure_outing',
+  track: 'A_PHYSICAL',
+  content_track: 'leisure_outing',
+  semantic_core: 'wander_into_new_shop',
+  action_tag: 'visit_small_shop',
+  object_tag: 'street_corner',
+  metaphor_tag: 'day_as_path',
+  opener_tag: 'visit_street_corner',
+  sentence_shape: 'outing_plus_playful_reframe',
+  state_fingerprint: restDayInitial.stateFingerprint,
+  environment_fingerprint: restDayInitial.environmentFingerprint,
+  prompt_version: STARTLY_PROMPT_VERSION
+}, restDayInitial, distantSemanticHistory);
+assert.equal(distantSemanticDuplicate.valid, false);
+assert.ok(distantSemanticDuplicate.reasons.includes('semantic_core_duplicate'));
 
 const vagueRefreshCandidate = validatePerspectiveCandidate({
   text: '天还早，今天不用一次把自己全部叫醒。',

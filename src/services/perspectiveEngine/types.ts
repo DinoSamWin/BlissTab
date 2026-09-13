@@ -188,7 +188,20 @@ export type ResponseStrategy =
   | 'release'
   | 'interrupt';
 
-export type Dimension = 'dictionary' | 'sensory' | 'ritual' | 'philosophical' | 'mixed';
+export type Dimension =
+  | 'work'
+  | 'life'
+  | 'friendship'
+  | 'delight'
+  | 'outdoors'
+  | 'connection'
+  | 'curiosity'
+  | 'poetic'
+  | 'dictionary'
+  | 'sensory'
+  | 'ritual'
+  | 'philosophical'
+  | 'mixed';
 
 export interface NoveltyPlan {
   targetTrack: PerspectiveContentTrack;

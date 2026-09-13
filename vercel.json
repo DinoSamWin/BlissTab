@@ -6,14 +6,6 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/siliconflow/:match*",
-      "destination": "https://api.siliconflow.cn/v1/:match*"
-    },
-    {
-      "source": "/api/deepseek/:match*",
-      "destination": "https://api.deepseek.com/:match*"
-    },
-    {
       "source": "/privacy",
       "destination": "/privacy/index.html"
     },
